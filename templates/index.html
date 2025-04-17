@@ -5,13 +5,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ex-s</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.2"></script>
   </head>
   <body>
-    <header>
-      <h1>ex-s</h1>
+    <header class="bg-white shadow">
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between"
+      >
+        <div class="flex items-center space-x-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-7 w-7 text-[#009999]"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <h1 class="text-2xl font-bold text-gray-800 tracking-tight">ex-s</h1>
+        </div>
+        <div class="text-sm text-gray-600">
+          SBOM Explorer, designed by NICS-ra
+        </div>
+      </div>
     </header>
-    <div class="container">
-      <button class="select-btn">Select SBOM File</button>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <button
+        class="select-btn bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow transition duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-5 w-5"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path
+            d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+          />
+        </svg>
+        <span>Select SBOM File</span>
+      </button>
     </div>
   </body>
 </html>
