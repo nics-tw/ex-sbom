@@ -14,16 +14,16 @@ type (
 	}
 
 	Vuln struct {
-		CveID         string `json:"cveID"`
-		VendorProject string `json:"vendorProject"`
-		Product	   string `json:"product"`
-		VulnName	 string `json:"vulnerabilityName"`
-		DateAdded	 string `json:"dateAdded"`
-		ShortDesp string `json:"shortDescription"`
-		RequiredAction string `json:"requiredAction"`
-		DueDate string `json:"dueDate"`
-		KnownRansonwareCampaignUse string `json:"knownRansomwareCampaignUse"`
-		Notes string `json:"notes"`
-		Cwes []string `json:"cwes"`
+		CveID                      string   `json:"cveID"`
+		VendorProject              string   `json:"vendorProject"`
+		Product                    string   `json:"product"`
+		VulnName                   string   `json:"vulnerabilityName"`
+		DateAdded                  string   `json:"dateAdded"`
+		ShortDesp                  string   `json:"shortDescription"`
+		RequiredAction             string   `json:"requiredAction"`
+		DueDate                    string   `json:"dueDate"`
+		KnownRansonwareCampaignUse string   `json:"knownRansomwareCampaignUse"`
+		Notes                      string   `json:"notes"`
+		Cwes                       []string `json:"cwes"`
 	}
 )
