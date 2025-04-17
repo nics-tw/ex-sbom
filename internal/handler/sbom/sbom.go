@@ -1,4 +1,4 @@
-package handler
+package sbom
 
 import (
 	"bytes"
@@ -34,7 +34,6 @@ var (
 // 2. return the SBOM file
 // TODO: rethink about the validation of the SBOM json from request
 func CreateSBOM(c *gin.Context) {
-	// Get the SBOM data from the request
 	var sbomData []byte
 	if err := c.ShouldBindJSON(&sbomData); err != nil {
 		c.JSON(400, gin.H{"error": "Invalid SBOM data"})
