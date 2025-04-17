@@ -34,21 +34,80 @@
       </div>
     </header>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <button
-        class="select-btn bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow transition duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-5 w-5"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+      <div class="flex items-start">
+        <div>
+          <input
+            type="file"
+            id="sbom-file-input"
+            class="hidden"
+            multiple
+            accept=".json,.xml,.spdx"
           />
-        </svg>
-        <span>Select SBOM File</span>
-      </button>
+
+          <button
+            id="select-sbom-btn"
+            class="select-btn bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow transition duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            onclick="document.getElementById('sbom-file-input').click()"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+              />
+            </svg>
+            <span>Select SBOM File</span>
+          </button>
+        </div>
+
+        <!-- File list container -->
+        <div id="selected-files" class="ml-6 mt-1 text-gray-700"></div>
+      </div>
     </div>
+
+    <script>
+      document
+        .getElementById("sbom-file-input")
+        .addEventListener("change", function (e) {
+          const fileList = e.target.files;
+          const selectedFilesContainer =
+            document.getElementById("selected-files");
+
+          selectedFilesContainer.innerHTML = "";
+
+          if (fileList.length > 0) {
+            const fileListHeading = document.createElement("div");
+            fileListHeading.className = "font-medium mb-2";
+            fileListHeading.textContent = "Selected files:";
+            selectedFilesContainer.appendChild(fileListHeading);
+
+            const fileListElement = document.createElement("ul");
+            fileListElement.className = "space-y-1";
+
+            Array.from(fileList).forEach((file) => {
+              const listItem = document.createElement("li");
+              listItem.className = "flex items-center";
+
+              const icon = document.createElement("span");
+              icon.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+              </svg>
+            `;
+
+              const fileName = document.createElement("span");
+              fileName.textContent = file.name;
+              listItem.appendChild(icon);
+              listItem.appendChild(fileName);
+              fileListElement.appendChild(listItem);
+            });
+
+            selectedFilesContainer.appendChild(fileListElement);
+          }
+        });
+    </script>
   </body>
 </html>
