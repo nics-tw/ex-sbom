@@ -3,8 +3,12 @@ package main
 import (
 	"embed"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,5 +31,30 @@ func main() {
 		port = "8080"
 	}
 
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		url := "http://localhost:" + port
+		if err := openBrowser(url); err != nil {
+			slog.Error("Failed to open browser", "error", err)
+		}
+	}()
+
 	r.Run(":" + port)
+}
+
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	default:
+		return nil // Silently fail on unsupported platforms
+	}
+
+	return cmd.Start()
 }
