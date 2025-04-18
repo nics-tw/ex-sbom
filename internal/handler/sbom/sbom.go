@@ -3,7 +3,9 @@ package sbom
 import (
 	"bytes"
 	"encoding/json"
+	"ex-s/util/msg"
 	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	sbomreader "github.com/spdx/tools-golang/json"
@@ -25,6 +27,14 @@ type (
 	}
 )
 
+const (
+	version   = "spdxVersion"
+	id        = "SPDXID"
+	format    = "bomFormat"
+	name      = "name"
+	cyclonedx = "CycloneDX"
+)
+
 var (
 	SBOMs = make(map[string]SBOM)
 )
@@ -36,11 +46,11 @@ var (
 func CreateSBOM(c *gin.Context) {
 	var sbomData []byte
 	if err := c.ShouldBindJSON(&sbomData); err != nil {
-		c.JSON(400, gin.H{"error": "Invalid SBOM data"})
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
 		return
 	}
 
-	fileName := c.Query("filename")
+	fileName := c.Query(name)
 
 	sbomType := detectSBOMFormat(sbomData)
 
@@ -48,7 +58,7 @@ func CreateSBOM(c *gin.Context) {
 	case SBOMSPDX:
 		spdxDoc, err := sbomreader.Read(bytes.NewReader(sbomData))
 		if err != nil {
-			c.JSON(400, gin.H{"error": "Failed to parse SPDX SBOM"})
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingSPDX})
 			return
 		}
 
@@ -59,31 +69,32 @@ func CreateSBOM(c *gin.Context) {
 		}
 
 		SBOMs[fileName] = sbom
-		c.JSON(200, gin.H{"message": "SPDX SBOM detected", "data": sbom})
+		// TODO: this part should be return SBOM ID
+		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "SPDX SBOM detected", msg.RespData: sbom})
 	case SBOMCycloneDX:
 		// TODO: implement CycloneDX SBOM parsing
 	case SBOMUnknown:
 		fallthrough
 	default:
-		c.JSON(400, gin.H{"error": "Unknown SBOM format"})
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
 	}
 }
 
 func detectSBOMFormat(data []byte) SBOMType {
 	var generic map[string]interface{}
 	if err := json.Unmarshal(data, &generic); err != nil {
-		fmt.Println("Error parsing JSON:", err)
+		fmt.Println(msg.ErrParsingJson, err)
 		return SBOMUnknown
 	}
 
-	if _, ok := generic["spdxVersion"]; ok {
-		if _, ok := generic["SPDXID"]; ok {
+	if _, ok := generic[version]; ok {
+		if _, ok := generic[id]; ok {
 			return SBOMSPDX
 		}
 	}
 
-	if format, ok := generic["bomFormat"]; ok {
-		if fmtStr, ok := format.(string); ok && fmtStr == "CycloneDX" {
+	if format, ok := generic[format]; ok {
+		if fmtStr, ok := format.(string); ok && fmtStr == cyclonedx {
 			return SBOMCycloneDX
 		}
 	}
