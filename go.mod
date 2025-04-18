@@ -3,6 +3,7 @@ module ex-s
 go 1.24.0
 
 require (
+	github.com/CycloneDX/cyclonedx-go v0.9.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/spdx/tools-golang v0.5.5
 )

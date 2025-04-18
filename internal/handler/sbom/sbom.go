@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/gin-gonic/gin"
 	sbomreader "github.com/spdx/tools-golang/json"
 )
@@ -69,10 +70,27 @@ func CreateSBOM(c *gin.Context) {
 		}
 
 		SBOMs[fileName] = sbom
+
 		// TODO: this part should be return SBOM ID
 		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "SPDX SBOM detected", msg.RespData: sbom})
 	case SBOMCycloneDX:
-		// TODO: implement CycloneDX SBOM parsing
+		decoder := cdx.NewBOMDecoder(bytes.NewReader(sbomData), cdx.BOMFileFormatJSON)
+
+		bom := cdx.BOM{}
+		if err := decoder.Decode(&bom); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingJson})
+			return
+		}
+
+		sbom := SBOM{
+			Name: fileName,
+			Type: SBOMCycloneDX,
+			Data: bom,
+		}
+
+		SBOMs[fileName] = sbom
+
+		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "CycloneDX SBOM detected", msg.RespData: sbom})
 	case SBOMUnknown:
 		fallthrough
 	default:
