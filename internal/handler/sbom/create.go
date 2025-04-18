@@ -40,7 +40,7 @@ var (
 	SBOMs = make(map[string]SBOM)
 )
 
-func toResponse(name string) gin.H {
+func toCreateResponse(name string) gin.H {
 	return gin.H{
 		msg.RespMsg:  "ok",
 		msg.RespData: []string{name},
@@ -78,7 +78,7 @@ func CreateSBOM(c *gin.Context) {
 
 		SBOMs[fileName] = sbom
 
-		c.JSON(http.StatusOK, toResponse(fileName))
+		c.JSON(http.StatusOK, toCreateResponse(fileName))
 	case SBOMCycloneDX:
 		decoder := cdx.NewBOMDecoder(bytes.NewReader(sbomData), cdx.BOMFileFormatJSON)
 
@@ -96,7 +96,7 @@ func CreateSBOM(c *gin.Context) {
 
 		SBOMs[fileName] = sbom
 
-		c.JSON(http.StatusOK, toResponse(fileName))
+		c.JSON(http.StatusOK, toCreateResponse(fileName))
 	case SBOMUnknown:
 		fallthrough
 	default:

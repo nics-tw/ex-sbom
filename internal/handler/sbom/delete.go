@@ -10,7 +10,7 @@ import (
 
 func DeleteSBOM(c *gin.Context) {
 	name := c.Param("name")
-	if name == "" {
+	if len(name) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "name")})
 		return
 	}
