@@ -40,6 +40,13 @@ var (
 	SBOMs = make(map[string]SBOM)
 )
 
+func toResponse(name string) gin.H {
+	return gin.H{
+		msg.RespMsg:  "ok",
+		msg.RespData: []string{name},
+	}
+}
+
 // CreateSBOM is the handler that:
 // 1. distinguish between the two types of SBOMs, spdx and cyclonedx
 // 2. return the SBOM file
@@ -71,8 +78,7 @@ func CreateSBOM(c *gin.Context) {
 
 		SBOMs[fileName] = sbom
 
-		// TODO: this part should be return SBOM ID
-		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "SPDX SBOM detected", msg.RespData: sbom})
+		c.JSON(http.StatusOK, toResponse(fileName))
 	case SBOMCycloneDX:
 		decoder := cdx.NewBOMDecoder(bytes.NewReader(sbomData), cdx.BOMFileFormatJSON)
 
@@ -90,7 +96,7 @@ func CreateSBOM(c *gin.Context) {
 
 		SBOMs[fileName] = sbom
 
-		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "CycloneDX SBOM detected", msg.RespData: sbom})
+		c.JSON(http.StatusOK, toResponse(fileName))
 	case SBOMUnknown:
 		fallthrough
 	default:
