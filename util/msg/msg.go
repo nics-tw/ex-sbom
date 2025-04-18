@@ -8,6 +8,7 @@ const (
 	ErrInvalidSBOM = "Unknown SBOM"
 	ErrSBOMNotFound = "SBOM not found"
 
+	ErrBindingJSON = "Error binding JSON"
 	ErrParsingJson = "Error parsing JSON:"
 	ErrParsingSPDX = "Error parsing SPDX SBOM"
 

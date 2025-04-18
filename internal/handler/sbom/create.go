@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"ex-s/util/msg"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
@@ -32,7 +33,7 @@ const (
 	version   = "spdxVersion"
 	id        = "SPDXID"
 	format    = "bomFormat"
-	name      = "name"
+	param     = "name"
 	cyclonedx = "CycloneDX"
 )
 
@@ -43,7 +44,7 @@ var (
 func toCreateResponse(name string) gin.H {
 	return gin.H{
 		msg.RespMsg:  "ok",
-		msg.RespData: []string{name},
+		msg.RespData: map[string]string{"name": name},
 	}
 }
 
@@ -52,13 +53,15 @@ func toCreateResponse(name string) gin.H {
 // 2. return the SBOM file
 // TODO: rethink about the validation of the SBOM json from request
 func CreateSBOM(c *gin.Context) {
-	var sbomData []byte
-	if err := c.ShouldBindJSON(&sbomData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
+	sbomData, err := c.GetRawData()
+	if err != nil {
+		slog.Error("Failed to read request body", "error", err)
+
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
 		return
 	}
 
-	fileName := c.Query(name)
+	fileName := c.Query(param)
 
 	sbomType := detectSBOMFormat(sbomData)
 
@@ -66,6 +69,8 @@ func CreateSBOM(c *gin.Context) {
 	case SBOMSPDX:
 		spdxDoc, err := sbomreader.Read(bytes.NewReader(sbomData))
 		if err != nil {
+			slog.Error("Failed to parse SPDX SBOM", "error", err)
+
 			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingSPDX})
 			return
 		}
@@ -84,6 +89,8 @@ func CreateSBOM(c *gin.Context) {
 
 		bom := cdx.BOM{}
 		if err := decoder.Decode(&bom); err != nil {
+			slog.Error("Failed to parse CycloneDX SBOM", "error", err)
+
 			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingJson})
 			return
 		}
@@ -102,6 +109,8 @@ func CreateSBOM(c *gin.Context) {
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
 	}
+
+	slog.Info("SBOM created", "name", fileName, "type", sbomType)
 }
 
 func detectSBOMFormat(data []byte) SBOMType {

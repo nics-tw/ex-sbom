@@ -10,7 +10,7 @@ func SetupRouterGroup(r *gin.Engine) {
 	// Create a new router group for SBOM-related routes
 	sbomGroup := r.Group("/sbom")
 	{
-		sbomGroup.POST("/create", sbom.CreateSBOM)
+		sbomGroup.POST("/upload", sbom.CreateSBOM)
 		sbomGroup.DELETE("/delete/:name", sbom.DeleteSBOM)
 	}
 }
