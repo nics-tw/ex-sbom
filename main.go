@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"ex-s/internal/handler/sbom"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -25,6 +26,8 @@ func main() {
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", nil)
 	})
+
+	setupHTMXEndpoints(r)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -57,4 +60,11 @@ func openBrowser(url string) error {
 	}
 
 	return cmd.Start()
+}
+
+func setupHTMXEndpoints(r *gin.Engine) {
+	// make routegroup
+	s := r.Group("/sbom")
+
+	s.GET("/create", sbom.CreateSBOM)
 }
