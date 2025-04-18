@@ -61,20 +61,54 @@
             </svg>
             <span>Select SBOM File</span>
           </button>
+
+          <button
+            id="upload-sbom-btn"
+            class="mt-2 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md shadow transition duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-green-300 disabled:opacity-50 disabled:cursor-not-allowed hidden"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <span>Upload Files</span>
+          </button>
         </div>
 
         <!-- File list container -->
         <div id="selected-files" class="ml-6 mt-1 text-gray-700"></div>
       </div>
+
+      <!-- Upload status container -->
+      <div id="upload-status" class="mt-4"></div>
     </div>
 
     <script>
+      let selectedFiles = [];
+
       document
         .getElementById("sbom-file-input")
         .addEventListener("change", function (e) {
           const fileList = e.target.files;
           const selectedFilesContainer =
             document.getElementById("selected-files");
+          const uploadButton = document.getElementById("upload-sbom-btn");
+
+          selectedFiles = Array.from(fileList);
+
+          // Show upload button if files are selected
+          if (selectedFiles.length > 0) {
+            uploadButton.classList.remove("hidden");
+          } else {
+            uploadButton.classList.add("hidden");
+          }
 
           selectedFilesContainer.innerHTML = "";
 
@@ -93,9 +127,9 @@
 
               const icon = document.createElement("span");
               icon.innerHTML = `
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-              </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+            </svg>
             `;
 
               const fileName = document.createElement("span");
@@ -108,6 +142,100 @@
             selectedFilesContainer.appendChild(fileListElement);
           }
         });
+
+      // Upload button click handler
+      document
+        .getElementById("upload-sbom-btn")
+        .addEventListener("click", async function () {
+          const statusContainer = document.getElementById("upload-status");
+          statusContainer.innerHTML = "";
+
+          if (selectedFiles.length === 0) {
+            return;
+          }
+
+          // Disable upload button during upload
+          this.disabled = true;
+
+          // Create status list
+          const statusList = document.createElement("ul");
+          statusList.className = "space-y-2 mt-2";
+          statusContainer.appendChild(statusList);
+
+          // Upload each file
+          for (const file of selectedFiles) {
+            const statusItem = document.createElement("li");
+            statusItem.className = "flex items-center";
+            statusItem.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+            </svg>
+            <span>Uploading ${file.name}...</span>
+          `;
+            statusList.appendChild(statusItem);
+
+            try {
+              // Read file content
+              const content = await readFileAsText(file);
+
+              // Upload to server
+              const response = await fetch(
+                "/sbom/upload?name=" + encodeURIComponent(file.name),
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: content,
+                }
+              );
+
+              if (response.ok) {
+                // Success
+                statusItem.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span>${file.name} uploaded successfully</span>
+              `;
+              } else {
+                // Error
+                const errorData = await response.json();
+                statusItem.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                </svg>
+                <span class="text-red-600">${file.name}: ${
+                  errorData.error || "Upload failed"
+                }</span>
+              `;
+              }
+            } catch (error) {
+              // Error reading or uploading file
+              statusItem.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+              </svg>
+              <span class="text-red-600">${file.name}: ${
+                error.message || "Error reading file"
+              }</span>
+            `;
+            }
+          }
+
+          // Re-enable upload button
+          this.disabled = false;
+        });
+
+      // Helper function to read file as text
+      function readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Error reading file"));
+          reader.readAsText(file);
+        });
+      }
     </script>
   </body>
 </html>
