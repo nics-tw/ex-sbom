@@ -20,13 +20,7 @@ var templates embed.FS
 func main() {
 	r := gin.Default()
 
-	tmpl := template.Must(template.New("").ParseFS(templates, "templates/*"))
-	r.SetHTMLTemplate(tmpl)
-
-	r.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "index.html", nil)
-	})
-
+	setupSSR(r)
 	handler.SetupRouterGroup(r)
 
 	port := os.Getenv("PORT")
@@ -60,4 +54,13 @@ func openBrowser(url string) error {
 	}
 
 	return cmd.Start()
+}
+
+func setupSSR(r *gin.Engine) {
+	tmpl := template.Must(template.New("").ParseFS(templates, "templates/*"))
+	r.SetHTMLTemplate(tmpl)
+
+	r.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "index.html", nil)
+	})
 }
