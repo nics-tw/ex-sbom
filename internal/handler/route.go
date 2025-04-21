@@ -11,6 +11,6 @@ func SetupRouterGroup(r *gin.Engine) {
 	sbomGroup := r.Group("/sbom")
 	{
 		sbomGroup.POST("/upload", sbom.CreateSBOM)
-		sbomGroup.DELETE("/delete/:name", sbom.DeleteSBOM)
+		sbomGroup.DELETE("/delete", sbom.DeleteSBOM)
 	}
 }

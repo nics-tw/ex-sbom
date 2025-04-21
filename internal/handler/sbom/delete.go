@@ -10,7 +10,7 @@ import (
 )
 
 func DeleteSBOM(c *gin.Context) {
-	name := c.Param("name")
+	name := c.Query("name")
 	if len(name) == 0 {
 		slog.Error("Missing SBOM name", "error", msg.ErrMissingParam)
 
