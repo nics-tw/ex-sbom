@@ -81,6 +81,10 @@ func CreateSBOM(c *gin.Context) {
 			Data: spdxDoc,
 		}
 
+		if _, ok := SBOMs[fileName]; ok {
+			slog.Info("SBOM already exists, overwriting", "name", fileName)
+		}
+
 		SBOMs[fileName] = sbom
 
 		c.JSON(http.StatusOK, toCreateResponse(fileName))
