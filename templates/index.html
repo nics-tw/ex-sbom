@@ -69,12 +69,6 @@
 
       <!-- Upload status container -->
       <div id="upload-status" class="mt-4"></div>
-      
-      <!-- History container -->
-      <div class="mt-6">
-        <h2 class="text-lg font-medium text-gray-900 mb-2" id="success-history-heading" style="display: none;">Upload History</h2>
-        <div id="success-history" class="mt-2"></div>
-      </div>
     </div>
 
     <script>
@@ -166,9 +160,6 @@
                     </svg>
                     <span>${file.name} uploaded successfully</span>
                   `;
-                  
-                  // Add to history
-                  addToSuccessHistory(file.name);
                 } else {
                   // Error
                   const errorData = await response.json();
@@ -199,34 +190,6 @@
             selectButton.classList.remove("opacity-50", "cursor-not-allowed");
           }
         });
-
-      // Function to add successful upload to history
-      function addToSuccessHistory(fileName) {
-        const timestamp = new Date().toLocaleTimeString();
-        const historyContainer = document.getElementById("success-history");
-        const historyHeading = document.getElementById("success-history-heading");
-        
-        // Show the heading if it's hidden
-        if (historyHeading.style.display === "none") {
-          historyHeading.style.display = "block";
-        }
-        
-        // Create history item
-        const historyItem = document.createElement("div");
-        historyItem.className = "flex items-center mb-2 bg-green-50 p-2 rounded-md";
-        historyItem.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-          </svg>
-          <div class="flex-1">
-            <div class="font-medium">${fileName}</div>
-            <div class="text-xs text-gray-500">Uploaded at ${timestamp}</div>
-          </div>
-        `;
-        
-        // Add to the beginning of history
-        historyContainer.insertBefore(historyItem, historyContainer.firstChild);
-      }
 
       // Helper function to read file as text
       function readFileAsText(file) {
