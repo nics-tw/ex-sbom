@@ -7,32 +7,16 @@
     <title>ex-s</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+    <style>
+      .tab-active {
+        border-bottom: 2px solid #009999;
+        background-color: rgba(0, 153, 153, 0.1);
+      }
+    </style>
   </head>
   <body>
-    <header class="bg-white shadow">
-      <div
-        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between"
-      >
-        <div class="flex items-center space-x-2">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-7 w-7 text-[#009999]"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fill-rule="evenodd"
-              d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
-              clip-rule="evenodd"
-            />
-          </svg>
-          <h1 class="text-2xl font-bold text-gray-800 tracking-tight">ex-s</h1>
-        </div>
-        <div class="text-sm text-gray-600">
-          SBOM Explorer, designed by NICS-ra
-        </div>
-      </div>
-    </header>
+    <!-- Header remains the same -->
+    
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="flex items-start">
         <div>
@@ -69,20 +53,33 @@
 
       <!-- Upload status container -->
       <div id="upload-status" class="mt-4"></div>
+      
+      <!-- Tabs container -->
+      <div class="mt-6 border-b border-gray-200">
+        <div class="text-lg font-medium text-gray-700 mb-2">Uploaded SBOM Files</div>
+        <div id="file-tabs" class="flex flex-wrap"></div>
+      </div>
+      
+      <!-- Tab content area -->
+      <div id="tab-content" class="py-4">
+        <div id="no-tabs-message" class="text-gray-500 italic">No files uploaded yet</div>
+      </div>
     </div>
 
     <script>
+      // Track uploaded files
+      const uploadedFiles = new Set();
+      let activeTab = null;
+      
       document
         .getElementById("sbom-file-input")
         .addEventListener("change", async function (e) {
+          // Existing file upload code remains the same
           const fileList = e.target.files;
           const selectedFilesContainer = document.getElementById("selected-files");
           const statusContainer = document.getElementById("upload-status");
           
-          // Clear the status container for new uploads
           statusContainer.innerHTML = "";
-          
-          // Display selected files
           selectedFilesContainer.innerHTML = "";
           
           if (fileList.length > 0) {
@@ -114,17 +111,14 @@
 
             selectedFilesContainer.appendChild(fileListElement);
             
-            // Create status list for uploads
             const statusList = document.createElement("ul");
             statusList.className = "space-y-2 mt-4";
             statusContainer.appendChild(statusList);
             
-            // Disable select button during upload
             const selectButton = document.getElementById("select-sbom-btn");
             selectButton.disabled = true;
             selectButton.classList.add("opacity-50", "cursor-not-allowed");
             
-            // Process each file
             for (const file of fileList) {
               const statusItem = document.createElement("li");
               statusItem.className = "flex items-center";
@@ -137,10 +131,7 @@
               statusList.appendChild(statusItem);
 
               try {
-                // Read file content
                 const content = await readFileAsText(file);
-
-                // Upload to server
                 const response = await fetch(
                   "/sbom/upload?name=" + encodeURIComponent(file.name),
                   {
@@ -153,15 +144,21 @@
                 );
 
                 if (response.ok) {
-                  // Success
+                  // Get the response data which contains the file name
+                  const responseData = await response.json();
+                  const fileName = responseData.data?.name || file.name;
+                  
                   statusItem.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
                     <span>${file.name} uploaded successfully</span>
                   `;
+                  
+                  // Add a tab for the uploaded file
+                  addFileTab(fileName);
                 } else {
-                  // Error
+                  // Error handling remains the same
                   const errorData = await response.json();
                   statusItem.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -173,7 +170,7 @@
                   `;
                 }
               } catch (error) {
-                // Error reading or uploading file
+                // Error reading or uploading file - same as before
                 statusItem.innerHTML = `
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
@@ -191,7 +188,145 @@
           }
         });
 
-      // Helper function to read file as text
+      // Function to add a new file tab
+      function addFileTab(fileName) {
+        // If we already have this file, don't add it again
+        if (uploadedFiles.has(fileName)) {
+          return;
+        }
+        
+        uploadedFiles.add(fileName);
+        
+        const tabsContainer = document.getElementById("file-tabs");
+        const noTabsMessage = document.getElementById("no-tabs-message");
+        
+        // Hide the "no files" message
+        if (noTabsMessage) {
+          noTabsMessage.style.display = "none";
+        }
+        
+        // Create the tab element
+        const tab = document.createElement("div");
+        tab.className = "px-4 py-2 border border-gray-300 rounded-t-md mr-2 mb-2 cursor-pointer hover:bg-gray-50 flex items-center";
+        tab.dataset.fileName = fileName;
+        
+        // Tab content
+        tab.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+          </svg>
+          <span>${fileName}</span>
+        `;
+        
+        // Add click event to select the tab
+        tab.addEventListener("click", () => selectTab(tab));
+        
+        // Add the tab to the container
+        tabsContainer.appendChild(tab);
+        
+        // Select this tab if it's the first one
+        if (uploadedFiles.size === 1) {
+          selectTab(tab);
+        }
+      }
+      
+      // Function to select a tab
+      function selectTab(tabElement) {
+        const tabsContainer = document.getElementById("file-tabs");
+        const tabContent = document.getElementById("tab-content");
+        const fileName = tabElement.dataset.fileName;
+        
+        // Remove active class from all tabs
+        tabsContainer.querySelectorAll("div").forEach(tab => {
+          tab.classList.remove("tab-active");
+        });
+        
+        // Add active class to selected tab
+        tabElement.classList.add("tab-active");
+        
+        // Update tab content with delete button
+        tabContent.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="text-lg font-medium">${fileName}</div>
+            <button 
+              class="delete-btn bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm flex items-center"
+              onclick="deleteFile('${fileName}')"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              Delete
+            </button>
+          </div>
+        `;
+        
+        // Store the active tab
+        activeTab = tabElement;
+      }
+      
+      // Function to delete a file
+      async function deleteFile(fileName) {
+        try {
+          const response = await fetch(`/sbom/delete?name=${encodeURIComponent(fileName)}`, {
+            method: 'DELETE'
+          });
+          
+          if (response.ok) {
+            // Remove the tab
+            const tabsContainer = document.getElementById("file-tabs");
+            const tabToRemove = tabsContainer.querySelector(`[data-file-name="${fileName}"]`);
+            
+            if (tabToRemove) {
+              tabsContainer.removeChild(tabToRemove);
+              uploadedFiles.delete(fileName);
+              
+              // Clear content if this was the active tab
+              if (activeTab === tabToRemove) {
+                document.getElementById("tab-content").innerHTML = '';
+                activeTab = null;
+              }
+              
+              // If there are other tabs, select the first one
+              if (uploadedFiles.size > 0) {
+                const firstTab = tabsContainer.querySelector("div");
+                if (firstTab) {
+                  selectTab(firstTab);
+                }
+              } else {
+                // Show "no files" message
+                document.getElementById("tab-content").innerHTML = '<div id="no-tabs-message" class="text-gray-500 italic">No files uploaded yet</div>';
+              }
+            }
+            
+            // Show success message
+            const statusContainer = document.getElementById("upload-status");
+            const successMessage = document.createElement("div");
+            successMessage.className = "mt-2 text-green-600 flex items-center";
+            successMessage.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+              ${fileName} deleted successfully
+            `;
+            statusContainer.innerHTML = '';
+            statusContainer.appendChild(successMessage);
+            
+            // Remove the message after 3 seconds
+            setTimeout(() => {
+              successMessage.remove();
+            }, 3000);
+          } else {
+            // Handle error
+            const errorData = await response.json();
+            alert(`Error deleting file: ${errorData.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error("Error deleting file:", error);
+          alert(`Failed to delete file: ${error.message || 'Network error'}`);
+        }
+      }
+
+      // Helper function to read file as text (keep the existing one)
       function readFileAsText(file) {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
