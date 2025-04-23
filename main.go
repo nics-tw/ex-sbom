@@ -4,6 +4,7 @@ import (
 	"embed"
 	"ex-s/internal/handler"
 	"html/template"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,6 +17,9 @@ import (
 
 //go:embed templates/*
 var templates embed.FS
+
+//go:embed static/img/favicon.ico
+var favicon embed.FS
 
 func main() {
 	r := gin.Default()
@@ -62,5 +66,11 @@ func setupSSR(r *gin.Engine) {
 
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", nil)
+	})
+
+	faviconFS, _ := fs.Sub(favicon, "static/img")
+	faviconHandler := http.FileServer(http.FS(faviconFS))
+	r.GET("/favicon.ico", func(c *gin.Context) {
+		faviconHandler.ServeHTTP(c.Writer, c.Request)
 	})
 }
