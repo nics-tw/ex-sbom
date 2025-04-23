@@ -5,8 +5,10 @@ const (
 	RespErr  = "error"
 	RespData = "data"
 
-	ErrInvalidSBOM = "Unknown SBOM"
-	ErrSBOMNotFound = "SBOM not found"
+	ErrInvalidSBOM        = "Unknown SBOM, please check if the SBOM is valid"
+	ErrSBOMNotFound       = "SBOM not found"
+	ErrXMLNotSupport      = "XML-formatted SBOM is currently not supported"
+	ErrFileTypeNotSupport = "File type not supported"
 
 	ErrBindingJSON = "Error binding JSON"
 	ErrParsingJson = "Error parsing JSON:"

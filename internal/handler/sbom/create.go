@@ -3,6 +3,7 @@ package sbom
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"ex-s/util/msg"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,14 @@ const (
 	SBOMUnknown SBOMType = iota
 	SBOMSPDX
 	SBOMCycloneDX
+)
+
+type FileType int
+
+const (
+	Unknown FileType = iota
+	JSON
+	XML
 )
 
 type (
@@ -58,6 +67,22 @@ func CreateSBOM(c *gin.Context) {
 		slog.Error("Failed to read request body", "error", err)
 
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
+		return
+	}
+
+	switch detectFileType(sbomData) {
+	case JSON:
+		slog.Info("Detected JSON file type with valid content")
+	case XML:
+		slog.Info("Detected XML file type with valid content")
+
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrXMLNotSupport})
+		return
+	case Unknown:
+		fallthrough
+	default:
+		slog.Error("Invalid file type", "error", msg.ErrFileTypeNotSupport)
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrFileTypeNotSupport})
 		return
 	}
 
@@ -115,6 +140,27 @@ func CreateSBOM(c *gin.Context) {
 	}
 
 	slog.Info("SBOM created", "name", fileName, "type", sbomType)
+}
+
+func detectFileType(data []byte) FileType {
+	// First, try JSON
+	var js json.RawMessage
+	if json.Unmarshal(data, &js) == nil {
+		return JSON
+	}
+
+	// Then try XML
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		_, err := decoder.Token()
+		if err != nil {
+			break
+		}
+		// If we reach this point, it's likely valid XML
+		return XML
+	}
+
+	return Unknown
 }
 
 func detectSBOMFormat(data []byte) SBOMType {
