@@ -1,7 +1,12 @@
 # ex-s
 ex-s, abbreviation for Explorer of SBOM, is currently an experimental visualization tool for SBOM analysis.
 
-# Usage
+## Usage
+
+- The main page of the tool is a graph visualization of the SBOM.
+- Through the dependency graph, you can see the relationships between different components.
+- Also, the impact chain of the vulnerabilities in the system can be visualized, analyzed, which helps you understand the potential risks in your system.
+- Aside from visualization, the detailed information of each component can be viewed, which may be helpful for you to plan the remediation of the vulnerabilities.
 
 ## Install
 
