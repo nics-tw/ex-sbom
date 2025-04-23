@@ -62,3 +62,7 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 
 	return nil
 }
+
+func DeleteSBOM(name string) {
+	delete(SBOMs, name)
+}

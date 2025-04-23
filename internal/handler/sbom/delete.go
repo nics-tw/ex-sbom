@@ -1,6 +1,7 @@
 package sbom
 
 import (
+	"ex-s/internal/service"
 	"ex-s/util/msg"
 	"fmt"
 	"log/slog"
@@ -26,6 +27,7 @@ func DeleteSBOM(c *gin.Context) {
 	}
 
 	delete(SBOMs, name)
+	service.DeleteSBOM(name)
 
 	slog.Info("SBOM deleted successfully", "name", name)
 
