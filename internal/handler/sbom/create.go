@@ -86,7 +86,13 @@ func CreateSBOM(c *gin.Context) {
 		return
 	}
 
-	fileName := c.Query(param)
+	fileName := c.Query("name")
+	if len(fileName) == 0 {
+		slog.Error("Missing SBOM name", "error", msg.ErrMissingParam)
+
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "name")})
+		return
+	}
 
 	sbomType := detectSBOMFormat(sbomData)
 
