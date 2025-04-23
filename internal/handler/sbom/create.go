@@ -60,7 +60,7 @@ func toCreateResponse(name string) gin.H {
 // CreateSBOM is the handler that:
 // 1. distinguish between the two types of SBOMs, spdx and cyclonedx
 // 2. return the SBOM file
-// TODO: rethink about the validation of the SBOM json from request
+// TODO: rethink about the content validation of the SBOM from request
 func CreateSBOM(c *gin.Context) {
 	sbomData, err := c.GetRawData()
 	if err != nil {
@@ -143,20 +143,13 @@ func CreateSBOM(c *gin.Context) {
 }
 
 func detectFileType(data []byte) FileType {
-	// First, try JSON
 	var js json.RawMessage
 	if json.Unmarshal(data, &js) == nil {
 		return JSON
 	}
 
-	// Then try XML
 	decoder := xml.NewDecoder(bytes.NewReader(data))
-	for {
-		_, err := decoder.Token()
-		if err != nil {
-			break
-		}
-		// If we reach this point, it's likely valid XML
+	if _, err := decoder.Token(); err == nil {
 		return XML
 	}
 
