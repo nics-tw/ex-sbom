@@ -1,0 +1,415 @@
+{
+	"info": {
+		"_postman_id": "a5ef74e8-af34-4948-b09c-2061df16d1c1",
+		"name": "ex-s",
+		"description": "# Overview\n\nThis file is the api documentation of the [ex-s](https://github.com/nics-tw/ex-s).",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "34288674"
+	},
+	"item": [
+		{
+			"name": "Upload SBOM API",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "file",
+					"file": {
+						"src": "/Users/huangdore/Desktop/others/sbom.json"
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/sbom/upload?name=sbom.json",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"sbom",
+						"upload"
+					],
+					"query": [
+						{
+							"key": "name",
+							"value": "sbom.json",
+							"description": "required, the name of the SBOM file(currently json format supported only)"
+						}
+					]
+				},
+				"description": "Upload SBOM API is responsible for upload the SBOM data into the backend side of ex-s."
+			},
+			"response": [
+				{
+					"name": "success",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "/Users/huangdore/Desktop/others/osv-scalibr/extractor/filesystem/sbom/cdx/testdata/sbom.bom.json"
+							},
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8080/sbom/upload?name=sbom.bom.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"sbom",
+								"upload"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "sbom.bom.json"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Wed, 23 Apr 2025 01:35:50 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "44"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"data\": {\n        \"name\": \"sbom.bom.json\"\n    },\n    \"msg\": \"ok\"\n}"
+				},
+				{
+					"name": "xml not support error",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "/Users/huangdore/Desktop/others/osv-scalibr/extractor/filesystem/sbom/cdx/testdata/sbom.bom.xml"
+							},
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8080/sbom/upload?name=sbom.bom.xml",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"sbom",
+								"upload"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "sbom.bom.xml"
+								}
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Wed, 23 Apr 2025 01:38:09 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "57"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"XML-formatted SBOM is currently not supported\"\n}"
+				},
+				{
+					"name": "unknown type content error",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "/Users/huangdore/Desktop/others/package-lock.json"
+							},
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8080/sbom/upload?name=package-lock.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"sbom",
+								"upload"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "package-lock.json"
+								}
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Wed, 23 Apr 2025 01:41:45 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "59"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"Unknown SBOM, please check if the SBOM is valid\"\n}"
+				},
+				{
+					"name": "missing param error",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "file",
+							"file": {
+								"src": "/Users/huangdore/Desktop/others/package-lock.json"
+							},
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8080/sbom/upload",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"sbom",
+								"upload"
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Wed, 23 Apr 2025 01:41:14 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "44"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"Missing required parameter: name\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Delete SBOM API",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/sbom/delete?name=sbom.json",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"sbom",
+						"delete"
+					],
+					"query": [
+						{
+							"key": "name",
+							"value": "sbom.json",
+							"description": "required, the param should be the existing file in the backend side."
+						}
+					]
+				},
+				"description": "Delete SBOM API is responsible for deleting SBOM data in the backend side."
+			},
+			"response": [
+				{
+					"name": "success",
+					"originalRequest": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/sbom/delete?name=sbom.bom.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"sbom",
+								"delete"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "sbom.bom.json"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Wed, 23 Apr 2025 01:36:31 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "12"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"msg\": \"ok\"\n}"
+				},
+				{
+					"name": "not found",
+					"originalRequest": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/sbom/delete?name=sb.bom.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"sbom",
+								"delete"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "sb.bom.json"
+								}
+							]
+						}
+					},
+					"status": "Not Found",
+					"code": 404,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Wed, 23 Apr 2025 01:37:09 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "26"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"SBOM not found\"\n}"
+				},
+				{
+					"name": "missing param",
+					"originalRequest": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/sbom/delete",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"sbom",
+								"delete"
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Wed, 23 Apr 2025 01:37:26 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "44"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"Missing required parameter: name\"\n}"
+				}
+			]
+		}
+	]
+}
