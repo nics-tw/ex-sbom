@@ -7,6 +7,11 @@ ex-s, abbreviation for Explorer of SBOM, is currently an experimental visualizat
 
 0. Install Golang, version 1.24 or later.
 
+For MacOS, you can use Homebrew to install Golang. If you don't have Homebrew installed, you can find the installation instructions [here](https://brew.sh/).
+```bash
+brew install go
+```
+
 1. Clone the repository:
 ```bash
 git clone git@github.com:nics-tw/ex-s.git
