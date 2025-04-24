@@ -53,8 +53,6 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		}
 	}
 
-	// TODO: implement reverse dependency calculation
-
 	SBOMs[name] = FormattedSBOM{
 		Components: components,
 		Dependency: dependency,
