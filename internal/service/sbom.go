@@ -58,6 +58,7 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 	SBOMs[name] = FormattedSBOM{
 		Components: components,
 		Dependency: dependency,
+		ReverseDependency: CreateReverseDep(dependency),
 	}
 
 	return nil
@@ -65,4 +66,20 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 
 func DeleteSBOM(name string) {
 	delete(SBOMs, name)
+}
+
+func CreateReverseDep(Dependency map[string][]string) (map[string][]string) {
+	// TODO: calculate non-root package number for pre-allocate the slice
+	reverseDependency := make(map[string][]string)
+
+	for k, v := range Dependency {
+		for _, dep := range v {
+			if _, ok := reverseDependency[dep]; !ok {
+				reverseDependency[dep] = []string{}
+			}
+			reverseDependency[dep] = append(reverseDependency[dep], k)
+		}
+	}
+
+	return reverseDependency
 }
