@@ -16,19 +16,19 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		SBOMs[name] = FormattedSBOM{}
 	}
 
-	dependency := getDep(bom.Dependencies)
+	dependency := getCdxDep(bom.Dependencies)
 
 	SBOMs[name] = FormattedSBOM{
-		Components:        getComponents(bom.Components),
-		DependencyLevel:   getDependencyDepthMap(bom),
+		Components:        getCdxComponents(bom.Components),
+		DependencyLevel:   getCdxDependencyDepthMap(bom),
 		Dependency:        dependency,
-		ReverseDependency: getReverseDep(dependency),
+		ReverseDependency: getCdxReverseDep(dependency),
 	}
 
 	return nil
 }
 
-func getComponents(input *[]cdx.Component) []string {
+func getCdxComponents(input *[]cdx.Component) []string {
 	var components []string
 
 	if input != nil {
@@ -40,7 +40,7 @@ func getComponents(input *[]cdx.Component) []string {
 	return components
 }
 
-func getDependencyDepthMap(sbom cdx.BOM) map[int][]string {
+func getCdxDependencyDepthMap(sbom cdx.BOM) map[int][]string {
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
@@ -92,7 +92,7 @@ func getDependencyDepthMap(sbom cdx.BOM) map[int][]string {
 	return result
 }
 
-func getDep(input *[]cdx.Dependency) map[string][]string {
+func getCdxDep(input *[]cdx.Dependency) map[string][]string {
 	dependency := make(map[string][]string)
 
 	if input != nil {
@@ -106,7 +106,7 @@ func getDep(input *[]cdx.Dependency) map[string][]string {
 	return dependency
 }
 
-func getReverseDep(Dependency map[string][]string) map[string][]string {
+func getCdxReverseDep(Dependency map[string][]string) map[string][]string {
 	// TODO: calculate non-root package number for pre-allocate the slice
 	reverseDependency := make(map[string][]string)
 
