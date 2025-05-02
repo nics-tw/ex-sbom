@@ -2,6 +2,7 @@ package ssbom
 
 import (
 	"fmt"
+	"slices"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 )
@@ -38,7 +39,7 @@ func getCdxComponents(input *[]cdx.Component) []string {
 		}
 	}
 
-	return components
+	return slices.Compact(components)
 }
 
 func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string) map[int][]string {
