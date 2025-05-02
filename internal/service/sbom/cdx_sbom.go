@@ -16,11 +16,12 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		SBOMs[name] = FormattedSBOM{}
 	}
 
+	c := getCdxComponents(bom.Components)
 	dependency := getCdxDep(bom.Dependencies)
 
 	SBOMs[name] = FormattedSBOM{
-		Components:        getCdxComponents(bom.Components),
-		DependencyLevel:   getCdxDependencyDepthMap(bom),
+		Components:        c,
+		DependencyLevel:   getCdxDependencyDepthMap(bom, c),
 		Dependency:        dependency,
 		ReverseDependency: getCdxReverseDep(dependency),
 	}
@@ -40,7 +41,7 @@ func getCdxComponents(input *[]cdx.Component) []string {
 	return components
 }
 
-func getCdxDependencyDepthMap(sbom cdx.BOM) map[int][]string {
+func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string) map[int][]string {
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
@@ -87,7 +88,8 @@ func getCdxDependencyDepthMap(sbom cdx.BOM) map[int][]string {
 		result[depth] = append(result[depth], node)
 	}
 
-	result[0] = roots
+	// considering with negative list way, if it's with depth that is not 0, that means it's not root
+	result[0] = getRootComponents(allComponents, result)
 
 	return result
 }
@@ -120,4 +122,30 @@ func getCdxReverseDep(Dependency map[string][]string) map[string][]string {
 	}
 
 	return reverseDependency
+}
+
+func getRootComponents(allComponents []string, depthMap map[int][]string) []string {
+	var nonRoots []string
+
+	for _, components := range depthMap {
+		nonRoots = append(nonRoots, components...)
+	}
+
+	return getDiff(allComponents, nonRoots)
+}
+
+func getDiff(a, b []string) []string {
+	bMap := make(map[string]struct{}, len(b))
+	for _, itemB := range b {
+		bMap[itemB] = struct{}{}
+	}
+
+	result := make([]string, 0, len(a))
+	for _, itemA := range a {
+		if _, exists := bMap[itemA]; !exists {
+			result = append(result, itemA)
+		}
+	}
+
+	return result
 }
