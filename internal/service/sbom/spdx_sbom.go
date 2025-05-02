@@ -33,12 +33,10 @@ func ProcessSPDX(name string, document *spdx.Document) error {
 		"Process SPDX-formatted SBOM successfully",
 		"name",
 		name,
-		"with",
+		"numbers of components",
 		len(c),
-		"components",
-		"and",
+		"total levels",
 		fmt.Sprintf("%d", len(SBOMs[name].DependencyLevel)),
-		"levels of dependency depth",
 	)
 
 	return nil

@@ -32,12 +32,10 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		"Process CycloneDX-formatted SBOM successfully",
 		"name",
 		name,
-		"with",
+		"numbers of components",
 		len(c),
-		"components",
-		"and",
+		"total levels",
 		fmt.Sprintf("%d", len(SBOMs[name].DependencyLevel)),
-		"levels of dependency depth",
 	)
 
 	return nil
