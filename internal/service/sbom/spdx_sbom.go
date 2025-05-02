@@ -32,22 +32,25 @@ func ProcessSPDX(name string, document *spdx.Document) error {
 }
 
 func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[int][]string {
-	graph := make(map[common.DocElementID][]common.DocElementID)
-	inDegree := make(map[common.DocElementID]int)
-	allNodes := make(map[common.DocElementID]bool)
+	graph := make(map[string][]string)
+	inDegree := make(map[string]int)
+	allNodes := make(map[string]bool)
 
 	if len(sbom.Relationships) == 0 {
 		return nil
 	}
 
 	for _, d := range sbom.Relationships {
-		graph[d.RefA] = append(graph[d.RefA], d.RefB)
-		inDegree[d.RefB]++
-		allNodes[d.RefA] = true
-		allNodes[d.RefB] = true
+		refAStr := getRefIDStr(d.RefA)
+		refBStr := getRefIDStr(d.RefB)
+
+		graph[refAStr] = append(graph[refAStr], refBStr)
+		inDegree[refBStr]++
+		allNodes[refAStr] = true
+		allNodes[refBStr] = true
 	}
 
-	var roots []common.DocElementID
+	var roots []string
 
 	for node := range allNodes {
 		if inDegree[node] == 0 {
@@ -55,10 +58,10 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[i
 		}
 	}
 
-	depthMap := make(map[common.DocElementID]int)
+	depthMap := make(map[string]int)
 
-	var dfs func(node common.DocElementID, depth int)
-	dfs = func(node common.DocElementID, depth int) {
+	var dfs func(node string, depth int)
+	dfs = func(node string, depth int) {
 		if depth > depthMap[node] {
 			depthMap[node] = depth
 		}
@@ -75,9 +78,7 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[i
 	result := make(map[int][]string)
 
 	for node, depth := range depthMap {
-		str := fmt.Sprintf("%s", node)
-
-		result[depth] = append(result[depth], str)
+		result[depth] = append(result[depth], node)
 	}
 
 	result[0] = getRootComponents(allComponents, result)
@@ -112,4 +113,16 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 	}
 
 	return dependency
+}
+
+func getRefIDStr(input common.DocElementID) string {
+	if len(input.DocumentRefID) > 0 {
+		return input.DocumentRefID
+	} else if len(input.ElementRefID) > 0 {
+		return string(input.ElementRefID)
+	} else if len(input.SpecialID) > 0 {
+		return input.SpecialID
+	}
+
+	return ""
 }
