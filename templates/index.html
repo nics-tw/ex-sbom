@@ -180,6 +180,11 @@
                   
                   // Add a tab for the uploaded file
                   addFileTab(fileName);
+
+                  // remove the uploading status after 3 seconds
+                  setTimeout(() => {
+                    statusItem.remove();
+                  }, 3000);
                 } else {
                   // Error handling remains the same
                   const errorData = await response.json();
