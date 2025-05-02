@@ -125,7 +125,7 @@ func CreateSBOM(c *gin.Context) {
 				return
 			}
 
-			slog.Info("SBOM processed", "name", fileName)
+			slog.Info("process spdx-formatted sbom into shared structs,", "name", fileName)
 		}()
 
 		c.JSON(http.StatusOK, toCreateResponse(fileName))
@@ -154,7 +154,7 @@ func CreateSBOM(c *gin.Context) {
 				return
 			}
 
-			slog.Info("SBOM processed", "name", fileName)
+			slog.Info("process cyclonedx-formatted sbom into shared structs,", "name", fileName)
 		}()
 
 		c.JSON(http.StatusOK, toCreateResponse(fileName))
