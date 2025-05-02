@@ -2,6 +2,7 @@ package ssbom
 
 import (
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/spdx/tools-golang/spdx"
@@ -27,6 +28,18 @@ func ProcessSPDX(name string, document *spdx.Document) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 	}
+
+	slog.Info(
+		"Process SPDX-formatted SBOM successfully",
+		"name",
+		name,
+		"with",
+		len(c),
+		"components",
+		"and",
+		fmt.Sprintf("%d", len(SBOMs[name].DependencyLevel)),
+		"levels of dependency depth",
+	)
 
 	return nil
 }
