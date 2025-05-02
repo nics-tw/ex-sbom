@@ -2,6 +2,7 @@ package ssbom
 
 import (
 	"fmt"
+	"log/slog"
 	"slices"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
@@ -26,6 +27,18 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 	}
+
+	slog.Info(
+		"Process CycloneDX-formatted SBOM successfully",
+		"name",
+		name,
+		"with",
+		len(c),
+		"components",
+		"and",
+		fmt.Sprintf("%d", len(SBOMs[name].DependencyLevel)),
+		"levels of dependency depth",
+	)
 
 	return nil
 }
