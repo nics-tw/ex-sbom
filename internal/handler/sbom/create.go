@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
-	"ex-s/internal/service/sbom"
+	ssbom "ex-s/internal/service/sbom"
 	"ex-s/util/msg"
 	"fmt"
 	"log/slog"
@@ -118,6 +118,15 @@ func CreateSBOM(c *gin.Context) {
 		}
 
 		SBOMs[fileName] = sbom
+
+		go func() {
+			if err := ssbom.ProcessSPDX(fileName, spdxDoc); err != nil {
+				slog.Error("Failed to process SPDX SBOM", "error", err)
+				return
+			}
+
+			slog.Info("SBOM processed", "name", fileName)
+		}()
 
 		c.JSON(http.StatusOK, toCreateResponse(fileName))
 	case SBOMCycloneDX:

@@ -24,7 +24,7 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		Components:        c,
 		DependencyLevel:   getCdxDependencyDepthMap(bom, c),
 		Dependency:        dependency,
-		ReverseDependency: getCdxReverseDep(dependency),
+		ReverseDependency: getReverseDep(dependency),
 	}
 
 	return nil
@@ -109,7 +109,7 @@ func getCdxDep(input *[]cdx.Dependency) map[string][]string {
 	return dependency
 }
 
-func getCdxReverseDep(Dependency map[string][]string) map[string][]string {
+func getReverseDep(Dependency map[string][]string) map[string][]string {
 	// TODO: calculate non-root package number for pre-allocate the slice
 	reverseDependency := make(map[string][]string)
 
