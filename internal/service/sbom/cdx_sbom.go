@@ -1,26 +1,9 @@
-package service
+package ssbom
 
 import (
 	"fmt"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
-)
-
-type (
-	FormattedSBOM struct {
-		Components      []string
-		DependencyLevel map[int][]string
-		Dependency      map[string][]string
-		// Reverse dependency is designed for finding out the components that depend on a specific component
-		// in this case the specific one with vuln that the CVSS score is higher than 7(or user defined)
-		ReverseDependency map[string][]string
-	}
-)
-
-var (
-	SBOMs = map[string]FormattedSBOM{}
-
-	CVSSThreshold = int(7)
 )
 
 func ProcessCDX(name string, bom cdx.BOM) error {
@@ -43,10 +26,6 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 	}
 
 	return nil
-}
-
-func DeleteSBOM(name string) {
-	delete(SBOMs, name)
 }
 
 func getComponents(input *[]cdx.Component) []string {
@@ -88,6 +67,7 @@ func getDependencyDepthMap(sbom cdx.BOM) map[int][]string {
 
 	depthMap := make(map[string]int)
 
+	// perform DFS to calculate the depth of each node
 	var dfs func(node string, depth int)
 	dfs = func(node string, depth int) {
 		if depth > depthMap[node] {

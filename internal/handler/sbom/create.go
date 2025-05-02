@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
-	"ex-s/internal/service"
+	"ex-s/internal/service/sbom"
 	"ex-s/util/msg"
 	"fmt"
 	"log/slog"
@@ -140,7 +140,7 @@ func CreateSBOM(c *gin.Context) {
 		SBOMs[fileName] = sbom
 
 		go func() {
-			if err := service.ProcessCDX(fileName, bom); err != nil {
+			if err := ssbom.ProcessCDX(fileName, bom); err != nil {
 				slog.Error("Failed to process CycloneDX SBOM", "error", err)
 				return
 			}
