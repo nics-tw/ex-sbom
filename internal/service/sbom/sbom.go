@@ -1,5 +1,7 @@
 package ssbom
 
+import "fmt"
+
 type (
 	// FormattedSBOM is a struct that contains the formatted SBOM data, which is originally in SPDX or CycloneDX defined format.
 	FormattedSBOM struct {
@@ -17,6 +19,14 @@ var (
 
 	CVSSThreshold = int(7)
 )
+
+func GetSBOM(name string) (FormattedSBOM, error) {
+	sbom, ok := SBOMs[name]
+	if !ok {
+		return FormattedSBOM{}, fmt.Errorf("SBOM not found")
+	}
+	return sbom, nil
+}
 
 func DeleteSBOM(name string) {
 	delete(SBOMs, name)
