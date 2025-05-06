@@ -560,6 +560,9 @@
               }
             }
 
+            // Reset file input to allow re-uploading the same file
+            document.getElementById("sbom-file-input").value = "";
+
             // Show success message
             const statusContainer = document.getElementById("upload-status");
             const successMessage = document.createElement("div");
