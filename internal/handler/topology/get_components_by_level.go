@@ -19,7 +19,7 @@ type (
 	}
 )
 
-func toTopologyResp(bom ssbom.FormattedSBOM) []levelInfo {
+func toLevelListResp(bom ssbom.FormattedSBOM) []levelInfo {
 	var levels []levelInfo
 	for level, components := range bom.DependencyLevel {
 		levels = append(levels, levelInfo{
@@ -49,6 +49,6 @@ func GetTopology(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		msg.RespMsg:  "ok",
-		msg.RespData: toTopologyResp(bom),
+		msg.RespData: toLevelListResp(bom),
 	})
 }
