@@ -34,7 +34,7 @@ func toLevelListResp(bom ssbom.FormattedSBOM) []levelInfo {
 	return levels
 }
 
-func GetTopology(c *gin.Context) {
+func GetComponentListByLevel(c *gin.Context) {
 	name := c.Query("name")
 	if len(name) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "name")})

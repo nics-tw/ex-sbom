@@ -312,7 +312,7 @@
       async function fetchTopologyData(fileName) {
         try {
           const response = await fetch(
-            `/topology/get?name=${encodeURIComponent(fileName)}`
+            `/topology/get_list_by_level?name=${encodeURIComponent(fileName)}`
           );
 
           if (!response.ok) {
