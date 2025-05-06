@@ -18,5 +18,6 @@ func SetupRouterGroup(r *gin.Engine) {
 	topologyGroup := r.Group("/topology")
 	{
 		topologyGroup.GET("/get", topology.GetTopology)
+		topologyGroup.GET("/relations", topology.GetRelations)
 	}
 }
