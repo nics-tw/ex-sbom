@@ -21,12 +21,14 @@ func ProcessSPDX(name string, document *spdx.Document) error {
 
 	c := getSpdxComponents(*document)
 	dependency := getSpdxDep(*document)
+	dependencyLevel := getSpdxDependencyDepthMap(*document, c)
 
 	SBOMs[name] = FormattedSBOM{
 		Components:        c,
-		DependencyLevel:   getSpdxDependencyDepthMap(*document, c),
+		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
+		ComponentToLevel:  getComponentToLevel(dependencyLevel),
 	}
 
 	slog.Info(

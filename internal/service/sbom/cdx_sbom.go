@@ -20,12 +20,14 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 
 	c := getCdxComponents(bom.Components)
 	dependency := getCdxDep(bom.Dependencies)
+	dependencyLevel := getCdxDependencyDepthMap(bom, c)
 
 	SBOMs[name] = FormattedSBOM{
 		Components:        c,
-		DependencyLevel:   getCdxDependencyDepthMap(bom, c),
+		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
+		ComponentToLevel:  getComponentToLevel(dependencyLevel),
 	}
 
 	slog.Info(
