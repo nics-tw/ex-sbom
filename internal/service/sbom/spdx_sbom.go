@@ -124,10 +124,8 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 
 	if len(input.Relationships) != 0 {
 		for _, r := range input.Relationships {
-			refAStr := fmt.Sprintf("%s", r.RefA)
-			refBStr := fmt.Sprintf("%s", r.RefB)
-
-			dependency[refAStr] = append(dependency[trimSPDXPrefix(refAStr)], trimSPDXPrefix(refBStr))
+			dependency[trimSPDXPrefix(getRefIDStr(r.RefA))] =
+				append(dependency[trimSPDXPrefix(getRefIDStr(r.RefA))], trimSPDXPrefix(getRefIDStr(r.RefB)))
 		}
 	}
 
