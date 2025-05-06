@@ -76,16 +76,20 @@
 
       <!-- Upload status container -->
       <div id="upload-status" class="mt-4"></div>
-      
+
       <!-- Tabs container -->
       <div class="mt-6 border-b border-gray-200">
-        <div class="text-lg font-medium text-gray-700 mb-2">Uploaded SBOM Files</div>
+        <div class="text-lg font-medium text-gray-700 mb-2">
+          Uploaded SBOM Files
+        </div>
         <div id="file-tabs" class="flex flex-wrap"></div>
       </div>
-      
+
       <!-- Tab content area -->
       <div id="tab-content" class="py-4">
-        <div id="no-tabs-message" class="text-gray-500 italic">No files uploaded yet</div>
+        <div id="no-tabs-message" class="text-gray-500 italic">
+          No files uploaded yet
+        </div>
       </div>
     </div>
 
@@ -93,18 +97,19 @@
       // Track uploaded files
       const uploadedFiles = new Set();
       let activeTab = null;
-      
+
       document
         .getElementById("sbom-file-input")
         .addEventListener("change", async function (e) {
           // Existing file upload code remains the same
           const fileList = e.target.files;
-          const selectedFilesContainer = document.getElementById("selected-files");
+          const selectedFilesContainer =
+            document.getElementById("selected-files");
           const statusContainer = document.getElementById("upload-status");
-          
+
           statusContainer.innerHTML = "";
           selectedFilesContainer.innerHTML = "";
-          
+
           if (fileList.length > 0) {
             const fileListHeading = document.createElement("div");
             fileListHeading.className = "font-medium mb-2";
@@ -133,15 +138,15 @@
             });
 
             selectedFilesContainer.appendChild(fileListElement);
-            
+
             const statusList = document.createElement("ul");
             statusList.className = "space-y-2 mt-4";
             statusContainer.appendChild(statusList);
-            
+
             const selectButton = document.getElementById("select-sbom-btn");
             selectButton.disabled = true;
             selectButton.classList.add("opacity-50", "cursor-not-allowed");
-            
+
             for (const file of fileList) {
               const statusItem = document.createElement("li");
               statusItem.className = "flex items-center";
@@ -170,14 +175,14 @@
                   // Get the response data which contains the file name
                   const responseData = await response.json();
                   const fileName = responseData.data?.name || file.name;
-                  
+
                   statusItem.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
                     <span>${file.name} uploaded successfully</span>
                   `;
-                  
+
                   // Add a tab for the uploaded file
                   addFileTab(fileName);
 
@@ -193,8 +198,8 @@
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                     </svg>
                     <span class="text-red-600">${file.name}: ${
-                      errorData.error || "Upload failed"
-                    }</span>
+                    errorData.error || "Upload failed"
+                  }</span>
                   `;
                 }
               } catch (error) {
@@ -204,12 +209,12 @@
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                   </svg>
                   <span class="text-red-600">${file.name}: ${
-                    error.message || "Error reading file"
-                  }</span>
+                  error.message || "Error reading file"
+                }</span>
                 `;
               }
             }
-            
+
             // Re-enable select button after uploads
             selectButton.disabled = false;
             selectButton.classList.remove("opacity-50", "cursor-not-allowed");
@@ -222,22 +227,23 @@
         if (uploadedFiles.has(fileName)) {
           return;
         }
-        
+
         uploadedFiles.add(fileName);
-        
+
         const tabsContainer = document.getElementById("file-tabs");
         const noTabsMessage = document.getElementById("no-tabs-message");
-        
+
         // Hide the "no files" message
         if (noTabsMessage) {
           noTabsMessage.style.display = "none";
         }
-        
+
         // Create the tab element
         const tab = document.createElement("div");
-        tab.className = "px-4 py-2 border border-gray-300 rounded-t-md mr-2 mb-2 cursor-pointer hover:bg-gray-50 flex items-center";
+        tab.className =
+          "px-4 py-2 border border-gray-300 rounded-t-md mr-2 mb-2 cursor-pointer hover:bg-gray-50 flex items-center";
         tab.dataset.fileName = fileName;
-        
+
         // Tab content
         tab.innerHTML = `
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -245,75 +251,229 @@
           </svg>
           <span>${fileName}</span>
         `;
-        
+
         // Add click event to select the tab
         tab.addEventListener("click", () => selectTab(tab));
-        
+
         // Add the tab to the container
         tabsContainer.appendChild(tab);
-        
+
         // Select this tab if it's the first one
         if (uploadedFiles.size === 1) {
           selectTab(tab);
         }
       }
-      
+
       // Function to select a tab
       function selectTab(tabElement) {
         const tabsContainer = document.getElementById("file-tabs");
         const tabContent = document.getElementById("tab-content");
         const fileName = tabElement.dataset.fileName;
-        
+
         // Remove active class from all tabs
-        tabsContainer.querySelectorAll("div").forEach(tab => {
+        tabsContainer.querySelectorAll("div").forEach((tab) => {
           tab.classList.remove("tab-active");
         });
-        
+
         // Add active class to selected tab
         tabElement.classList.add("tab-active");
-        
-        // Update tab content with delete button
+
+        // Show loading state
         tabContent.innerHTML = `
-          <div class="flex items-center justify-between">
-            <div class="text-lg font-medium">${fileName}</div>
-            <button 
-              class="delete-btn bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm flex items-center"
-              onclick="deleteFile('${fileName}')"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-              </svg>
-              Delete
-            </button>
-          </div>
-        `;
-        
+    <div class="flex items-center justify-between mb-4">
+      <div class="text-lg font-medium">${fileName}</div>
+      <button 
+        class="delete-btn bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded text-sm flex items-center"
+        onclick="deleteFile('${fileName}')"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+        </svg>
+        Delete
+      </button>
+    </div>
+    <div class="mt-4 text-gray-600 flex items-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="animate-spin h-5 w-5 mr-3 text-[#009999]" viewBox="0 0 24 24" fill="none">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      Loading topology data...
+    </div>
+  `;
+
         // Store the active tab
         activeTab = tabElement;
+
+        // Fetch topology data
+        fetchTopologyData(fileName);
       }
-      
+
+      // Add a new function to fetch topology data
+      async function fetchTopologyData(fileName) {
+        try {
+          const response = await fetch(
+            `/topology/get?name=${encodeURIComponent(fileName)}`
+          );
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch topology: ${response.status}`);
+          }
+
+          const responseData = await response.json();
+
+          if (responseData.data) {
+            displayTopologyData(responseData.data, fileName);
+          } else {
+            throw new Error("No topology data available");
+          }
+        } catch (error) {
+          console.error("Error fetching topology:", error);
+
+          const tabContent = document.getElementById("tab-content");
+          const headerDiv = tabContent.querySelector("div:first-child");
+
+          // Keep the header with delete button
+          tabContent.innerHTML = "";
+          tabContent.appendChild(headerDiv);
+
+          // Show error message
+          const errorDiv = document.createElement("div");
+          errorDiv.className = "mt-4 p-4 bg-red-50 text-red-600 rounded-md";
+          errorDiv.innerHTML = `
+      <div class="font-medium">Failed to load topology data</div>
+      <div class="text-sm mt-1">${
+        error.message || "Unknown error occurred"
+      }</div>
+    `;
+          tabContent.appendChild(errorDiv);
+        }
+      }
+
+      // Add a function to display the topology data
+      function displayTopologyData(topologyData, fileName) {
+        const tabContent = document.getElementById("tab-content");
+        const headerDiv = tabContent.querySelector("div:first-child");
+
+        // Keep the header with delete button
+        tabContent.innerHTML = "";
+        tabContent.appendChild(headerDiv);
+
+        // Create container for topology data
+        const topologyContainer = document.createElement("div");
+        topologyContainer.className = "mt-6";
+
+        // Sort levels by level number
+        const sortedLevels = topologyData.sort((a, b) => a.level - b.level);
+
+        if (sortedLevels.length === 0) {
+          const emptyState = document.createElement("div");
+          emptyState.className = "text-gray-500 italic";
+          emptyState.textContent = "No topology data available for this SBOM";
+          topologyContainer.appendChild(emptyState);
+        } else {
+          // Create level panels
+          sortedLevels.forEach((level) => {
+            const levelPanel = document.createElement("div");
+            levelPanel.className =
+              "mb-6 border border-gray-200 rounded-md overflow-hidden";
+
+            // Level header
+            const levelHeader = document.createElement("div");
+            levelHeader.className =
+              "bg-gray-50 px-4 py-3 flex items-center justify-between";
+
+            const levelTitle = document.createElement("div");
+            levelTitle.className = "font-medium";
+            levelTitle.innerHTML =
+              level.level === 0
+                ? `Root Level <span class="text-sm font-normal text-gray-500">(Top-level dependencies, which is directly import as package/component)</span>`
+                : `Level ${level.level} <span class="text-sm font-normal text-gray-500">(${level.total_components} components)</span>`;
+
+            const vulnBadge = document.createElement("div");
+            if (level.total_vulns > 0) {
+              vulnBadge.className =
+                "px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full";
+              vulnBadge.textContent = `${level.total_vulns} vulnerabilities`;
+            } else {
+              vulnBadge.className =
+                "px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full";
+              vulnBadge.textContent = "No vulnerabilities";
+            }
+
+            levelHeader.appendChild(levelTitle);
+            levelHeader.appendChild(vulnBadge);
+            levelPanel.appendChild(levelHeader);
+
+            // Components list
+            const componentsList = document.createElement("div");
+            componentsList.className = "px-4 py-3";
+
+            if (level.components.length === 0) {
+              componentsList.innerHTML =
+                "<div class='text-gray-500 italic'>No components at this level</div>";
+            } else {
+              const componentsGrid = document.createElement("div");
+              componentsGrid.className =
+                "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2";
+
+              level.components.forEach((component) => {
+                const componentItem = document.createElement("div");
+                const hasVuln = level.components_with_vuln.includes(component);
+
+                componentItem.className = hasVuln
+                  ? "px-3 py-2 border border-red-200 bg-red-50 rounded flex items-center"
+                  : "px-3 py-2 border border-gray-200 bg-white rounded flex items-center";
+
+                const icon = hasVuln
+                  ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>`
+                  : `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" />
+              </svg>`;
+
+                componentItem.innerHTML = `${icon}<span class="truncate">${component}</span>`;
+                componentsGrid.appendChild(componentItem);
+              });
+
+              componentsList.appendChild(componentsGrid);
+            }
+
+            levelPanel.appendChild(componentsList);
+            topologyContainer.appendChild(levelPanel);
+          });
+        }
+
+        tabContent.appendChild(topologyContainer);
+      }
+
       // Function to delete a file
       async function deleteFile(fileName) {
         try {
-          const response = await fetch(`/sbom/delete?name=${encodeURIComponent(fileName)}`, {
-            method: 'DELETE'
-          });
-          
+          const response = await fetch(
+            `/sbom/delete?name=${encodeURIComponent(fileName)}`,
+            {
+              method: "DELETE",
+            }
+          );
+
           if (response.ok) {
             // Remove the tab
             const tabsContainer = document.getElementById("file-tabs");
-            const tabToRemove = tabsContainer.querySelector(`[data-file-name="${fileName}"]`);
-            
+            const tabToRemove = tabsContainer.querySelector(
+              `[data-file-name="${fileName}"]`
+            );
+
             if (tabToRemove) {
               tabsContainer.removeChild(tabToRemove);
               uploadedFiles.delete(fileName);
-              
+
               // Clear content if this was the active tab
               if (activeTab === tabToRemove) {
-                document.getElementById("tab-content").innerHTML = '';
+                document.getElementById("tab-content").innerHTML = "";
                 activeTab = null;
               }
-              
+
               // If there are other tabs, select the first one
               if (uploadedFiles.size > 0) {
                 const firstTab = tabsContainer.querySelector("div");
@@ -322,10 +482,11 @@
                 }
               } else {
                 // Show "no files" message
-                document.getElementById("tab-content").innerHTML = '<div id="no-tabs-message" class="text-gray-500 italic">No files uploaded yet</div>';
+                document.getElementById("tab-content").innerHTML =
+                  '<div id="no-tabs-message" class="text-gray-500 italic">No files uploaded yet</div>';
               }
             }
-            
+
             // Show success message
             const statusContainer = document.getElementById("upload-status");
             const successMessage = document.createElement("div");
@@ -336,9 +497,9 @@
               </svg>
               ${fileName} deleted successfully
             `;
-            statusContainer.innerHTML = '';
+            statusContainer.innerHTML = "";
             statusContainer.appendChild(successMessage);
-            
+
             // Remove the message after 3 seconds
             setTimeout(() => {
               successMessage.remove();
@@ -346,11 +507,11 @@
           } else {
             // Handle error
             const errorData = await response.json();
-            alert(`Error deleting file: ${errorData.error || 'Unknown error'}`);
+            alert(`Error deleting file: ${errorData.error || "Unknown error"}`);
           }
         } catch (error) {
           console.error("Error deleting file:", error);
-          alert(`Failed to delete file: ${error.message || 'Network error'}`);
+          alert(`Failed to delete file: ${error.message || "Network error"}`);
         }
       }
 
