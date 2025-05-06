@@ -1,9 +1,9 @@
 package ssbom
 
 import (
+	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
-	"slices"
 
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
@@ -110,7 +110,7 @@ func getSpdxComponents(input spdx.Document) []string {
 
 	// Currently there's some bugs that will result in duplicated package information existing at the same time for some SBOM scanning tool
 	// ref: https://github.com/aquasecurity/trivy/issues/7824
-	return slices.Compact(components)
+	return unique.StringSlice(components)
 }
 
 func getSpdxDep(input spdx.Document) map[string][]string {
