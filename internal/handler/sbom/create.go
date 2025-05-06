@@ -127,8 +127,6 @@ func CreateSBOM(c *gin.Context) {
 
 			slog.Info("process spdx-formatted sbom into shared structs,", "name", fileName)
 		}()
-
-		c.JSON(http.StatusOK, toCreateResponse(fileName))
 	case SBOMCycloneDX:
 		decoder := cdx.NewBOMDecoder(bytes.NewReader(sbomData), cdx.BOMFileFormatJSON)
 
@@ -156,15 +154,16 @@ func CreateSBOM(c *gin.Context) {
 
 			slog.Info("process cyclonedx-formatted sbom into shared structs,", "name", fileName)
 		}()
-
-		c.JSON(http.StatusOK, toCreateResponse(fileName))
 	case SBOMUnknown:
 		fallthrough
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
+		return
 	}
 
 	slog.Info("SBOM created", "name", fileName, "type", sbomType)
+
+	c.JSON(http.StatusOK, toCreateResponse(fileName))
 }
 
 func detectFileType(data []byte) FileType {
