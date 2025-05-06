@@ -9,6 +9,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type (
+	levelInfo struct {
+		Level              int      `json:"level"`
+		Components         []string `json:"components"`
+		ComponentsWithVuln []string `json:"components_with_vuln"`
+		TotalComponents    int      `json:"total_components"`
+		TotalVulns         int      `json:"total_vulns"`
+	}
+)
+
+func toTopologyResp(bom ssbom.FormattedSBOM) []levelInfo {
+	var levels []levelInfo
+	for level, components := range bom.DependencyLevel {
+		levels = append(levels, levelInfo{
+			Level:              level,
+			Components:         components,
+			ComponentsWithVuln: []string{}, // TODO: implement this after the integrate of osv-scanner
+			TotalComponents:    len(components),
+			TotalVulns:         0, // TODO: implement this after the integrate of osv-scanner
+		})
+	}
+
+	return levels
+}
+
 func GetTopology(c *gin.Context) {
 	name := c.Query("name")
 	if len(name) == 0 {
@@ -22,10 +47,8 @@ func GetTopology(c *gin.Context) {
 		return
 	}
 
-	// TODO: which level containing component with CVSS score > 7 issue should be implement after the integrate of osv-scanner
-
 	c.JSON(http.StatusOK, gin.H{
 		msg.RespMsg:  "ok",
-		msg.RespData: bom.DependencyLevel,
+		msg.RespData: toTopologyResp(bom),
 	})
 }
