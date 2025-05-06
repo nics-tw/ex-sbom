@@ -4,9 +4,15 @@ import (
 	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
+)
+
+const (
+	spdxPrefix        = "SPDXRef-"
+	documentRefPrefix = "DocumentRef-"
 )
 
 func ProcessSPDX(name string, document *spdx.Document) error {
@@ -54,8 +60,8 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[i
 	}
 
 	for _, d := range sbom.Relationships {
-		refAStr := getRefIDStr(d.RefA)
-		refBStr := getRefIDStr(d.RefB)
+		refAStr := trimSPDXPrefix(getRefIDStr(d.RefA))
+		refBStr := trimSPDXPrefix(getRefIDStr(d.RefB))
 
 		graph[refAStr] = append(graph[refAStr], refBStr)
 		inDegree[refBStr]++
@@ -121,7 +127,7 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 			refAStr := fmt.Sprintf("%s", r.RefA)
 			refBStr := fmt.Sprintf("%s", r.RefB)
 
-			dependency[refAStr] = append(dependency[refAStr], refBStr)
+			dependency[refAStr] = append(dependency[trimSPDXPrefix(refAStr)], trimSPDXPrefix(refBStr))
 		}
 	}
 
@@ -138,4 +144,16 @@ func getRefIDStr(input common.DocElementID) string {
 	}
 
 	return ""
+}
+
+func trimSPDXPrefix(input string) string {
+	if strings.HasPrefix(input, "SPDXRef-") {
+		return strings.TrimPrefix(input, "SPDXRef-")
+	}
+
+	if strings.HasPrefix(input, "DocumentRef-") {
+		return strings.TrimPrefix(input, "DocumentRef-")
+	}
+
+	return input
 }
