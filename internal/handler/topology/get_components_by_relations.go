@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,9 +26,13 @@ func toRelationListResp(bom ssbom.FormattedSBOM) []relation {
 	for rootComponent, subComponents := range bom.Dependency {
 		rootLevel, ok := bom.ComponentToLevel[rootComponent]
 		if !ok {
-			slog.Error("failed to get root level", "component", rootComponent)
+			if !slices.Contains(bom.Components, rootComponent) {
+				slog.Error("failed to get root level", "component", rootComponent)
 
-			continue
+				continue
+			}
+
+			rootLevel = 0
 		}
 
 		for _, subComponent := range subComponents {
