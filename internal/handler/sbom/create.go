@@ -107,17 +107,15 @@ func CreateSBOM(c *gin.Context) {
 			return
 		}
 
-		sbom := SBOM{
-			Name: fileName,
-			Type: SBOMSPDX,
-			Data: spdxDoc,
-		}
-
 		if _, ok := SBOMs[fileName]; ok {
 			slog.Info("SBOM already exists, overwriting", "name", fileName)
 		}
 
-		SBOMs[fileName] = sbom
+		SBOMs[fileName] = SBOM{
+			Name: fileName,
+			Type: SBOMSPDX,
+			Data: spdxDoc,
+		}
 
 		go func() {
 			if err := ssbom.ProcessSPDX(fileName, spdxDoc); err != nil {
@@ -138,13 +136,15 @@ func CreateSBOM(c *gin.Context) {
 			return
 		}
 
-		sbom := SBOM{
+		if _, ok := SBOMs[fileName]; ok {
+			slog.Info("SBOM already exists, overwriting", "name", fileName)
+		}
+
+		SBOMs[fileName] = SBOM{
 			Name: fileName,
 			Type: SBOMCycloneDX,
 			Data: bom,
 		}
-
-		SBOMs[fileName] = sbom
 
 		go func() {
 			if err := ssbom.ProcessCDX(fileName, bom); err != nil {
