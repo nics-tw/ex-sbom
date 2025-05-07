@@ -18,8 +18,19 @@ type (
 	}
 
 	Component struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
+		Name       string `json:"name"`
+		Version    string `json:"version"`
+		VulnNumber int    `json:"vuln_number"`
+		Vulns      []Vuln `json:"vulns"`
+	}
+
+	Vuln struct {
+		ID        string  `json:"id"`
+		Summary   string  `json:"summary"`
+		Details   string  `json:"details"`
+		CVSSScore float64 `json:"cvss_score"`
+		// SuggestFixVersion is a distinct list of versions that the user can upgrade to prevent the vulnerability
+		SuggestFixVersion []string `json:"suggest_fix_version"`
 	}
 )
 
