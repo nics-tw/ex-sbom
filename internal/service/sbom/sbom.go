@@ -14,6 +14,12 @@ type (
 		// ComponentToLevel is an map with util designed for finding out the level of a specific component
 		// in this case it is used for topology drawing
 		ComponentToLevel map[string]int
+		ComponentInfo    map[string]Component
+	}
+
+	Component struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
 	}
 )
 

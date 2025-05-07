@@ -28,6 +28,7 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
+		ComponentInfo:     getCdxComponentInfo(bom.Components),
 	}
 
 	slog.Info(
@@ -120,6 +121,21 @@ func getCdxDep(input *[]cdx.Dependency) map[string][]string {
 	}
 
 	return dependency
+}
+
+func getCdxComponentInfo(input *[]cdx.Component) map[string]Component {
+	componentInfo := make(map[string]Component)
+
+	if input != nil {
+		for _, c := range *input {
+			componentInfo[c.Name] = Component{
+				Name:    c.Name,
+				Version: c.Version,
+			}
+		}
+	}
+
+	return componentInfo
 }
 
 func getReverseDep(Dependency map[string][]string) map[string][]string {

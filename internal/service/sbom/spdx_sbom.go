@@ -35,6 +35,7 @@ func ProcessSPDX(name string, document *spdx.Document) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
+		ComponentInfo:     getSpdxComponentInfo(*document),
 	}
 
 	slog.Info(
@@ -130,6 +131,21 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 	}
 
 	return dependency
+}
+
+func getSpdxComponentInfo(input spdx.Document) map[string]Component {
+	var result = make(map[string]Component)
+
+	for _, p := range input.Packages {
+		if p.PackageSPDXIdentifier != "" {
+			result[string(p.PackageSPDXIdentifier)] = Component{
+				Name:    p.PackageName,
+				Version: p.PackageVersion,
+			}
+		}
+	}
+
+	return result
 }
 
 func getRefIDStr(input common.DocElementID) string {
