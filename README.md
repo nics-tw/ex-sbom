@@ -3,6 +3,8 @@ ex-s, abbreviation for Explorer of SBOM, is currently an experimental visualizat
 
 Disclaimer: This tool is still in the early stages of development and may not be fully functional.(We considering the current state is in pre-alpha status) We welcome any feedback or suggestions for improvement.
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-s.svg)](https://pkg.go.dev/github.com/nics-tw/ex-s)
+
 ## Usage
 
 - The main page of the tool is a graph visualization of the SBOM.
