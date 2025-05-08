@@ -21,6 +21,12 @@ var templates embed.FS
 //go:embed static/img/favicon.ico
 var favicon embed.FS
 
+//go:embed static/img/apple-touch-icon.png
+var image embed.FS
+
+//go:embed static/img/apple-touch-icon-precomposed.png
+var image2 embed.FS
+
 func main() {
 	r := gin.Default()
 
@@ -72,5 +78,17 @@ func setupSSR(r *gin.Engine) {
 	faviconHandler := http.FileServer(http.FS(faviconFS))
 	r.GET("/favicon.ico", func(c *gin.Context) {
 		faviconHandler.ServeHTTP(c.Writer, c.Request)
+	})
+
+	touchIconFS, _ := fs.Sub(image, "static/img")
+	touchIconHandler := http.FileServer(http.FS(touchIconFS))
+	r.GET("/apple-touch-icon.png", func(c *gin.Context) {
+		touchIconHandler.ServeHTTP(c.Writer, c.Request)
+	})
+
+	precomposedFS, _ := fs.Sub(image2, "static/img")
+	precomposedHandler := http.FileServer(http.FS(precomposedFS))
+	r.GET("/apple-touch-icon-precomposed.png", func(c *gin.Context) {
+		precomposedHandler.ServeHTTP(c.Writer, c.Request)
 	})
 }
