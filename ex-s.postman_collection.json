@@ -410,6 +410,322 @@
 					"body": "{\n    \"error\": \"Missing required parameter: name\"\n}"
 				}
 			]
+		},
+		{
+			"name": "Get component list by level",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/topology/get_list_by_level?name=bom.json",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"topology",
+						"get_list_by_level"
+					],
+					"query": [
+						{
+							"key": "name",
+							"value": "bom.json",
+							"description": "required, the name of the SBOM file(currently json format supported only)"
+						}
+					]
+				},
+				"description": "Get component list by level API represent the util to get the component list by dependency leveling. It may be root level or any kind of indirect importing level."
+			},
+			"response": [
+				{
+					"name": "success",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/topology/get_list_by_level?name=bom-nuget.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"topology",
+								"get_list_by_level"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "bom-nuget.json"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Tue, 06 May 2025 08:57:13 GMT"
+						},
+						{
+							"key": "Transfer-Encoding",
+							"value": "chunked"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"data\": [\n        {\n            \"level\": 1,\n            \"components\": [\n                \"Package-System.Reflection.Extensions-4.3.0\",\n                \"Package-System.CodeDom-6.0.0\",\n                \"Package-System.Text.RegularExpressions-4.3.0\",\n                \"Package-runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-Microsoft.Diagnostics.Tracing.TraceEvent-3.0.2\",\n                \"Package-System.Diagnostics.Tools-4.3.0\",\n                \"Package-System.Buffers-4.3.0\",\n                \"Package-Microsoft.Win32.Primitives-4.3.0\",\n                \"Package-System.Reflection.Emit-4.3.0\",\n                \"Package-System.Memory-4.5.3\",\n                \"Package-runtime.native.System.Net.Http-4.3.0\",\n                \"Package-System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-System.Linq-4.3.0\",\n                \"Package-xunit.abstractions-2.0.3\",\n                \"Package-System.Globalization.Extensions-4.3.0\",\n                \"Package-Microsoft.CodeAnalysis.CSharp-3.0.0\",\n                \"Package-System.IO.FileSystem.Primitives-4.3.0\",\n                \"Package-Microsoft.DotNet.PlatformAbstractions-3.1.6\",\n                \"Package-System.Globalization.Calendars-4.3.0\",\n                \"Package-System.Diagnostics.Debug-4.3.0\",\n                \"Package-xunit.assert-2.4.2\",\n                \"Package-NuGet.Frameworks-5.11.0\",\n                \"Package-Microsoft.TestPlatform.TestHost-17.3.2\",\n                \"Package-System.Text.Encodings.Web-4.7.2\",\n                \"Package-moda-twfido\",\n                \"Package-ITfoxtec.Identity.Saml2-4.8.6\",\n                \"Package-xunit.analyzers-1.0.0\",\n                \"Package-CommandLineParser-2.4.3\",\n                \"Package-System.Threading.Tasks.Extensions-4.5.0\",\n                \"Package-System.Net.NameResolution-4.3.0\",\n                \"Package-BenchmarkDotNet.Annotations-0.13.5\",\n                \"Package-Microsoft.Diagnostics.Runtime-2.2.332302\",\n                \"Package-runtime.osx.10.10-x64.runtime.native.System.Security.Cryptography.Apple-4.3.0\",\n                \"Package-NUglify-1.16.1\",\n                \"Package-Castle.Core-5.1.1\",\n                \"Package-System.Security.Cryptography.Csp-4.3.0\",\n                \"Package-System.Threading.Tasks.Extensions-4.3.0\",\n                \"Package-System.Text.Json-5.0.2\",\n                \"Package-System.Reflection.Metadata-1.6.0\",\n                \"Package-Iced-1.17.0\",\n                \"Package-Gee.External.Capstone-2.3.0\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 41,\n            \"total_vulns\": 0\n        },\n        {\n            \"level\": 3,\n            \"components\": [\n                \"Package-System.Security.Cryptography.Encoding-4.3.0\",\n                \"Package-Microsoft.IdentityModel.Xml-6.28.1\",\n                \"Package-System.Globalization-4.3.0\",\n                \"Package-runtime.any.System.Text.Encoding-4.3.0\",\n                \"Package-System.Threading-4.3.0\",\n                \"Package-System.Text.Encoding.Extensions-4.3.0\",\n                \"Package-System.IO.FileSystem-4.3.0\",\n                \"Package-System.Runtime.Handles-4.3.0\",\n                \"Package-System.Reflection-4.3.0\",\n                \"Package-Microsoft.Extensions.Logging-6.0.0\",\n                \"Package-System.ServiceModel.Primitives-4.10.2\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 11,\n            \"total_vulns\": 0\n        },\n        {\n            \"level\": 2,\n            \"components\": [\n                \"Package-runtime.fedora.23-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-runtime.opensuse.13.2-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-runtime.osx.10.10-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-Microsoft.IdentityModel.Tokens.Saml-6.28.1\",\n                \"Package-Microsoft.Extensions.Http-6.0.0\",\n                \"Package-System.Runtime.InteropServices-4.3.0\",\n                \"Package-System.Reflection.Emit.ILGeneration-4.3.0\",\n                \"Package-runtime.opensuse.42.1-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-System.Security.Cryptography.Algorithms-4.3.0\",\n                \"Package-runtime.ubuntu.14.04-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-System.Net.Primitives-4.3.0\",\n                \"Package-runtime.native.System-4.3.0\",\n                \"Package-System.Diagnostics.Tracing-4.3.0\",\n                \"Package-System.ServiceModel.Security-4.10.2\",\n                \"Package-runtime.rhel.7-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-runtime.debian.8-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-System.Security.Cryptography.Primitives-4.3.0\",\n                \"Package-System.Resources.ResourceManager-4.3.0\",\n                \"Package-System.Diagnostics.EventLog-6.0.0\",\n                \"Package-System.IdentityModel.Tokens.Jwt-6.28.1\",\n                \"Package-NETStandard.Library-1.6.1\",\n                \"Package-System.Runtime.Extensions-4.3.0\",\n                \"Package-System.Collections-4.3.0\",\n                \"Package-runtime.ubuntu.16.04-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-System.Text.Encoding-4.3.0\",\n                \"Package-runtime.ubuntu.16.10-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 26,\n            \"total_vulns\": 0\n        },\n        {\n            \"level\": 5,\n            \"components\": [\n                \"Package-System.Numerics.Vectors-4.5.0\",\n                \"Package-Microsoft.Extensions.Primitives-6.0.0\",\n                \"Package-runtime.any.System.Runtime-4.3.0\",\n                \"Package-Microsoft.IdentityModel.Logging-6.28.1\",\n                \"Package-System.Security.Cryptography.Cng-4.5.0\",\n                \"Package-System.Threading.Tasks-4.3.0\",\n                \"Package-System.Security.Principal.Windows-5.0.0\",\n                \"Package-Microsoft.Extensions.DependencyInjection.Abstractions-6.0.0\",\n                \"Package-Microsoft.Extensions.ObjectPool-5.0.10\",\n                \"Package-Microsoft.CSharp-4.5.0\",\n                \"Package-System.Security.Cryptography.Xml-6.0.1\",\n                \"Package-Microsoft.Bcl.AsyncInterfaces-5.0.0\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 12,\n            \"total_vulns\": 0\n        },\n        {\n            \"level\": 6,\n            \"components\": [\n                \"Package-System.Runtime.CompilerServices.Unsafe-6.0.0\",\n                \"Package-System.Security.AccessControl-6.0.0\",\n                \"Package-System.Security.Cryptography.Pkcs-6.0.1\",\n                \"Package-System.Private.Uri-4.3.0\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 4,\n            \"total_vulns\": 0\n        },\n        {\n            \"level\": 4,\n            \"components\": [\n                \"Package-System.Reflection.Primitives-4.3.0\",\n                \"Package-System.Private.ServiceModel-4.10.2\",\n                \"Package-System.IO-4.3.0\",\n                \"Package-Microsoft.Extensions.Logging.Abstractions-6.0.0\",\n                \"Package-Microsoft.Extensions.Options-6.0.0\",\n                \"Package-Microsoft.IdentityModel.Tokens-6.28.1\",\n                \"Package-System.Runtime-4.3.0\",\n                \"Package-Microsoft.Extensions.DependencyInjection-6.0.0\",\n                \"Package-System.Diagnostics.DiagnosticSource-6.0.0\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 9,\n            \"total_vulns\": 0\n        },\n        {\n            \"level\": 7,\n            \"components\": [\n                \"Package-System.Formats.Asn1-6.0.0\",\n                \"Package-Microsoft.NETCore.Platforms-1.1.0\",\n                \"Package-Microsoft.NETCore.Targets-1.1.0\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 3,\n            \"total_vulns\": 0\n        },\n        {\n            \"level\": 0,\n            \"components\": [\n                \"Package-Net.Codecrete.QrCodeGenerator-2.0.3\",\n                \"Package-ITfoxtec.Identity.Saml2.MvcCore-4.8.6\",\n                \"Package-Microsoft.IdentityModel.Abstractions-6.28.1\",\n                \"Package-Newtonsoft.Json-13.0.3\",\n                \"Package-LigerShark.WebOptimizer.Core-3.0.378\",\n                \"Package-Microsoft.IdentityModel.JsonWebTokens-6.28.1\",\n                \"Package-Microsoft.VisualStudio.Azure.Containers.Tools.Targets-1.17.0\",\n                \"Package-Polly-7.2.3\",\n                \"Package-BouncyCastle.Cryptography-2.0.0\",\n                \"Package-runtime.unix.System.Private.Uri-4.3.0\",\n                \"Package-System.Reflection.DispatchProxy-4.7.1\",\n                \"Package-LigerShark.WebOptimizer.Core-3.0.378\",\n                \"Package-Polly-7.2.3\",\n                \"Package-Microsoft.IdentityModel.JsonWebTokens-6.28.1\",\n                \"Package-BouncyCastle.Cryptography-2.0.0\",\n                \"Package-Microsoft.VisualStudio.Azure.Containers.Tools.Targets-1.17.0\",\n                \"Package-Net.Codecrete.QrCodeGenerator-2.0.3\",\n                \"Package-Microsoft.IdentityModel.Abstractions-6.28.1\",\n                \"Package-Newtonsoft.Json-13.0.3\",\n                \"Package-System.Reflection.DispatchProxy-4.7.1\",\n                \"Package-ITfoxtec.Identity.Saml2.MvcCore-4.8.6\",\n                \"Package-runtime.unix.System.Private.Uri-4.3.0\",\n                \"Package-Microsoft.CodeAnalysis.Common-3.0.0\",\n                \"Package-Microsoft.CodeAnalysis.Analyzers-2.6.2-beta2\",\n                \"Package-Microsoft.VisualStudio.Azure.Containers.Tools.Targets-1.17.0\",\n                \"Package-BouncyCastle.Cryptography-2.0.0\",\n                \"Package-System.Collections.Immutable-5.0.0\",\n                \"Package-System.Text.Encoding.CodePages-4.5.0\",\n                \"Package-Microsoft.Diagnostics.NETCore.Client-0.2.251802\",\n                \"Package-Microsoft.IdentityModel.Abstractions-6.28.1\",\n                \"Package-LigerShark.WebOptimizer.Core-3.0.378\",\n                \"Package-Net.Codecrete.QrCodeGenerator-2.0.3\",\n                \"Package-Polly-7.2.3\",\n                \"Package-System.Reflection.DispatchProxy-4.7.1\",\n                \"Package-ITfoxtec.Identity.Saml2.MvcCore-4.8.6\",\n                \"Package-Microsoft.IdentityModel.JsonWebTokens-6.28.1\",\n                \"Package-Microsoft.NETCore.Platforms-2.0.0\",\n                \"Package-BenchmarkDotNet-0.13.5\",\n                \"Package-System.Management-6.0.0\",\n                \"Package-Newtonsoft.Json-13.0.3\",\n                \"Package-Perfolizer-0.2.1\",\n                \"Package-Moq-4.18.4\",\n                \"Package-runtime.unix.System.Private.Uri-4.3.0\",\n                \"Package-Microsoft.VisualStudio.Azure.Containers.Tools.Targets-1.17.0\",\n                \"Package-Moq-4.18.4\",\n                \"Package-Newtonsoft.Json-13.0.3\",\n                \"Package-xunit.core-2.4.2\",\n                \"Package-Microsoft.AspNetCore.TestHost-6.0.13\",\n                \"Package-System.Threading.Timer-4.3.0\",\n                \"Package-BouncyCastle.Cryptography-2.0.0\",\n                \"Package-ITfoxtec.Identity.Saml2.MvcCore-4.8.6\",\n                \"Package-System.AppContext-4.3.0\",\n                \"Package-System.IO.Compression.ZipFile-4.3.0\",\n                \"Package-System.IO.Compression-4.3.0\",\n                \"Package-System.Collections.Concurrent-4.3.0\",\n                \"Package-System.Linq.Expressions-4.3.0\",\n                \"Package-Microsoft.IdentityModel.JsonWebTokens-6.28.1\",\n                \"Package-xunit.extensibility.execution-2.4.2\",\n                \"Package-Microsoft.IdentityModel.Abstractions-6.28.1\",\n                \"Package-System.Runtime.InteropServices.RuntimeInformation-4.3.0\",\n                \"Package-System.Net.Http-4.3.0\",\n                \"Package-xunit.runner.visualstudio-2.4.5\",\n                \"Package-coverlet.collector-3.1.2\",\n                \"Package-runtime.native.System.Security.Cryptography.Apple-4.3.0\",\n                \"Package-System.Reflection.TypeExtensions-4.3.0\",\n                \"Package-Microsoft.TestPlatform.ObjectModel-17.3.2\",\n                \"Package-runtime.native.System.IO.Compression-4.3.0\",\n                \"Package-System.Security.Cryptography.X509Certificates-4.3.0\",\n                \"Package-System.Console-4.3.0\",\n                \"Package-System.IO.Pipelines-6.0.3\",\n                \"Package-xunit.extensibility.core-2.4.2\",\n                \"Package-Microsoft.NET.Test.Sdk-17.3.2\",\n                \"Package-xunit-2.4.2\",\n                \"Package-System.Reflection.DispatchProxy-4.7.1\",\n                \"Package-LigerShark.WebOptimizer.Core-3.0.378\",\n                \"Package-System.ObjectModel-4.3.0\",\n                \"Package-System.Runtime.Numerics-4.3.0\",\n                \"Package-Microsoft.Extensions.Logging.Abstractions-6.0.3\",\n                \"Package-Polly-7.2.3\",\n                \"Package-runtime.fedora.24-x64.runtime.native.System.Security.Cryptography.OpenSsl-4.3.0\",\n                \"Package-System.Reflection.Emit.Lightweight-4.3.0\",\n                \"Package-Net.Codecrete.QrCodeGenerator-2.0.3\",\n                \"Package-System.Net.Sockets-4.3.0\",\n                \"Package-Microsoft.CodeCoverage-17.3.2\",\n                \"Package-System.Xml.XDocument-4.3.0\",\n                \"Package-System.Xml.ReaderWriter-4.3.0\",\n                \"Package-runtime.any.System.Reflection-4.3.0\",\n                \"Package-runtime.any.System.Globalization.Calendars-4.3.0\",\n                \"Package-runtime.any.System.Threading.Timer-4.3.0\",\n                \"Package-runtime.unix.Microsoft.Win32.Primitives-4.3.0\",\n                \"Package-runtime.any.System.Diagnostics.Tracing-4.3.0\",\n                \"Package-runtime.unix.System.Console-4.3.0\",\n                \"Package-runtime.unix.System.Diagnostics.Debug-4.3.0\",\n                \"Package-runtime.unix.System.Net.Sockets-4.3.0\",\n                \"Package-runtime.any.System.Resources.ResourceManager-4.3.0\",\n                \"Package-runtime.any.System.Runtime.Handles-4.3.0\",\n                \"Package-runtime.any.System.Text.Encoding.Extensions-4.3.0\",\n                \"Package-runtime.any.System.Collections-4.3.0\",\n                \"Package-runtime.any.System.Threading.Tasks-4.3.0\",\n                \"Package-runtime.any.System.Diagnostics.Tools-4.3.0\",\n                \"Package-runtime.any.System.IO-4.3.0\",\n                \"Package-runtime.any.System.Reflection.Primitives-4.3.0\",\n                \"Package-System.Threading.ThreadPool-4.3.0\",\n                \"Package-runtime.unix.System.Runtime.Extensions-4.3.0\",\n                \"Package-runtime.any.System.Runtime.InteropServices-4.3.0\",\n                \"Package-runtime.any.System.Globalization-4.3.0\",\n                \"Package-runtime.any.System.Reflection.Extensions-4.3.0\",\n                \"Package-runtime.unix.System.IO.FileSystem-4.3.0\",\n                \"Package-runtime.unix.System.Private.Uri-4.3.0\",\n                \"Package-runtime.unix.System.Net.Primitives-4.3.0\",\n                \"Package-runtime.win.System.Net.Primitives-4.3.0\",\n                \"Package-runtime.win.System.Net.Sockets-4.3.0\",\n                \"Package-runtime.win.System.Console-4.3.0\",\n                \"Package-runtime.win.System.Runtime.Extensions-4.3.0\",\n                \"Package-runtime.win.System.Diagnostics.Debug-4.3.0\",\n                \"Package-runtime.win.Microsoft.Win32.Primitives-4.3.0\",\n                \"Package-runtime.win.System.IO.FileSystem-4.3.0\",\n                \"Package-System.Threading.Overlapped-4.3.0\"\n            ],\n            \"components_with_vuln\": [],\n            \"total_components\": 118,\n            \"total_vulns\": 0\n        }\n    ],\n    \"msg\": \"ok\"\n}"
+				},
+				{
+					"name": "not found",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/topology/get_list_by_level?name=bom.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"topology",
+								"get_list_by_level"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "bom.json"
+								}
+							]
+						}
+					},
+					"status": "Not Found",
+					"code": 404,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Tue, 06 May 2025 08:58:22 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "26"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"SBOM not found\"\n}"
+				},
+				{
+					"name": "missing param",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/topology/get_list_by_level",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"topology",
+								"get_list_by_level"
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Thu, 08 May 2025 00:57:22 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "44"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"Missing required parameter: name\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Get component list by dependency",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/topology/relations?name=bom.json",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"topology",
+						"relations"
+					],
+					"query": [
+						{
+							"key": "name",
+							"value": "bom.json",
+							"description": "required, the name of the SBOM file(currently json format supported only)"
+						}
+					]
+				},
+				"description": "Get component list by dependency API represent the util for listing the dependency of each component. Notice that if a component/package does not possess any dependency, it will be excluded from the response result."
+			},
+			"response": [
+				{
+					"name": "success",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/topology/relations?name=bom.1.4.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"topology",
+								"relations"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "bom.1.4.json"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Thu, 08 May 2025 00:56:07 GMT"
+						},
+						{
+							"key": "Transfer-Encoding",
+							"value": "chunked"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"data\": [\n        {\n            \"root_component\": \"guzzlehttp/guzzle-6.5.8.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"guzzlehttp/promises-1.5.2.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"guzzlehttp/guzzle-6.5.8.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"guzzlehttp/psr7-1.9.0.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"guzzlehttp/guzzle-6.5.8.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/polyfill-intl-idn-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"laravel/laravel-7.12.0.0\",\n            \"root_level\": 1,\n            \"sub_component\": \"fideloper/proxy-4.4.2.0\",\n            \"sub_level\": 2\n        },\n        {\n            \"root_component\": \"laravel/laravel-7.12.0.0\",\n            \"root_level\": 1,\n            \"sub_component\": \"fruitcake/laravel-cors-1.0.6.0\",\n            \"sub_level\": 2\n        },\n        {\n            \"root_component\": \"laravel/laravel-7.12.0.0\",\n            \"root_level\": 1,\n            \"sub_component\": \"guzzlehttp/guzzle-6.5.8.0\",\n            \"sub_level\": 2\n        },\n        {\n            \"root_component\": \"laravel/laravel-7.12.0.0\",\n            \"root_level\": 1,\n            \"sub_component\": \"laravel/framework-7.30.6.0\",\n            \"sub_level\": 2\n        },\n        {\n            \"root_component\": \"laravel/laravel-7.12.0.0\",\n            \"root_level\": 1,\n            \"sub_component\": \"laravel/tinker-2.7.3.0\",\n            \"sub_level\": 2\n        },\n        {\n            \"root_component\": \"ramsey/uuid-4.2.3.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"brick/math-0.9.3.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"ramsey/uuid-4.2.3.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"ramsey/collection-1.2.2.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"ramsey/uuid-4.2.3.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-ctype-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"ramsey/uuid-4.2.3.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/event-dispatcher-contracts-2.5.2.0\",\n            \"root_level\": 6,\n            \"sub_component\": \"psr/event-dispatcher-1.0.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"doctrine/inflector-2.0.6.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"dragonmantank/cron-expression-2.3.1.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"egulias/email-validator-2.1.25.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"league/commonmark-1.6.7.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"league/flysystem-1.1.10.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"monolog/monolog-2.8.0.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"nesbot/carbon-2.63.0.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"opis/closure-3.6.3.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"psr/container-1.1.1.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"psr/simple-cache-1.0.1.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"ramsey/uuid-4.2.3.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"swiftmailer/swiftmailer-6.3.0.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/console-5.4.16.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/error-handler-5.4.15.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/finder-5.4.11.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/http-foundation-5.4.16.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/mime-5.4.16.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/polyfill-php73-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/process-5.4.11.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/routing-5.4.15.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/var-dumper-5.4.14.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"tijsverkoyen/css-to-inline-styles-2.2.5.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"vlucas/phpdotenv-4.3.0.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/framework-7.30.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"voku/portable-ascii-1.6.1.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"symfony/polyfill-intl-idn-1.27.0.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-intl-normalizer-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/polyfill-intl-idn-1.27.0.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-php72-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"ramsey/collection-1.2.2.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-php81-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/process-5.4.11.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/var-dumper-5.4.14.0\",\n            \"root_level\": 6,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/var-dumper-5.4.14.0\",\n            \"root_level\": 6,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/translation-5.4.14.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/translation-5.4.14.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/translation-5.4.14.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/translation-5.4.14.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/translation-contracts-2.5.2.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"tijsverkoyen/css-to-inline-styles-2.2.5.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/css-selector-5.4.11.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"fruitcake/laravel-cors-1.0.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"asm89/stack-cors-1.3.0.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"fruitcake/laravel-cors-1.0.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/http-foundation-5.4.16.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"fruitcake/laravel-cors-1.0.6.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"psy/psysh-0.11.9.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"nikic/php-parser-4.15.2.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"psy/psysh-0.11.9.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/console-5.4.16.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"psy/psysh-0.11.9.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/var-dumper-5.4.14.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/mime-5.4.16.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/mime-5.4.16.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-intl-idn-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/mime-5.4.16.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/mime-5.4.16.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/routing-5.4.15.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/routing-5.4.15.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"egulias/email-validator-2.1.25.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"doctrine/lexer-1.2.3.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"egulias/email-validator-2.1.25.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-intl-idn-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/event-dispatcher-5.4.9.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/event-dispatcher-5.4.9.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/event-dispatcher-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/event-dispatcher-5.4.9.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"psr/log-1.1.4.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/error-handler-5.4.15.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/event-dispatcher-5.4.9.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/http-foundation-5.4.16.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-ctype-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-php73-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"vlucas/phpdotenv-4.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"phpoption/phpoption-1.9.0.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"vlucas/phpdotenv-4.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-ctype-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"guzzlehttp/psr7-1.9.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"psr/http-message-1.0.1.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"guzzlehttp/psr7-1.9.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"ralouphie/getallheaders-3.0.3.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"laravel/tinker-2.7.3.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"psy/psysh-0.11.9.0\",\n            \"sub_level\": 3\n        },\n        {\n            \"root_component\": \"laravel/tinker-2.7.3.0\",\n            \"root_level\": 2,\n            \"sub_component\": \"symfony/var-dumper-5.4.14.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"monolog/monolog-2.8.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"psr/log-1.1.4.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"swiftmailer/swiftmailer-6.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"egulias/email-validator-2.1.25.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"swiftmailer/swiftmailer-6.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-iconv-1.27.0.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"swiftmailer/swiftmailer-6.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-intl-idn-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"swiftmailer/swiftmailer-6.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/console-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/console-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/console-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-php73-1.27.0.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/console-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/console-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/service-contracts-2.5.2.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/console-5.4.16.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/string-5.4.15.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"symfony/css-selector-5.4.11.0\",\n            \"root_level\": 4,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/error-handler-5.4.15.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"psr/log-1.1.4.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/error-handler-5.4.15.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/var-dumper-5.4.14.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/service-contracts-2.5.2.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"psr/container-1.1.1.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/service-contracts-2.5.2.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"asm89/stack-cors-1.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/http-foundation-5.4.16.0\",\n            \"sub_level\": 5\n        },\n        {\n            \"root_component\": \"asm89/stack-cors-1.3.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/http-kernel-5.4.16.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"league/flysystem-1.1.10.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"league/mime-type-detection-1.11.0.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"nesbot/carbon-2.63.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"nesbot/carbon-2.63.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"nesbot/carbon-2.63.0.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/translation-5.4.14.0\",\n            \"sub_level\": 4\n        },\n        {\n            \"root_component\": \"symfony/finder-5.4.11.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/finder-5.4.11.0\",\n            \"root_level\": 3,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/http-foundation-5.4.16.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/deprecation-contracts-2.5.2.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/http-foundation-5.4.16.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/http-foundation-5.4.16.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/string-5.4.15.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-ctype-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/string-5.4.15.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-intl-grapheme-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/string-5.4.15.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-intl-normalizer-1.27.0.0\",\n            \"sub_level\": 6\n        },\n        {\n            \"root_component\": \"symfony/string-5.4.15.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-mbstring-1.27.0.0\",\n            \"sub_level\": 7\n        },\n        {\n            \"root_component\": \"symfony/string-5.4.15.0\",\n            \"root_level\": 5,\n            \"sub_component\": \"symfony/polyfill-php80-1.27.0.0\",\n            \"sub_level\": 7\n        }\n    ],\n    \"msg\": \"ok\"\n}"
+				},
+				{
+					"name": "not found",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/topology/relations?name=bom.1.json",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"topology",
+								"relations"
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "bom.1.json"
+								}
+							]
+						}
+					},
+					"status": "Not Found",
+					"code": 404,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Thu, 08 May 2025 00:56:34 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "26"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"SBOM not found\"\n}"
+				},
+				{
+					"name": "missing param",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/topology/relations",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8080",
+							"path": [
+								"topology",
+								"relations"
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Thu, 08 May 2025 00:57:42 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "44"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"error\": \"Missing required parameter: name\"\n}"
+				}
+			]
 		}
 	]
 }
