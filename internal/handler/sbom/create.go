@@ -77,6 +77,7 @@ func CreateSBOM(c *gin.Context) {
 	case XML:
 		slog.Info("Detected XML file type with valid content")
 
+		// TODO: considering to support XML file type since both mainstream format of SBOMis provided official tool to process that
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrXMLNotSupport})
 		return
 	case Unknown:
