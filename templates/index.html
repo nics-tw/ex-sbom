@@ -53,29 +53,25 @@
             ex-s
           </h1>
         </div>
-        <div
-          class="text-sm text-gray-600"
-          id="app-description"
-          data-i18n="appDescription"
-        >
-          SBOM Explorer, designed by NICS-ra
-        </div>
-        <div class="border-l border-gray-300 h-5"></div>
-        <div class="flex text-sm">
-          <button
-            id="lang-en"
-            class="px-2 py-1 rounded font-medium language-btn active-language"
-            onclick="changeLanguage('en')"
-          >
-            EN
-          </button>
-          <button
-            id="lang-zh"
-            class="px-2 py-1 rounded font-medium language-btn"
-            onclick="changeLanguage('zh')"
-          >
-            正體中文
-          </button>
+
+        <div class="flex items-center space-x-3">
+          <!-- Language switcher -->
+          <div class="flex text-sm">
+            <button id="lang-en" class="px-2 py-1 rounded font-medium language-btn active-language" onclick="changeLanguage('en')">
+              EN
+            </button>
+            <button id="lang-zh" class="px-2 py-1 rounded font-medium language-btn" onclick="changeLanguage('zh')">
+              正體中文
+            </button>
+          </div>
+          
+          <!-- Divider -->
+          <div class="text-gray-400">|</div>
+          
+          <!-- App description -->
+          <div class="text-sm text-gray-600" id="app-description" data-i18n="appDescription">
+            SBOM Explorer, designed by NICS-ra
+          </div>
         </div>
       </div>
     </header>
