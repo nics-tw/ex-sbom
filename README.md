@@ -35,12 +35,15 @@ go mod tidy
 ```bash
 go build -o ex-s
 ```
+
 4. Run the project:
 ```bash
 ./ex-s
 ```
 
 5. Your browser should automatically open a new tab with the URL `http://localhost:8080`. If it doesn't, you can manually open your browser and enter the URL.
+
+（If for local development, you can merely run the command `go run main.go` to start the server.）
 
 ## API documentation
 
