@@ -148,6 +148,8 @@ func getSpdxComponentInfo(input spdx.Document) map[string]Component {
 	return result
 }
 
+// the implement of the common.DocElementID interface containing three possible ID
+// in these case we only apply the one that only exists as the unique ID for the purpose of handy mapping
 func getRefIDStr(input common.DocElementID) string {
 	if len(input.DocumentRefID) > 0 {
 		return input.DocumentRefID
@@ -160,6 +162,12 @@ func getRefIDStr(input common.DocElementID) string {
 	return ""
 }
 
+// for the original SPDX file, the SPDXREFID will contain two kinds of prefix
+// 1. SPDXRef-: the one that is used for the component itself
+// 2. DocumentRef-: the one that is used for the ducumentation itself
+// but on the other hand, while processing other util, it will trim these prefix if existing
+// since not all columns performed the same pattern(and most of them applied with the one witout prefix)
+// this util function is for aligning the pattern in using unique id for SPDX document
 func trimSPDXPrefix(input string) string {
 	if strings.HasPrefix(input, "SPDXRef-") {
 		return strings.TrimPrefix(input, "SPDXRef-")
