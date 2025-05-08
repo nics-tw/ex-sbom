@@ -12,9 +12,23 @@
         border-bottom: 2px solid #009999;
         background-color: rgba(0, 153, 153, 0.1);
       }
+
+      .language-btn {
+        transition: all 0.2s;
+      }
+
+      .language-btn:hover {
+        background-color: rgba(0, 153, 153, 0.1);
+      }
+
+      .active-language {
+        background-color: rgba(0, 153, 153, 0.2);
+        color: #009999;
+      }
     </style>
   </head>
   <body>
+    <!-- Update the header section -->
     <header class="bg-white shadow">
       <div
         class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between"
@@ -32,14 +46,41 @@
               clip-rule="evenodd"
             />
           </svg>
-          <h1 class="text-2xl font-bold text-gray-800 tracking-tight">ex-s</h1>
+          <h1
+            class="text-2xl font-bold text-gray-800 tracking-tight"
+            data-i18n="appTitle"
+          >
+            ex-s
+          </h1>
         </div>
-        <div class="text-sm text-gray-600">
+        <div
+          class="text-sm text-gray-600"
+          id="app-description"
+          data-i18n="appDescription"
+        >
           SBOM Explorer, designed by NICS-ra
+        </div>
+        <div class="border-l border-gray-300 h-5"></div>
+        <div class="flex text-sm">
+          <button
+            id="lang-en"
+            class="px-2 py-1 rounded font-medium language-btn active-language"
+            onclick="changeLanguage('en')"
+          >
+            EN
+          </button>
+          <button
+            id="lang-zh"
+            class="px-2 py-1 rounded font-medium language-btn"
+            onclick="changeLanguage('zh')"
+          >
+            正體中文
+          </button>
         </div>
       </div>
     </header>
 
+    <!-- Update the upload section -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="flex items-start">
         <div>
@@ -50,7 +91,6 @@
             multiple
             accept=".json,.xml,.spdx"
           />
-
           <button
             id="select-sbom-btn"
             class="select-btn bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow transition duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -66,7 +106,7 @@
                 d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
               />
             </svg>
-            <span>Select SBOM Files</span>
+            <span data-i18n="selectFiles">Select SBOM Files</span>
           </button>
         </div>
 
@@ -79,7 +119,10 @@
 
       <!-- Tabs container -->
       <div class="mt-6 border-b border-gray-200">
-        <div class="text-lg font-medium text-gray-700 mb-2">
+        <div
+          class="text-lg font-medium text-gray-700 mb-2"
+          data-i18n="uploadedFiles"
+        >
           Uploaded SBOM Files
         </div>
         <div id="file-tabs" class="flex flex-wrap"></div>
@@ -87,7 +130,11 @@
 
       <!-- Tab content area -->
       <div id="tab-content" class="py-4">
-        <div id="no-tabs-message" class="text-gray-500 italic">
+        <div
+          id="no-tabs-message"
+          class="text-gray-500 italic"
+          data-i18n="noFilesUploaded"
+        >
           No files uploaded yet
         </div>
       </div>
@@ -97,6 +144,73 @@
       // Track uploaded files
       const uploadedFiles = new Set();
       let activeTab = null;
+
+      // Language translations
+      const translations = {
+        en: {
+          appTitle: "ex-s",
+          appDescription: "SBOM Explorer, designed by NICS-ra",
+          selectFiles: "Select SBOM Files",
+          selectedFiles: "Selected files:",
+          uploadedFiles: "Uploaded SBOM Files",
+          noFilesUploaded: "No files uploaded yet",
+          uploading: "Uploading {0}...",
+          uploadedSuccessfully: "{0} uploaded successfully",
+          uploadFailed: "{0}: {1}",
+          errorReadingFile: "Error reading file",
+          warningOverwrite:
+            "Warning: the previous <strong>{0}</strong> will be overwritten since the file names are same.",
+          delete: "Delete",
+          deletedSuccessfully: "{0} deleted successfully",
+          errorDeleting: "Error deleting file: {0}",
+          failedToDelete: "Failed to delete file: {0}",
+          loadingTopology: "Loading topology data...",
+          failedToLoadTopology: "Failed to load topology data",
+          noTopologyData: "No topology data available for this SBOM",
+          rootLevel: "Root Level",
+          level: "Level {0}",
+          topLevelDependencies:
+            "(Top-level dependencies, which is directly import as package/component)",
+          componentsCount: "({0} components)",
+          vulnerabilities: "{0} vulnerabilities",
+          noVulnerabilities: "No vulnerabilities",
+          noComponents: "No components at this level",
+          showAll: "Show all {0} components",
+          showLess: "Show less",
+          unknownError: "Unknown error occurred",
+        },
+        zh: {
+          appTitle: "ex-s",
+          appDescription: "SBOM explorer，由 NICS-ra 設計",
+          selectFiles: "選擇 SBOM 檔案",
+          selectedFiles: "已選擇的檔案：",
+          uploadedFiles: "已上傳的 SBOM 檔案",
+          noFilesUploaded: "尚未上傳檔案",
+          uploading: "正在上傳 {0}...",
+          uploadedSuccessfully: "{0} 上傳成功",
+          uploadFailed: "{0}: {1}",
+          errorReadingFile: "讀取檔案錯誤",
+          warningOverwrite:
+            "警告：由於檔案名稱相同，之前的 <strong>{0}</strong> 將被覆蓋。",
+          delete: "刪除",
+          deletedSuccessfully: "{0} 刪除成功",
+          errorDeleting: "刪除檔案錯誤: {0}",
+          failedToDelete: "刪除檔案失敗: {0}",
+          loadingTopology: "正在處理...",
+          failedToLoadTopology: "資料處理失敗",
+          noTopologyData: "此 SBOM 沒有足夠的相關資料",
+          rootLevel: "直接使用之元件",
+          level: "第 {0} 級",
+          topLevelDependencies: "（被直接使用於應用程式之元件、工具、或者套件）",
+          componentsCount: "（{0} 個元件）",
+          vulnerabilities: "{0} 個漏洞",
+          noVulnerabilities: "沒有漏洞",
+          noComponents: "此層沒有任何元件",
+          showAll: "顯示所有 {0} 個元件",
+          showLess: "顯示較少",
+          unknownError: "發生錯誤",
+        },
+      };
 
       document
         .getElementById("sbom-file-input")
@@ -113,7 +227,7 @@
           if (fileList.length > 0) {
             const fileListHeading = document.createElement("div");
             fileListHeading.className = "font-medium mb-2";
-            fileListHeading.textContent = "Selected files:";
+            fileListHeading.textContent = t("selectedFiles");
             selectedFilesContainer.appendChild(fileListHeading);
 
             const fileListElement = document.createElement("ul");
@@ -154,7 +268,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
                 </svg>
-                <span>Uploading ${file.name}...</span>
+                <span>${t("uploading", file.name)}</span>
               `;
               statusList.appendChild(statusItem);
 
@@ -170,7 +284,7 @@
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
       </svg>
-      <span class="text-yellow-800">Warning: the previous <strong>${file.name}</strong> will be overwritten since the file names are same.</span>
+      <span class="text-yellow-800">${t("warningOverwrite", file.name)}</span>
     `;
                 statusList.appendChild(warningItem);
 
@@ -209,7 +323,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
-                    <span>${file.name} uploaded successfully</span>
+                    <span>${t("uploadedSuccessfully", file.name)}</span>
                   `;
 
                   // Add a tab for the uploaded file
@@ -226,9 +340,11 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                     </svg>
-                    <span class="text-red-600">${file.name}: ${
-                    errorData.error || "Upload failed"
-                  }</span>
+                    <span class="text-red-600">${t(
+                      "uploadFailed",
+                      file.name,
+                      errorData.error || "Upload failed"
+                    )}</span>
                   `;
                 }
               } catch (error) {
@@ -237,9 +353,11 @@
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                   </svg>
-                  <span class="text-red-600">${file.name}: ${
-                  error.message || "Error reading file"
-                }</span>
+                  <span class="text-red-600">${t(
+                    "uploadFailed",
+                    file.name,
+                    error.message || t("errorReadingFile")
+                  )}</span>
                 `;
               }
             }
@@ -249,6 +367,70 @@
             selectButton.classList.remove("opacity-50", "cursor-not-allowed");
           }
         });
+
+      // Current language
+      let currentLanguage = "en";
+
+      // Function to replace placeholders in translations
+      function formatString(str, ...args) {
+        return str.replace(/{(\d+)}/g, (match, index) => {
+          return typeof args[index] !== "undefined" ? args[index] : match;
+        });
+      }
+
+      // Function to get translated text
+      function t(key, ...args) {
+        const translation =
+          translations[currentLanguage][key] || translations["en"][key] || key;
+        return formatString(translation, ...args);
+      }
+
+      // Function to change language
+      function changeLanguage(lang) {
+        currentLanguage = lang;
+        document
+          .getElementById("lang-en")
+          .classList.toggle("active-language", lang === "en");
+        document
+          .getElementById("lang-zh")
+          .classList.toggle("active-language", lang === "zh");
+
+        // Update all text elements with data-i18n attribute
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          const key = el.getAttribute("data-i18n");
+          let args = [];
+          if (el.hasAttribute("data-i18n-args")) {
+            try {
+              args = JSON.parse(el.getAttribute("data-i18n-args"));
+            } catch (e) {
+              console.error("Invalid i18n args", e);
+            }
+          }
+          el.innerHTML = t(key, ...args);
+        });
+
+        // Update app description
+        document.getElementById("app-description").textContent =
+          t("appDescription");
+
+        // Update select button text
+        const selectBtn = document.querySelector("#select-sbom-btn span");
+        if (selectBtn) selectBtn.textContent = t("selectFiles");
+
+        // Update "no files" message
+        const noFilesMsg = document.getElementById("no-tabs-message");
+        if (noFilesMsg) noFilesMsg.textContent = t("noFilesUploaded");
+
+        // Update uploaded files heading
+        const uploadedFilesHeading = document.querySelector(".mt-6 .text-lg");
+        if (uploadedFilesHeading)
+          uploadedFilesHeading.textContent = t("uploadedFiles");
+
+        // Refresh current view if tab is active
+        if (activeTab) {
+          fetchTopologyData(activeTab.dataset.fileName);
+        }
+      }
 
       // Function to add a new file tab
       function addFileTab(fileName) {
@@ -318,7 +500,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
         </svg>
-        Delete
+        ${t("delete")}
       </button>
     </div>
     <div class="mt-4 text-gray-600 flex items-center">
@@ -326,7 +508,7 @@
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
-      Loading topology data...
+      ${t("loadingTopology")}
     </div>
   `;
 
@@ -370,9 +552,7 @@
           errorDiv.className = "mt-4 p-4 bg-red-50 text-red-600 rounded-md";
           errorDiv.innerHTML = `
       <div class="font-medium">Failed to load topology data</div>
-      <div class="text-sm mt-1">${
-        error.message || "Unknown error occurred"
-      }</div>
+      <div class="text-sm mt-1">${error.message || t("unknownError")}</div>
     `;
           tabContent.appendChild(errorDiv);
         }
@@ -397,7 +577,7 @@
         if (sortedLevels.length === 0) {
           const emptyState = document.createElement("div");
           emptyState.className = "text-gray-500 italic";
-          emptyState.textContent = "No topology data available for this SBOM";
+          emptyState.textContent = t("noTopologyData");
           topologyContainer.appendChild(emptyState);
         } else {
           // Create level panels
@@ -417,10 +597,22 @@
 
             const levelTitle = document.createElement("div");
             levelTitle.className = "font-medium";
-            levelTitle.innerHTML =
-              level.level === 0
-                ? `Root Level <span class="text-sm font-normal text-gray-500">(Top-level dependencies, which is directly import as package/component)</span>`
-                : `Level ${level.level} <span class="text-sm font-normal text-gray-500">(${componentCount} components)</span>`;
+            // Use translation for level titles
+            if (level.level === 0) {
+              levelTitle.innerHTML = `${t(
+                "rootLevel"
+              )} <span class="text-sm font-normal text-gray-500">${t(
+                "topLevelDependencies"
+              )}</span>`;
+            } else {
+              levelTitle.innerHTML = `${t(
+                "level",
+                level.level
+              )} <span class="text-sm font-normal text-gray-500">${t(
+                "componentsCount",
+                componentCount
+              )}</span>`;
+            }
 
             const rightSection = document.createElement("div");
             rightSection.className = "flex items-center space-x-2";
@@ -429,11 +621,11 @@
             if (level.total_vulns > 0) {
               vulnBadge.className =
                 "px-2 py-1 text-xs font-medium bg-[#D9936E] text-red-800 rounded-full";
-              vulnBadge.textContent = `${level.total_vulns} vulnerabilities`;
+              vulnBadge.textContent = t("vulnerabilities", level.total_vulns);
             } else {
               vulnBadge.className =
                 "px-2 py-1 text-xs font-medium bg-[#95D0C0] text-[#231815] rounded-full";
-              vulnBadge.textContent = "No vulnerabilities";
+              vulnBadge.textContent = t("noVulnerabilities");
             }
 
             // Fold/Unfold icon
@@ -458,8 +650,10 @@
             componentsList.dataset.isExpanded = "true";
 
             if (componentCount === 0) {
-              componentsList.innerHTML =
-                "<div class='text-gray-500 italic'>No components at this level</div>";
+              const noComponentsMsg = document.createElement("div");
+              noComponentsMsg.className = "text-gray-500 italic";
+              noComponentsMsg.textContent = t("noComponents");
+              componentsList.appendChild(noComponentsMsg);
             } else {
               const componentsGrid = document.createElement("div");
               componentsGrid.className =
@@ -504,7 +698,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
                 </svg>
-                Show less
+                ${t("showLess")}
               `;
                     toggleButton.onclick = () => renderComponents(false);
                   } else {
@@ -512,7 +706,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
                 </svg>
-                Show all ${componentCount} components
+                ${t("showAll", componentCount)}
               `;
                     toggleButton.onclick = () => renderComponents(true);
                   }
@@ -601,7 +795,7 @@
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
               </svg>
-              ${fileName} deleted successfully
+              ${t("deletedSuccessfully", fileName)}
             `;
             statusContainer.innerHTML = "";
             statusContainer.appendChild(successMessage);
@@ -613,11 +807,11 @@
           } else {
             // Handle error
             const errorData = await response.json();
-            alert(`Error deleting file: ${errorData.error || "Unknown error"}`);
+            alert(t("errorDeleting", errorData.error || t("unknownError")));
           }
         } catch (error) {
           console.error("Error deleting file:", error);
-          alert(`Failed to delete file: ${error.message || "Network error"}`);
+          alert(t("failedToDelete", error.message || t("unknownError")));
         }
       }
 
@@ -630,6 +824,17 @@
           reader.readAsText(file);
         });
       }
+
+      // Initialize the language based on browser preference
+      document.addEventListener("DOMContentLoaded", function () {
+        // Check browser language preference
+        const browserLang = navigator.language || navigator.userLanguage;
+        if (browserLang.startsWith("zh")) {
+          changeLanguage("zh");
+        } else {
+          changeLanguage("en");
+        }
+      });
     </script>
   </body>
 </html>
