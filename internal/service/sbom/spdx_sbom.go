@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	spdxPrefix        = "SPDXRef-"
-	documentRefPrefix = "DocumentRef-"
+	spdxPrefix         = "SPDXRef-"
+	documentRefPrefix  = "DocumentRef-"
+	documentID         = "DOCUMENT"
+	documentRootPrefix = "DocumentRoot-"
 )
 
 func ProcessSPDX(name string, document *spdx.Document) error {
@@ -64,6 +66,10 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[i
 		refAStr := trimSPDXPrefix(getRefIDStr(d.RefA))
 		refBStr := trimSPDXPrefix(getRefIDStr(d.RefB))
 
+		if isGeneratedRoot(refAStr) || isGeneratedRoot(refBStr) {
+			continue
+		}
+
 		graph[refAStr] = append(graph[refAStr], refBStr)
 		inDegree[refBStr]++
 		allNodes[refAStr] = true
@@ -110,7 +116,7 @@ func getSpdxComponents(input spdx.Document) []string {
 	var components []string
 
 	for _, p := range input.Packages {
-		if p.PackageSPDXIdentifier != "" {
+		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
 			components = append(components, string(p.PackageSPDXIdentifier))
 		}
 	}
@@ -125,8 +131,14 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 
 	if len(input.Relationships) != 0 {
 		for _, r := range input.Relationships {
-			dependency[trimSPDXPrefix(getRefIDStr(r.RefA))] =
-				append(dependency[trimSPDXPrefix(getRefIDStr(r.RefA))], trimSPDXPrefix(getRefIDStr(r.RefB)))
+			refA := trimSPDXPrefix(getRefIDStr(r.RefA))
+			refB := trimSPDXPrefix(getRefIDStr(r.RefB))
+
+			if isGeneratedRoot(refA) || isGeneratedRoot(refB) {
+				continue
+			}
+
+			dependency[refA] = append(dependency[refA], refB)
 		}
 	}
 
@@ -178,4 +190,8 @@ func trimSPDXPrefix(input string) string {
 	}
 
 	return input
+}
+
+func isGeneratedRoot(input string) bool {
+	return input == documentID || strings.HasPrefix(input, documentRootPrefix)
 }
