@@ -8,7 +8,6 @@ import (
 )
 
 func SetupRouterGroup(r *gin.Engine) {
-	// Create a new router group for SBOM-related routes
 	sbomGroup := r.Group("/sbom")
 	{
 		sbomGroup.POST("/upload", sbom.CreateSBOM)
