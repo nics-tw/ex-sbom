@@ -17,6 +17,7 @@ type (
 		ComponentInfo    map[string]Component
 	}
 
+	// Component is a struct that contains the information from both the original SBOM file and scanned info from the osv-scanner util
 	Component struct {
 		Name       string `json:"name"`
 		Version    string `json:"version"`
@@ -24,6 +25,7 @@ type (
 		Vulns      []Vuln `json:"vulns"`
 	}
 
+	// Vuln is a struct that contains the information of the vulnerability within the component(if existing)
 	Vuln struct {
 		ID        string  `json:"id"`
 		Summary   string  `json:"summary"`
