@@ -57,19 +57,31 @@
         <div class="flex items-center space-x-3">
           <!-- Language switcher -->
           <div class="flex text-sm">
-            <button id="lang-en" class="px-2 py-1 rounded font-medium language-btn active-language" onclick="changeLanguage('en')">
+            <button
+              id="lang-en"
+              class="px-2 py-1 rounded font-medium language-btn active-language"
+              onclick="changeLanguage('en')"
+            >
               EN
             </button>
-            <button id="lang-zh" class="px-2 py-1 rounded font-medium language-btn" onclick="changeLanguage('zh')">
+            <button
+              id="lang-zh"
+              class="px-2 py-1 rounded font-medium language-btn"
+              onclick="changeLanguage('zh')"
+            >
               正體中文
             </button>
           </div>
-          
+
           <!-- Divider -->
           <div class="text-gray-400">|</div>
-          
+
           <!-- App description -->
-          <div class="text-sm text-gray-600" id="app-description" data-i18n="appDescription">
+          <div
+            class="text-sm text-gray-600"
+            id="app-description"
+            data-i18n="appDescription"
+          >
             SBOM Explorer, designed by NICS-ra
           </div>
         </div>
@@ -197,7 +209,8 @@
           noTopologyData: "此 SBOM 沒有足夠的相關資料",
           rootLevel: "直接使用之元件",
           level: "第 {0} 級",
-          topLevelDependencies: "（被直接使用於應用程式之元件、工具、或者套件）",
+          topLevelDependencies:
+            "（被直接使用於應用程式之元件、工具、或者套件）",
           componentsCount: "（{0} 個元件）",
           vulnerabilities: "{0} 個漏洞",
           noVulnerabilities: "沒有漏洞",
@@ -430,13 +443,6 @@
 
       // Function to add a new file tab
       function addFileTab(fileName) {
-        // If we already have this file, don't add it again
-        if (uploadedFiles.has(fileName)) {
-          return;
-        }
-
-        uploadedFiles.add(fileName);
-
         const tabsContainer = document.getElementById("file-tabs");
         const noTabsMessage = document.getElementById("no-tabs-message");
 
@@ -444,6 +450,24 @@
         if (noTabsMessage) {
           noTabsMessage.style.display = "none";
         }
+
+        // Check if we already have this file
+        if (uploadedFiles.has(fileName)) {
+          // Find the existing tab
+          const existingTab = Array.from(tabsContainer.children).find(
+            (tab) => tab.dataset.fileName === fileName
+          );
+
+          // Select the existing tab
+          if (existingTab) {
+            selectTab(existingTab);
+          }
+
+          return;
+        }
+
+        // Add to tracked files
+        uploadedFiles.add(fileName);
 
         // Create the tab element
         const tab = document.createElement("div");
@@ -453,11 +477,11 @@
 
         // Tab content
         tab.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-          </svg>
-          <span>${fileName}</span>
-        `;
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-2" viewBox="0 0 20 20" fill="currentColor">
+      <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+    </svg>
+    <span>${fileName}</span>
+  `;
 
         // Add click event to select the tab
         tab.addEventListener("click", () => selectTab(tab));
@@ -465,10 +489,8 @@
         // Add the tab to the container
         tabsContainer.appendChild(tab);
 
-        // Select this tab if it's the first one
-        if (uploadedFiles.size === 1) {
-          selectTab(tab);
-        }
+        // Always select the newly added tab
+        selectTab(tab);
       }
 
       // Function to select a tab
