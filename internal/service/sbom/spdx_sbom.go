@@ -192,6 +192,8 @@ func trimSPDXPrefix(input string) string {
 	return input
 }
 
+// default spdx document will consider the document itself as a component
+// for better understanding and preventing confusion, we will ignore it as default
 func isGeneratedRoot(input string) bool {
 	return input == documentID || strings.HasPrefix(input, documentRootPrefix)
 }
