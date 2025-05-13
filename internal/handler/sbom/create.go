@@ -118,14 +118,11 @@ func CreateSBOM(c *gin.Context) {
 			Data: spdxDoc,
 		}
 
-		go func() {
-			if err := ssbom.ProcessSPDX(fileName, spdxDoc); err != nil {
-				slog.Error("Failed to process SPDX SBOM", "error", err)
-				return
-			}
+		if err := ssbom.ProcessSPDX(fileName, spdxDoc, sbomData); err != nil {
+			slog.Error("Failed to process SPDX SBOM", "error", err)
+		}
 
-			slog.Info("process spdx-formatted sbom into shared structs,", "name", fileName)
-		}()
+		slog.Info("process spdx-formatted sbom into shared structs,", "name", fileName)
 	case SBOMCycloneDX:
 		decoder := cdx.NewBOMDecoder(bytes.NewReader(sbomData), cdx.BOMFileFormatJSON)
 
@@ -147,14 +144,12 @@ func CreateSBOM(c *gin.Context) {
 			Data: bom,
 		}
 
-		go func() {
-			if err := ssbom.ProcessCDX(fileName, bom); err != nil {
-				slog.Error("Failed to process CycloneDX SBOM", "error", err)
-				return
-			}
+		if err := ssbom.ProcessCDX(fileName, bom, sbomData); err != nil {
+			slog.Error("Failed to process CycloneDX SBOM", "error", err)
+			return
+		}
 
-			slog.Info("process cyclonedx-formatted sbom into shared structs,", "name", fileName)
-		}()
+		slog.Info("process cyclonedx-formatted sbom into shared structs,", "name", fileName)
 	case SBOMUnknown:
 		fallthrough
 	default:

@@ -1,11 +1,15 @@
 package ssbom
 
 import (
+	"errors"
+	"ex-s/util/file"
 	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
+	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
 )
@@ -17,7 +21,7 @@ const (
 	documentRootPrefix = "DocumentRoot-"
 )
 
-func ProcessSPDX(name string, document *spdx.Document) error {
+func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 	if document == nil {
 		return nil
 	}
@@ -37,7 +41,7 @@ func ProcessSPDX(name string, document *spdx.Document) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getSpdxComponentInfo(*document),
+		ComponentInfo:     getSpdxComponentInfo(*document, file),
 	}
 
 	slog.Info(
@@ -145,17 +149,59 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document) map[string]Component {
+func getSpdxComponentInfo(input spdx.Document, files []byte) map[string]Component {
 	var result = make(map[string]Component)
+
+	path, err := file.CopyAndCreate(files)
+	if err != nil {
+		slog.Error("failed to copy and create file", "error", err)
+
+		return nil
+	}
+
+	vulnPkgs, err := file.GetScanResult(path)
+	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
+		slog.Error("failed to get scan result", "error", err)
+	}
 
 	for _, p := range input.Packages {
 		if p.PackageSPDXIdentifier != "" {
+			var num int
+			vulns := make([]Vuln, 0)
+
+			pkg, ok := vulnPkgs[p.PackageName]
+			if ok {
+				num = len(pkg.Vulnerabilities)
+
+				if num > 0 {
+					for _, v := range pkg.Vulnerabilities {
+						vuln := Vuln{
+							ID:      v.ID,
+							Summary: v.Summary,
+							Details: v.Details,
+						}
+
+						for _, g := range pkg.Groups {
+							if slices.Contains(g.IDs, v.ID) {
+								vuln.CVSSScore = g.MaxSeverity
+							}
+						}
+
+						vulns = append(vulns, vuln)
+					}
+				}
+			}
+
 			result[string(p.PackageSPDXIdentifier)] = Component{
-				Name:    p.PackageName,
-				Version: p.PackageVersion,
+				Name:       p.PackageName,
+				Version:    p.PackageVersion,
+				VulnNumber: num,
+				Vulns:      vulns,
 			}
 		}
 	}
+
+	file.Delete(path)
 
 	return result
 }

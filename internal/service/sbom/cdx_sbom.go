@@ -1,14 +1,18 @@
 package ssbom
 
 import (
+	"errors"
+	"ex-s/util/file"
 	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
+	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 )
 
-func ProcessCDX(name string, bom cdx.BOM) error {
+func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
 	if bom.BOMFormat != cdx.BOMFormat {
 		return fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
 	}
@@ -28,7 +32,7 @@ func ProcessCDX(name string, bom cdx.BOM) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getCdxComponentInfo(bom.Components),
+		ComponentInfo:     getCdxComponentInfo(bom.Components, file),
 	}
 
 	slog.Info(
@@ -123,17 +127,61 @@ func getCdxDep(input *[]cdx.Dependency) map[string][]string {
 	return dependency
 }
 
-func getCdxComponentInfo(input *[]cdx.Component) map[string]Component {
+func getCdxComponentInfo(input *[]cdx.Component, files []byte) map[string]Component {
 	componentInfo := make(map[string]Component)
+
+	path, err := file.CopyAndCreate(files)
+	if err != nil {
+		slog.Error("failed to copy and create file", "error", err)
+
+		return nil
+	}
+
+	vulnPkgs, err := file.GetScanResult(path)
+	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
+		slog.Error("failed to get scan result", "error", err)
+	}
 
 	if input != nil {
 		for _, c := range *input {
+			var num int
+			vulns := make([]Vuln, 0)
+
+			pkg, ok := vulnPkgs[c.Name]
+			if ok {
+				num = len(pkg.Vulnerabilities)
+
+				if num > 0 {
+					slog.Info("found vulnerabilities", "component", c.Name, "number", num)
+
+					for _, v := range pkg.Vulnerabilities {
+						vuln := Vuln{
+							ID:      v.ID,
+							Summary: v.Summary,
+							Details: v.Details,
+						}
+
+						for _, g := range pkg.Groups {
+							if slices.Contains(g.IDs, v.ID) {
+								vuln.CVSSScore = g.MaxSeverity
+							}
+						}
+
+						vulns = append(vulns, vuln)
+					}
+				}
+			}
+
 			componentInfo[c.Name] = Component{
-				Name:    c.Name,
-				Version: c.Version,
+				Name:       c.Name,
+				Version:    c.Version,
+				VulnNumber: num,
+				Vulns:      vulns,
 			}
 		}
 	}
+
+	file.Delete(path)
 
 	return componentInfo
 }
