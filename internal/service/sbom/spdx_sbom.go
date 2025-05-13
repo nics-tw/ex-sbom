@@ -6,10 +6,8 @@ import (
 	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
 
-	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
@@ -221,40 +219,4 @@ func trimSPDXPrefix(input string) string {
 // for better understanding and preventing confusion, we will ignore it as default
 func isGeneratedRoot(input string) bool {
 	return input == documentID || strings.HasPrefix(input, documentRootPrefix)
-}
-
-func getCVSS(id string, groups []models.GroupInfo) string {
-	for _, g := range groups {
-		if slices.Contains(g.IDs, id) {
-			return g.MaxSeverity
-		}
-	}
-
-	return ""
-}
-
-func getVulnNumber(name string, vulnMap map[string]models.PackageVulns) int {
-	if vuln, ok := vulnMap[name]; ok {
-		return len(vuln.Vulnerabilities)
-	}
-
-	return 0
-}
-
-func getVulns(name string, vulnMap map[string]models.PackageVulns) []Vuln {
-	if vuln, ok := vulnMap[name]; ok {
-		var vulns []Vuln
-		for _, v := range vuln.Vulnerabilities {
-			vulns = append(vulns, Vuln{
-				ID:        v.ID,
-				Summary:   v.Summary,
-				Details:   v.Details,
-				CVSSScore: getCVSS(v.ID, vuln.Groups),
-			})
-		}
-
-		return vulns
-	}
-
-	return nil
 }
