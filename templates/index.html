@@ -687,6 +687,7 @@
                 displayComponents.forEach((component) => {
                   const componentItem = document.createElement("div");
                   const hasVuln =
+                    Array.isArray(level.components_with_vuln) &&
                     level.components_with_vuln.includes(component);
 
                   componentItem.className = hasVuln
