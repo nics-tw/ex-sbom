@@ -7,6 +7,7 @@ const (
 
 	ErrInvalidSBOM        = "Unknown SBOM, please check if the SBOM is valid"
 	ErrSBOMNotFound       = "SBOM not found"
+	ErrComponentNotFound  = "Component not found"
 	ErrXMLNotSupport      = "XML-formatted SBOM is currently not supported"
 	ErrFileTypeNotSupport = "File type not supported"
 
