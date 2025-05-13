@@ -41,7 +41,7 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getSpdxComponentInfo(*document, file),
+		ComponentInfo:     getSpdxComponentInfo(*document, file, name),
 	}
 
 	slog.Info(
@@ -149,10 +149,14 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document, files []byte) map[string]Component {
+func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) map[string]Component {
 	var result = make(map[string]Component)
 
-	path, err := file.CopyAndCreate(files)
+	path, err := file.CopyAndCreate(file.FileInput{
+		Name:  filename,
+		IsCDX: false,
+		Data:  files,
+	})
 	if err != nil {
 		slog.Error("failed to copy and create file", "error", err)
 

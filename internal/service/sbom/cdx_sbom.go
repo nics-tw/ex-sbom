@@ -32,7 +32,7 @@ func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getCdxComponentInfo(bom.Components, file),
+		ComponentInfo:     getCdxComponentInfo(bom.Components, file, name),
 	}
 
 	slog.Info(
@@ -127,10 +127,14 @@ func getCdxDep(input *[]cdx.Dependency) map[string][]string {
 	return dependency
 }
 
-func getCdxComponentInfo(input *[]cdx.Component, files []byte) map[string]Component {
+func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) map[string]Component {
 	componentInfo := make(map[string]Component)
 
-	path, err := file.CopyAndCreate(files)
+	path, err := file.CopyAndCreate(file.FileInput{
+		Name:  filename,
+		IsCDX: true,
+		Data:  files,
+	})
 	if err != nil {
 		slog.Error("failed to copy and create file", "error", err)
 
