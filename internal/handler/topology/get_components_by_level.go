@@ -22,12 +22,26 @@ type (
 func toLevelListResp(bom ssbom.FormattedSBOM) []levelInfo {
 	var levels []levelInfo
 	for level, components := range bom.DependencyLevel {
+		var totalVulns int
+		var componentsWithVuln []string
+
+		for _, component := range components {
+			info, ok := bom.ComponentInfo[component]
+			if ok {
+				totalVulns += info.VulnNumber
+
+				if info.VulnNumber > 0 {
+					componentsWithVuln = append(componentsWithVuln, component)
+				}
+			}
+		}
+
 		levels = append(levels, levelInfo{
 			Level:              level,
 			Components:         components,
-			ComponentsWithVuln: []string{}, // TODO: implement this after the integrate of osv-scanner
+			ComponentsWithVuln: componentsWithVuln,
 			TotalComponents:    len(components),
-			TotalVulns:         0, // TODO: implement this after the integrate of osv-scanner
+			TotalVulns:         totalVulns,
 		})
 	}
 
