@@ -145,7 +145,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		slog.Error("failed to get scan result", "error", err)
 	}
 
-	if input != nil {
+	if input != nil && len(*input) > 0 {
 		for _, c := range *input {
 			componentInfo[c.Name] = Component{
 				Name:       c.Name,
