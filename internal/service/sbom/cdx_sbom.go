@@ -6,7 +6,6 @@ import (
 	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
-	"slices"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -148,39 +147,11 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 
 	if input != nil {
 		for _, c := range *input {
-			var num int
-			vulns := make([]Vuln, 0)
-
-			pkg, ok := vulnPkgs[c.Name]
-			if ok {
-				num = len(pkg.Vulnerabilities)
-
-				if num > 0 {
-					slog.Info("found vulnerabilities", "component", c.Name, "number", num)
-
-					for _, v := range pkg.Vulnerabilities {
-						vuln := Vuln{
-							ID:      v.ID,
-							Summary: v.Summary,
-							Details: v.Details,
-						}
-
-						for _, g := range pkg.Groups {
-							if slices.Contains(g.IDs, v.ID) {
-								vuln.CVSSScore = g.MaxSeverity
-							}
-						}
-
-						vulns = append(vulns, vuln)
-					}
-				}
-			}
-
 			componentInfo[c.Name] = Component{
 				Name:       c.Name,
 				Version:    c.Version,
-				VulnNumber: num,
-				Vulns:      vulns,
+				VulnNumber: getVulnNumber(c.Name, vulnPkgs),
+				Vulns:      getVulns(c.Name, vulnPkgs),
 			}
 		}
 	}

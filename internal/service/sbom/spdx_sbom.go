@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
@@ -170,37 +171,11 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 
 	for _, p := range input.Packages {
 		if p.PackageSPDXIdentifier != "" {
-			var num int
-			vulns := make([]Vuln, 0)
-
-			pkg, ok := vulnPkgs[p.PackageName]
-			if ok {
-				num = len(pkg.Vulnerabilities)
-
-				if num > 0 {
-					for _, v := range pkg.Vulnerabilities {
-						vuln := Vuln{
-							ID:      v.ID,
-							Summary: v.Summary,
-							Details: v.Details,
-						}
-
-						for _, g := range pkg.Groups {
-							if slices.Contains(g.IDs, v.ID) {
-								vuln.CVSSScore = g.MaxSeverity
-							}
-						}
-
-						vulns = append(vulns, vuln)
-					}
-				}
-			}
-
 			result[string(p.PackageSPDXIdentifier)] = Component{
 				Name:       p.PackageName,
 				Version:    p.PackageVersion,
-				VulnNumber: num,
-				Vulns:      vulns,
+				VulnNumber: getVulnNumber(p.PackageName, vulnPkgs),
+				Vulns:      getVulns(p.PackageName, vulnPkgs),
 			}
 		}
 	}
@@ -246,4 +221,40 @@ func trimSPDXPrefix(input string) string {
 // for better understanding and preventing confusion, we will ignore it as default
 func isGeneratedRoot(input string) bool {
 	return input == documentID || strings.HasPrefix(input, documentRootPrefix)
+}
+
+func getCVSS(id string, groups []models.GroupInfo) string {
+	for _, g := range groups {
+		if slices.Contains(g.IDs, id) {
+			return g.MaxSeverity
+		}
+	}
+
+	return ""
+}
+
+func getVulnNumber(name string, vulnMap map[string]models.PackageVulns) int {
+	if vuln, ok := vulnMap[name]; ok {
+		return len(vuln.Vulnerabilities)
+	}
+
+	return 0
+}
+
+func getVulns(name string, vulnMap map[string]models.PackageVulns) []Vuln {
+	if vuln, ok := vulnMap[name]; ok {
+		var vulns []Vuln
+		for _, v := range vuln.Vulnerabilities {
+			vulns = append(vulns, Vuln{
+				ID:        v.ID,
+				Summary:   v.Summary,
+				Details:   v.Details,
+				CVSSScore: getCVSS(v.ID, vuln.Groups),
+			})
+		}
+
+		return vulns
+	}
+
+	return nil
 }
