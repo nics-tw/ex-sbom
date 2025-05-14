@@ -18,6 +18,7 @@ const (
 	documentRefPrefix  = "DocumentRef-"
 	documentID         = "DOCUMENT"
 	documentRootPrefix = "DocumentRoot-"
+	filePrefix         = "File-"
 )
 
 func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
@@ -266,5 +267,5 @@ func trimSPDXPrefix(input string) string {
 // default spdx document will consider the document itself as a component
 // for better understanding and preventing confusion, we will ignore it as default
 func isGeneratedRoot(input string) bool {
-	return input == documentID || strings.HasPrefix(input, documentRootPrefix)
+	return input == documentID || strings.HasPrefix(input, documentRootPrefix) || strings.HasPrefix(input, filePrefix)
 }
