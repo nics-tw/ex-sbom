@@ -138,7 +138,7 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 	}
 
 	// considering with negative list way, if it's with depth that is not 0, that means it's not root
-	result[0] = getRootComponents(allComponents, result)
+	roots = getRootComponents(allComponents, result)
 
 	// if level 0 contain no components, we need to move all level's components to their level -1
 	if len(result[0]) == 0 {
@@ -158,6 +158,9 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 			delete(result, level)
 		}
 	}
+
+	// add the root components to level 0
+	result[0] = append(result[0], roots...)
 
 	// convert the ref to name
 	converted := make(map[int][]string)

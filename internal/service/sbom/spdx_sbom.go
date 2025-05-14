@@ -113,7 +113,7 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 		result[depth] = append(result[depth], node)
 	}
 
-	result[0] = getRootComponents(allComponents, result)
+	roots = getRootComponents(allComponents, result)
 
 	if len(result[0]) == 0 {
 		var levels []int
@@ -132,6 +132,8 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 			delete(result, level)
 		}
 	}
+
+	result[0] = append(result[0], roots...)
 
 	convertedResult := make(map[int][]string)
 
