@@ -156,8 +156,6 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 
 	for level, components := range result {
 		for _, component := range components {
-			slog.Info("debug: component", "component", component)
-
 			name, ok := refToName[component]
 			if !ok {
 				slog.Error("failed to get ref name", "ref", component)
