@@ -355,11 +355,14 @@
                   const fileName = responseData.data?.name || file.name;
 
                   statusItem.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 00-1.414 1.414L10 11.414l1.293 1.293a1 1 001.414 0l4-4z" clip-rule="evenodd" />
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
-                    <span>${t("uploadedSuccessfully", file.name)}</span>
-                  `;
+                    <span class="text-green-600">${t(
+                      "uploadedSuccessfully",
+                      file.name
+                    )}</span>
+                    `;
 
                   // Add a tab for the uploaded file
                   addFileTab(fileName);
@@ -1150,14 +1153,13 @@
             // Show success message
             const statusContainer = document.getElementById("upload-status");
             const successMessage = document.createElement("div");
-            successMessage.className =
-              "mt-2 text-green-600 flex items-center px-2 py-1 rounded bg-green-50/50";
+            successMessage.className = "mt-2 text-green-600 flex items-center";
             successMessage.innerHTML = `
-  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 00-1.414 1.414L10 11.414l1.293 1.293a1 1 001.414 0l4-4z" clip-rule="evenodd" />
-  </svg>
-  <span class="break-all">${t("deletedSuccessfully", fileName)}</span>
-`;
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+              ${t("deletedSuccessfully", fileName)}
+            `;
             statusContainer.innerHTML = "";
             statusContainer.appendChild(successMessage);
 
