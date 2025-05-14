@@ -31,8 +31,9 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 	}
 
 	c := getSpdxComponents(*document)
-	dependency := getSpdxDep(*document)
-	dependencyLevel := getSpdxDependencyDepthMap(*document, c)
+	refToName := getSpdxIdentifierToName(*document)
+	dependency := getSpdxDep(*document, refToName)
+	dependencyLevel := getSpdxDependencyDepthMap(*document, c, refToName)
 
 	SBOMs[name] = FormattedSBOM{
 		Components:        c,
@@ -56,7 +57,7 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 	return nil
 }
 
-func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[int][]string {
+func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameMap map[string]string) map[int][]string {
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
@@ -110,7 +111,28 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[i
 		result[depth] = append(result[depth], node)
 	}
 
-	
+	result[0] = getRootComponents(allComponents, result)
+
+	if len(result[0]) == 0 {
+		for level := range result {
+			if level == 0 {
+				continue
+			}
+
+			result[level-1] = result[level]
+			delete(result, level)
+		}
+	}
+
+	convertedResult := make(map[int][]string)
+
+	for level, components := range result {
+		for _, component := range components {
+			if name, ok := nameMap[component]; ok {
+				convertedResult[level] = append(convertedResult[level], name)
+			}
+		}
+	}
 
 	return result
 }
@@ -129,7 +151,19 @@ func getSpdxComponents(input spdx.Document) []string {
 	return unique.StringSlice(components)
 }
 
-func getSpdxDep(input spdx.Document) map[string][]string {
+func getSpdxIdentifierToName(input spdx.Document) map[string]string {
+	components := make(map[string]string)
+
+	for _, p := range input.Packages {
+		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
+			components[string(p.PackageSPDXIdentifier)] = p.PackageName
+		}
+	}
+
+	return components
+}
+
+func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]string {
 	dependency := make(map[string][]string)
 
 	if len(input.Relationships) != 0 {
@@ -141,7 +175,21 @@ func getSpdxDep(input spdx.Document) map[string][]string {
 				continue
 			}
 
-			dependency[refA] = append(dependency[refA], refB)
+			nameA, ok := nameMap[getRefIDStr(r.RefA)]
+			if !ok {
+				slog.Error("failed to get name from refA", "refA", refA)
+
+				continue
+			}
+
+			nameB, ok := nameMap[getRefIDStr(r.RefB)]
+			if !ok {
+				slog.Error("failed to get name from refB", "refB", refB)
+
+				continue
+			}
+
+			dependency[nameA] = append(dependency[nameA], nameB)
 		}
 	}
 
