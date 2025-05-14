@@ -6,6 +6,7 @@ require (
 	github.com/CycloneDX/cyclonedx-go v0.9.2
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/osv-scanner/v2 v2.0.2
+	github.com/ossf/osv-schema/bindings/go v0.0.0-20250409195902-e540247eebab
 	github.com/spdx/tools-golang v0.5.5
 )
 
@@ -94,7 +95,6 @@ require (
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/opencontainers/runtime-spec v1.1.0 // indirect
 	github.com/opencontainers/selinux v1.11.0 // indirect
-	github.com/ossf/osv-schema/bindings/go v0.0.0-20250409195902-e540247eebab // indirect
 	github.com/owenrumney/go-sarif/v2 v2.3.3 // indirect
 	github.com/package-url/packageurl-go v0.1.3 // indirect
 	github.com/pandatix/go-cvss v0.6.2 // indirect
