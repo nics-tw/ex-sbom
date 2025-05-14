@@ -978,7 +978,7 @@
             const vulnId = `vuln-${index}`;
 
             // Calculate severity from CVSS score
-            const severityLevel = getSeverityFromCvss(vuln.cvss);
+            const severityLevel = getSeverityFromCvss(vuln.cvss_score);
             const severityClass = getSeverityClass(severityLevel);
 
             html += `
@@ -993,8 +993,8 @@
                   </div>
                   <div class="flex items-center">
                     ${
-                      vuln.cvss
-                        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${vuln.cvss}</span>`
+                      vuln.cvss_score
+                        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${vuln.cvss_score}</span>`
                         : ""
                     }
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${severityClass}">${severityLevel}</span>
