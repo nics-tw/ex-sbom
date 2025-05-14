@@ -317,7 +317,7 @@
                   "flex items-center bg-yellow-50 px-4 py-2 rounded-md border border-yellow-200 mt-2";
                 warningItem.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 011-2 0 012 0zm-1-8a1 1 00-1 1v3a1 1 002 0V6a1 1 00-1-1z" clip-rule="evenodd" />
       </svg>
       <span class="text-yellow-800">${t("warningOverwrite", file.name)}</span>
     `;
@@ -356,7 +356,7 @@
 
                   statusItem.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 00-1.414 1.414L10 11.414l1.293 1.293a1 1 001.414 0l4-4z" clip-rule="evenodd" />
                     </svg>
                     <span>${t("uploadedSuccessfully", file.name)}</span>
                   `;
@@ -373,7 +373,7 @@
                   const errorData = await response.json();
                   statusItem.innerHTML = `
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm8.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 00-1.414 1.414L10 11.414l1.293 1.293a1 1 001.414-1.414L11.414 10l1.293-1.293a1 1 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                     </svg>
                     <span class="text-red-600">${t(
                       "uploadFailed",
@@ -386,7 +386,7 @@
                 // Error reading or uploading file - same as before
                 statusItem.innerHTML = `
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 000 16zm8.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 00-1.414 1.414L10 11.414l1.293 1.293a1 1 001.414-1.414L11.414 10l1.293-1.293a1 1 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                   </svg>
                   <span class="text-red-600">${t(
                     "uploadFailed",
@@ -556,7 +556,7 @@
         // Tab content
         tab.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-2" viewBox="0 0 20 20" fill="currentColor">
-      <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+      <path fill-rule="evenodd" d="M4 4a2 2 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
     </svg>
     <span>${fileName}</span>
   `;
@@ -729,7 +729,7 @@
             foldIcon.className = "text-gray-500";
             foldIcon.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 transform transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+          <path fill-rule="evenodd" d="M5.293 7.293a1 1 011.414 0L10 10.586l3.293-3.293a1 1 011.414 1.414l-4 4a1 1 01-1.414 0l-4-4a1 1 010-1.414z" clip-rule="evenodd" />
         </svg>
       `;
 
@@ -774,13 +774,19 @@
 
                   const icon = hasVuln
                     ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 011-2 0 012 0zm-1-8a1 1 00-1 1v3a1 1 002 0V6a1 1 00-1-1z" clip-rule="evenodd" />
                 </svg>`
                     : `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" />
+                  <path fill-rule="evenodd" d="M4 4a2 2 012-2h8a2 2 012 2v12a1 1 011 1h-2a1 1 01-1-1v-2a1 1 00-1-1H9a1 1 00-1 1v2a1 1 01-1 1H5a1 1 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" />
                 </svg>`;
 
                   componentItem.innerHTML = `${icon}<span class="truncate">${component}</span>`;
+
+                  componentItem.addEventListener("click", (e) => {
+                    e.stopPropagation(); // Prevent level panel from toggling
+                    showComponentDetails(fileName, component);
+                  });
+
                   componentsGrid.appendChild(componentItem);
                 });
 
@@ -793,7 +799,7 @@
                   if (showAll) {
                     toggleButton.innerHTML = `
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
+                  <path fill-rule="evenodd" d="M14.707 12.707a1 1 01-1.414 0L10 9.414l-3.293-3.293a1 1 011.414 1.414l-4 4a1 1 01-1.414 0l-4-4a1 1 010-1.414z" clip-rule="evenodd" />
                 </svg>
                 ${t("showLess")}
               `;
@@ -801,7 +807,7 @@
                   } else {
                     toggleButton.innerHTML = `
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  <path fill-rule="evenodd" d="M5.293 7.293a1 1 011.414 0L10 10.586l3.293-3.293a1 1 011.414 1.414l-4 4a1 1 01-1.414 0l-4-4a1 1 010-1.414z" clip-rule="evenodd" />
                 </svg>
                 ${t("showAll", componentCount)}
               `;
@@ -839,6 +845,261 @@
         }
 
         tabContent.appendChild(topologyContainer);
+      }
+
+      // Function to show component details modal
+      async function showComponentDetails(fileName, component) {
+        // Create modal container if it doesn't exist
+        if (!document.getElementById("component-modal")) {
+          const modal = document.createElement("div");
+          modal.id = "component-modal";
+          modal.className =
+            "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden";
+          modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 class="text-xl font-medium text-gray-800" id="component-modal-title">${t(
+            "componentDetails"
+          )}</h2>
+          <button id="component-modal-close" class="text-gray-500 hover:text-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="overflow-y-auto flex-1 p-6" id="component-modal-content">
+          <div class="flex justify-center items-center py-8">
+            <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-[#009999]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>${t("loading")}</span>
+          </div>
+        </div>
+      </div>
+    `;
+          document.body.appendChild(modal);
+
+          // Add close event
+          document
+            .getElementById("component-modal-close")
+            .addEventListener("click", () => {
+              document
+                .getElementById("component-modal")
+                .classList.add("hidden");
+            });
+        }
+
+        // Update modal title and show it
+        document.getElementById("component-modal-title").textContent =
+          component;
+        document.getElementById("component-modal").classList.remove("hidden");
+
+        // Reset modal content to loading state
+        document.getElementById("component-modal-content").innerHTML = `
+    <div class="flex justify-center items-center py-8">
+      <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-[#009999]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>${t("loading")}</span>
+    </div>
+  `;
+
+        // Fetch component data
+        try {
+          const response = await fetch(
+            `/topology/component?name=${encodeURIComponent(
+              fileName
+            )}&component=${encodeURIComponent(component)}`
+          );
+
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch component details: ${response.status}`
+            );
+          }
+
+          const data = await response.json();
+
+          if (data.data) {
+            renderComponentDetails(data.data);
+          } else {
+            throw new Error("No component data available");
+          }
+        } catch (error) {
+          console.error("Error fetching component details:", error);
+          document.getElementById("component-modal-content").innerHTML = `
+      <div class="bg-red-50 text-red-800 p-4 rounded-md">
+        <p class="font-medium">Error loading component details</p>
+        <p class="mt-2">${error.message || "Unknown error"}</p>
+      </div>
+    `;
+        }
+      }
+
+      // Function to render component details
+      function renderComponentDetails(component) {
+        const content = document.getElementById("component-modal-content");
+        const { name, version, vuln_number = 0, vulns = [] } = component;
+
+        // Start with component metadata
+        let html = `
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b border-gray-200">
+      <div>
+        <h3 class="text-sm font-medium text-gray-500">${t("componentName")}</h3>
+        <p class="mt-2 text-lg">${name || "—"}</p>
+      </div>
+      <div>
+        <h3 class="text-sm font-medium text-gray-500">${t(
+          "componentVersion"
+        )}</h3>
+        <p class="mt-2">${version || "—"}</p>
+      </div>
+    </div>
+  `;
+
+        // Add vulnerabilities section if any
+        html += `
+    <div>
+      <div class="flex items-center justify-between">
+        <h3 class="text-md font-medium">${t("vulnerabilityCount")}</h3>
+        ${
+          vuln_number > 0
+            ? `<span class="px-2.5 py-0.5 rounded-full text-sm font-medium bg-red-100 text-red-800">${vuln_number}</span>`
+            : `<span class="px-2.5 py-0.5 rounded-full text-sm font-medium bg-green-100 text-green-800">${vuln_number}</span>`
+        }
+      </div>
+  `;
+
+        if (vulns && vulns.length > 0) {
+          // Add collapsible vulnerabilities
+          vulns.forEach((vuln, index) => {
+            const vulnId = `vuln-${index}`;
+            
+            // Calculate severity from CVSS score
+            const severityLevel = getSeverityFromCvss(vuln.cvss);
+            const severityClass = getSeverityClass(severityLevel);
+          
+            html += `
+              <div class="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+                <div class="bg-gray-50 px-4 py-3 flex items-center justify-between cursor-pointer" 
+                     onclick="toggleVulnerabilityDetails('${vulnId}')">
+                  <div class="flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="font-medium">${vuln.id || "Unknown"}</span>
+                  </div>
+                  <div class="flex items-center">
+                    ${
+                      vuln.cvss
+                        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${vuln.cvss}</span>`
+                        : ""
+                    }
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${severityClass}">${severityLevel}</span>
+                    <svg id="chevron-${vulnId}" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 transform transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M5.293 7.293a1 1 011.414 0L10 10.586l3.293-3.293a1 1 011.414 1.414l-4 4a1 1 01-1.414 0l-4-4a1 1 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <div id="${vulnId}" class="px-4 py-3 border-t border-gray-200 hidden">
+                  ${
+                    vuln.summary
+                      ? `<div class="mb-4">
+                      <h4 class="text-sm font-medium text-gray-500 mb-1">${t(
+                        "summary"
+                      )}</h4>
+                      <p>${vuln.summary}</p>
+                    </div>`
+                      : ""
+                  }
+                  
+                  ${
+                    vuln.details
+                      ? `<div class="mb-4">
+                      <h4 class="text-sm font-medium text-gray-500 mb-1">${t(
+                        "details"
+                      )}</h4>
+                      <div class="prose prose-sm max-w-none">${renderMarkdown(
+                        vuln.details
+                      )}</div>
+                    </div>`
+                      : ""
+                  }
+                  
+                  ${
+                    vuln.fix_version
+                      ? `<div class="mt-2">
+                      <h4 class="text-sm font-medium text-gray-500 mb-1">${t(
+                        "fixVersion"
+                      )}</h4>
+                      <p class="text-green-600 font-medium">${vuln.fix_version}</p>
+                    </div>`
+                      : ""
+                  }
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          html += `
+      <div class="mt-4 text-gray-500 italic">
+        ${t("noVulnerabilitiesFound")}
+      </div>
+    `;
+        }
+
+        html += "</div>";
+        content.innerHTML = html;
+      }
+
+      // Helper function to get CSS class for severity level
+      function getSeverityClass(severity) {
+        const severityLower = severity.toLowerCase();
+        if (severityLower.includes("critical")) {
+          return "bg-red-100 text-red-800";
+        } else if (severityLower.includes("high")) {
+          return "bg-orange-100 text-orange-800";
+        } else if (severityLower.includes("medium")) {
+          return "bg-yellow-100 text-yellow-800";
+        } else if (severityLower.includes("low")) {
+          return "bg-blue-100 text-blue-800";
+        } else {
+          return "bg-gray-100 text-gray-800";
+        }
+      }
+
+      // Function to toggle vulnerability details visibility
+      function toggleVulnerabilityDetails(vulnId) {
+        const detailsElem = document.getElementById(vulnId);
+        const chevronElem = document.getElementById(`chevron-${vulnId}`);
+
+        if (detailsElem.classList.contains("hidden")) {
+          detailsElem.classList.remove("hidden");
+          chevronElem.classList.add("rotate-180");
+        } else {
+          detailsElem.classList.add("hidden");
+          chevronElem.classList.remove("rotate-180");
+        }
+      }
+
+      // Make the toggle function available globally
+      window.toggleVulnerabilityDetails = toggleVulnerabilityDetails;
+
+      function getSeverityFromCvss(cvssScore) {
+        if (!cvssScore) return "Unknown";
+
+        const score = parseFloat(cvssScore);
+
+        if (isNaN(score)) return "Unknown";
+
+        if (score >= 9.0) return "Critical";
+        if (score >= 7.0) return "High";
+        if (score >= 4.0) return "Medium";
+        if (score >= 0.1) return "Low";
+
+        return "None";
       }
 
       // Function to delete a file
@@ -890,7 +1151,7 @@
             successMessage.className = "mt-2 text-green-600 flex items-center";
             successMessage.innerHTML = `
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 00-1.414 1.414L10 11.414l1.293 1.293a1 1 001.414 0l4-4z" clip-rule="evenodd" />
               </svg>
               ${t("deletedSuccessfully", fileName)}
             `;
