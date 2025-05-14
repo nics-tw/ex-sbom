@@ -3,8 +3,10 @@ package ssbom
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
+	"github.com/ossf/osv-schema/bindings/go/osvschema"
 )
 
 type (
@@ -37,7 +39,7 @@ type (
 		Details   string `json:"details"`
 		CVSSScore string `json:"cvss_score"`
 		// SuggestFixVersion is a distinct list of versions that the user can upgrade to prevent the vulnerability
-		SuggestFixVersion []string `json:"suggest_fix_version"`
+		SuggestFixVersion string `json:"suggest_fix_version"`
 	}
 )
 
@@ -93,11 +95,13 @@ func getVulns(name string, vulnMap map[string]models.PackageVulns) []Vuln {
 	if vuln, ok := vulnMap[name]; ok {
 		var vulns []Vuln
 		for _, v := range vuln.Vulnerabilities {
+
 			vulns = append(vulns, Vuln{
-				ID:        v.ID,
-				Summary:   v.Summary,
-				Details:   v.Details,
-				CVSSScore: getCVSS(v.ID, vuln.Groups),
+				ID:                v.ID,
+				Summary:           v.Summary,
+				Details:           v.Details,
+				CVSSScore:         getCVSS(v.ID, vuln.Groups),
+				SuggestFixVersion: getFixVersion(v),
 			})
 		}
 
@@ -105,6 +109,26 @@ func getVulns(name string, vulnMap map[string]models.PackageVulns) []Vuln {
 	}
 
 	return nil
+}
+
+func getFixVersion(v osvschema.Vulnerability) string {
+	var fixVersions strings.Builder
+
+	for _, affected := range v.Affected {
+		for _, r := range affected.Ranges {
+			for _, e := range r.Events {
+				if len(e.Fixed) > 0 {
+					if fixVersions.Len() > 0 {
+						fixVersions.WriteString(", ")
+					}
+
+					fixVersions.WriteString(e.Fixed)
+				}
+			}
+		}
+	}
+
+	return fixVersions.String()
 }
 
 func getReverseDep(Dependency map[string][]string) map[string][]string {
