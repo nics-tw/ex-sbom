@@ -22,8 +22,10 @@ func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
 	}
 
 	c := getCdxComponents(bom.Components)
-	dependency := getCdxDep(bom.Dependencies)
-	dependencyLevel := getCdxDependencyDepthMap(bom, c)
+	refToName := getCdxBomRefToName(bom.Components)
+
+	dependency := getCdxDep(bom.Dependencies, refToName)
+	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName)
 
 	SBOMs[name] = FormattedSBOM{
 		Components:        c,
@@ -59,7 +61,35 @@ func getCdxComponents(input *[]cdx.Component) []string {
 	return unique.StringSlice(components)
 }
 
-func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string) map[int][]string {
+func getCdxBomRef(input *[]cdx.Component) []string {
+	var components []string
+
+	if input != nil {
+		for _, c := range *input {
+			if c.BOMRef != "" {
+				components = append(components, c.BOMRef)
+			}
+		}
+	}
+
+	return unique.StringSlice(components)
+}
+
+func getCdxBomRefToName(input *[]cdx.Component) map[string]string {
+	components := make(map[string]string)
+
+	if input != nil {
+		for _, c := range *input {
+			if c.BOMRef != "" {
+				components[c.BOMRef] = c.Name
+			}
+		}
+	}
+
+	return components
+}
+
+func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName map[string]string) map[int][]string {
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
@@ -109,16 +139,62 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string) map[int][]st
 	// considering with negative list way, if it's with depth that is not 0, that means it's not root
 	result[0] = getRootComponents(allComponents, result)
 
-	return result
+	// if level 0 contain no components, we need to move all level's components to their level -1
+	if len(result[0]) == 0 {
+		for level := range result {
+			if level == 0 {
+				continue
+			}
+
+			result[level-1] = result[level]
+			delete(result, level)
+		}
+	}
+
+	// convert the ref to name
+	converted := make(map[int][]string)
+
+	for level, components := range result {
+		for _, component := range components {
+			slog.Info("debug: component", "component", component)
+
+			name, ok := refToName[component]
+			if !ok {
+				slog.Error("failed to get ref name", "ref", component)
+				continue
+			}
+
+			converted[level] = append(converted[level], name)
+		}
+	}
+
+	return converted
 }
 
-func getCdxDep(input *[]cdx.Dependency) map[string][]string {
+func getCdxDep(input *[]cdx.Dependency, refToName map[string]string) map[string][]string {
 	dependency := make(map[string][]string)
 
 	if input != nil {
 		for _, d := range *input {
 			if d.Dependencies != nil && len(*d.Dependencies) > 0 {
-				dependency[d.Ref] = append(dependency[d.Ref], *d.Dependencies...)
+				// convert the ref to name
+				refName, ok := refToName[d.Ref]
+				if !ok {
+					slog.Error("failed to get ref name", "ref", d.Ref)
+					continue
+				}
+
+				var deps []string
+				for _, dep := range *d.Dependencies {
+					depName, ok := refToName[dep]
+					if !ok {
+						slog.Error("failed to get dep name", "dep", dep)
+						continue
+					}
+					deps = append(deps, depName)
+				}
+
+				dependency[refName] = deps
 			}
 		}
 	}

@@ -110,7 +110,7 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string) map[i
 		result[depth] = append(result[depth], node)
 	}
 
-	result[0] = getRootComponents(allComponents, result)
+	
 
 	return result
 }
