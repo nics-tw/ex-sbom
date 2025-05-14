@@ -6,6 +6,7 @@ import (
 	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -141,7 +142,14 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 
 	// if level 0 contain no components, we need to move all level's components to their level -1
 	if len(result[0]) == 0 {
+		var levels []int
 		for level := range result {
+			levels = append(levels, level)
+		}
+
+		slices.Sort(levels)
+
+		for _, level := range levels {
 			if level == 0 {
 				continue
 			}

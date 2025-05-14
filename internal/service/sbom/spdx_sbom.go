@@ -6,6 +6,7 @@ import (
 	"ex-s/util/unique"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -115,7 +116,14 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 	result[0] = getRootComponents(allComponents, result)
 
 	if len(result[0]) == 0 {
+		var levels []int
 		for level := range result {
+			levels = append(levels, level)
+		}
+
+		slices.Sort(levels)
+
+		for _, level := range levels {
 			if level == 0 {
 				continue
 			}
