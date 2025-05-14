@@ -4,6 +4,7 @@ import (
 	ssbom "ex-s/internal/service/sbom"
 	"ex-s/util/msg"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -33,12 +34,16 @@ func GetComponent(c *gin.Context) {
 
 	bom, err := ssbom.GetSBOM(name)
 	if err != nil {
+		slog.Error("GetComponent", "error", err)
+
 		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
 		return
 	}
 
 	component, ok := bom.ComponentInfo[comp]
 	if !ok {
+		slog.Error("GetComponent", "error", fmt.Sprintf("component %s not found in sbom %s", comp, name))
+
 		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: "component not found"})
 		return
 	}
