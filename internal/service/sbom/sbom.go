@@ -26,19 +26,22 @@ type (
 
 	// Component is a struct that contains the information from both the original SBOM file and scanned info from the osv-scanner util
 	Component struct {
-		Name       string `json:"name"`
-		Version    string `json:"version"`
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		// VulnNumber is the number of total vulnerabilities that the component has
 		VulnNumber int    `json:"vuln_number"`
 		Vulns      []Vuln `json:"vulns"`
 	}
 
 	// Vuln is a struct that contains the information of the vulnerability within the component(if existing)
 	Vuln struct {
-		ID        string `json:"id"`
-		Summary   string `json:"summary"`
+		ID      string `json:"id"`
+		Summary string `json:"summary"`
+		// Details is the description of the vulnerability, which is in markdown format, including root cause and patch information
 		Details   string `json:"details"`
 		CVSSScore string `json:"cvss_score"`
 		// SuggestFixVersion is a distinct list of versions that the user can upgrade to prevent the vulnerability
+		// here concat the versions with ", " as the separator
 		SuggestFixVersion string `json:"suggest_fix_version"`
 	}
 )
@@ -54,6 +57,7 @@ func GetSBOM(name string) (FormattedSBOM, error) {
 	if !ok {
 		return FormattedSBOM{}, fmt.Errorf("SBOM not found")
 	}
+
 	return sbom, nil
 }
 
