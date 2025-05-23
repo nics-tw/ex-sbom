@@ -12,10 +12,11 @@ import (
 
 func toComponentResp(c ssbom.Component) map[string]any {
 	return map[string]any{
-		"name":        c.Name,
-		"version":     c.Version,
-		"vuln_number": c.VulnNumber,
-		"vulns":       c.Vulns,
+		"name":             c.Name,
+		"version":          c.Version,
+		"vuln_number":      c.VulnNumber,
+		"vulns":            c.Vulns,
+		"contain_vuln_dep": c.ContainsVulnDep,
 	}
 }
 

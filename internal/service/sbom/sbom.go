@@ -2,6 +2,7 @@ package ssbom
 
 import (
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -29,8 +30,18 @@ type (
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		// VulnNumber is the number of total vulnerabilities that the component has
-		VulnNumber int    `json:"vuln_number"`
-		Vulns      []Vuln `json:"vulns"`
+		VulnNumber      int           `json:"vuln_number"`
+		Vulns           []Vuln        `json:"vulns"`
+		ContainsVulnDep bool          `json:"contains_vuln_dep"`
+		VulnDeps        []string      `json:"vuln_deps"`
+		VulnDepPaths    []VulnDepPath `json:"vuln_dep_paths"`
+	}
+
+	VulnDepPath struct {
+		Name string `json:"name"`
+		// Path is the path of the dependency in the original SBOM file
+		// the first element is the dependency component with vuln, and the last element is the root component
+		Path []string `json:"path"`
 	}
 
 	// Vuln is a struct that contains the information of the vulnerability within the component(if existing)
@@ -175,4 +186,115 @@ func getDiff(a, b []string) []string {
 	}
 
 	return result
+}
+
+// getAffecteds is a util function that returns the components that have direct or indirect relationship with the given component
+func getAffecteds(name string, ReverseDependency map[string][]string) []string {
+	seen := make(map[string]bool)
+	var affected []string
+
+	var traverse func(component string)
+	traverse = func(component string) {
+		if seen[component] {
+			return
+		}
+		seen[component] = true
+
+		deps, ok := ReverseDependency[component]
+		if !ok || len(deps) == 0 {
+			return
+		}
+
+		for _, dep := range deps {
+			affected = append(affected, dep)
+			traverse(dep)
+		}
+	}
+
+	traverse(name)
+	return affected
+}
+
+func getVulnDepPaths(vulnComp string, ReverseDependency map[string][]string) []VulnDepPath {
+	affecteds := getAffecteds(vulnComp, ReverseDependency)
+
+	if len(affecteds) == 0 {
+		return nil
+	}
+
+	var vulnDepPaths []VulnDepPath
+
+	for _, affected := range affecteds {
+		path := getPath(affected, vulnComp, ReverseDependency)
+		if len(path) == 0 {
+			slog.Error("failed to get path", "affected", affected, "vulnComp", vulnComp)
+			continue
+		}
+
+		vulnDepPaths = append(vulnDepPaths, VulnDepPath{
+			Name: vulnComp,
+			Path: path,
+		})
+	}
+
+	return vulnDepPaths
+}
+
+func getPath(comp, vulnComp string, ReverseDependency map[string][]string) []string {
+    // path is defined as every package name that is in the path from the vulnComp to the root
+    var path []string
+    
+    // If comp is the same as vulnComp, return just the component itself
+    if comp == vulnComp {
+        return []string{vulnComp}
+    }
+    
+    // Use a map to track visited nodes and their parents
+    visited := make(map[string]string)
+    visited[vulnComp] = "" // vulnComp has no parent
+    
+    // Use BFS to find the shortest path from vulnComp to comp
+    queue := []string{vulnComp}
+    found := false
+    
+    for len(queue) > 0 && !found {
+        current := queue[0]
+        queue = queue[1:]
+        
+        // Check all components that depend on the current one
+        for _, dependent := range ReverseDependency[current] {
+            if _, seen := visited[dependent]; seen {
+                continue
+            }
+            
+            // Record that we got to dependent from current
+            visited[dependent] = current
+            
+            if dependent == comp {
+                found = true
+                break
+            }
+            
+            queue = append(queue, dependent)
+        }
+    }
+    
+    // If no path was found
+    if !found {
+        return nil
+    }
+    
+    // Reconstruct the path from comp back to vulnComp
+    reversePath := []string{}
+    for current := comp; current != ""; current = visited[current] {
+        reversePath = append(reversePath, current)
+    }
+    
+    // Reverse the path to get from vulnComp to comp
+    path = make([]string, len(reversePath))
+    for i, c := range reversePath {
+        path[len(reversePath)-1-i] = c
+    }
+    
+    return path
 }
