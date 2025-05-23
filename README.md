@@ -48,3 +48,9 @@ go build -o ex-s
 ## API documentation
 
 We use Postman to document our API. You can find the documentation json file in the root directory with name `ex-s.postman_collection.json`. You can import this file into Postman to view the API documentation.
+
+## Contributing
+
+As this is an experimental project, we welcome any contributions or suggestions. If you have any ideas or feedback, please feel free to open an issue or submit a pull request.
+
+By contributing to this project, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md) and the [Contributing Guidelines](CONTRIBUTING.md).
