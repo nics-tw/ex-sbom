@@ -23,7 +23,7 @@ We expect all contributors to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md
   ```
 - Add the original repository as an upstream remote:
   ```bash
-  git remote add upstream https://github.com/nics-ra/ex-s.git
+  git remote add upstream https://github.com/nics-tw/ex-s.git
     ```
 - Install Go dependencies:
   ```bash
