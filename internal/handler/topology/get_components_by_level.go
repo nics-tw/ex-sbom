@@ -11,11 +11,12 @@ import (
 
 type (
 	levelInfo struct {
-		Level              int      `json:"level"`
-		Components         []string `json:"components"`
-		ComponentsWithVuln []string `json:"components_with_vuln"`
-		TotalComponents    int      `json:"total_components"`
-		TotalVulns         int      `json:"total_vulns"`
+		Level                 int      `json:"level"`
+		Components            []string `json:"components"`
+		ComponentsWithVuln    []string `json:"components_with_vuln"`
+		ComponentsWithVulnDep []string `json:"components_with_vuln_dep"`
+		TotalComponents       int      `json:"total_components"`
+		TotalVulns            int      `json:"total_vulns"`
 	}
 )
 
@@ -24,6 +25,7 @@ func toLevelListResp(bom ssbom.FormattedSBOM) []levelInfo {
 	for level, components := range bom.DependencyLevel {
 		var totalVulns int
 		var componentsWithVuln []string
+		var componentsWithVulnDep []string
 
 		for _, component := range components {
 			info, ok := bom.ComponentInfo[component]
@@ -33,15 +35,20 @@ func toLevelListResp(bom ssbom.FormattedSBOM) []levelInfo {
 				if info.VulnNumber > 0 {
 					componentsWithVuln = append(componentsWithVuln, component)
 				}
+
+				if len(info.VulnDeps) > 0 {
+					componentsWithVulnDep = append(componentsWithVulnDep, component)
+				}
 			}
 		}
 
 		levels = append(levels, levelInfo{
-			Level:              level,
-			Components:         components,
-			ComponentsWithVuln: componentsWithVuln,
-			TotalComponents:    len(components),
-			TotalVulns:         totalVulns,
+			Level:                 level,
+			Components:            components,
+			ComponentsWithVuln:    componentsWithVuln,
+			ComponentsWithVulnDep: componentsWithVulnDep,
+			TotalComponents:       len(components),
+			TotalVulns:            totalVulns,
 		})
 	}
 
