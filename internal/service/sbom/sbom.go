@@ -34,7 +34,6 @@ type (
 		Vulns           []Vuln        `json:"vulns"`
 		ContainsVulnDep bool          `json:"contains_vuln_dep"`
 		VulnDeps        []string      `json:"vuln_deps"`
-		VulnDepPaths    []VulnDepPath `json:"vuln_dep_paths"`
 	}
 
 	VulnDepPath struct {

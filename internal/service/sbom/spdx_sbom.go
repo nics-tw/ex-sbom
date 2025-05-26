@@ -62,11 +62,6 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 		if len(affected) > 0 {
 			affecteds = append(affecteds, affected...)
 		}
-
-		// find path and append the vulnDepPaths
-
-
-		
 	}
 
 	distinct := unique.StringSlice(affecteds)
@@ -83,8 +78,6 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 		componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
 		SBOMs[name].ComponentInfo[compName] = componentInfo
 	}
-
-
 
 	slog.Info(
 		"Process SPDX-formatted SBOM successfully",

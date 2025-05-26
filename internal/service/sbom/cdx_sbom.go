@@ -37,6 +37,39 @@ func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
 		ComponentInfo:     getCdxComponentInfo(bom.Components, file, name),
 	}
 
+	withVuln := []string{}
+
+	for compName, info := range SBOMs[name].ComponentInfo {
+		if info.VulnNumber > 0 {
+			withVuln = append(withVuln, compName)
+		}
+	}
+
+	affecteds := []string{}
+
+	for _, compName := range withVuln {
+		affected := getAffecteds(compName, SBOMs[name].ReverseDependency)
+
+		if len(affected) > 0 {
+			affecteds = append(affecteds, affected...)
+		}
+	}
+
+	distinct := unique.StringSlice(affecteds)
+
+	for _, compName := range distinct {
+		if _, ok := SBOMs[name]; !ok {
+			slog.Error("failed to get name from refA", "refA", name)
+
+			continue
+		}
+
+		componentInfo := SBOMs[name].ComponentInfo[compName]
+		componentInfo.ContainsVulnDep = true
+		componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
+		SBOMs[name].ComponentInfo[compName] = componentInfo
+	}
+
 	slog.Info(
 		"Process CycloneDX-formatted SBOM successfully",
 		"name",
