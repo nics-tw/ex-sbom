@@ -12,6 +12,12 @@ Disclaimer: This tool is still in the early stages of development and may not be
 - Also, the impact chain of the vulnerabilities in the system can be visualized, analyzed, which helps you understand the potential risks in your system.
 - Aside from visualization, the detailed information of each component can be viewed, which may be helpful for you to plan the remediation of the vulnerabilities.
 
+## Why we make this project
+
+In the very beginning, we were looking for a tool that could visualize the SBOM and the vulnerabilities in it(indeed, there's not-so-many options for us to choose from). And since we are also surveying the impact of the vulnerabilities among the software supply chain, we thought it would be great if we could visualize that along with the SBOM data. Hence, we decided to homebrew this tool.
+
+On the part of retrieving the SBOM data from external sources, we considered the [osv-scanner](https://github.com/google/osv-scanner) and [osv-scalibr](https://github.com/google/osv-scalibr) as an excellent work in the open source community. Hence we applied part of the util from them to retrieve data of the component in the SBOM, especially information with CVE vulnerabilities. As a result, we would like to address our most sincere gratitude to the authors of these two projects.
+
 ## Install
 
 0. Install Golang, version 1.24 or later.
