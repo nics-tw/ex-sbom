@@ -8,6 +8,7 @@ require (
 	github.com/google/osv-scanner/v2 v2.0.2
 	github.com/ossf/osv-schema/bindings/go v0.0.0-20250409195902-e540247eebab
 	github.com/spdx/tools-golang v0.5.5
+	github.com/stretchr/testify v1.10.0
 )
 
 require (
@@ -101,6 +102,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rust-secure-code/go-rustaudit v0.0.0-20250226111315-e20ec32e963c // indirect
 	github.com/saferwall/pe v1.5.6 // indirect
