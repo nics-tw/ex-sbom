@@ -1,8 +1,6 @@
 # ex-s
 
-````
 正體中文說明請參考 [README.zh-TW.md](README.zh-TW.md)
-````
 
 ex-s, abbreviation for Explorer of SBOM, is currently an experimental visualization tool for SBOM analysis.
 
