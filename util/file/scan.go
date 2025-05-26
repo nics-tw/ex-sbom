@@ -3,6 +3,7 @@ package file
 import (
 	"errors"
 	"regexp"
+	"strings"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -47,8 +48,12 @@ func getPackageName(input string) string {
 	// the pattern is like this: `symfony/http-foundation``, and we need to extract the name `http-foundation`
 	pattern := regexp.MustCompile(`(?m)\/([^\/]+)$`)
 	matches := pattern.FindStringSubmatch(input)
-	if len(matches) > 1 {
+	if len(matches) > 1 && matches[1] != "" {
 		return matches[1]
+	}
+
+	if strings.HasSuffix(input, "/") {
+		return ""
 	}
 
 	return input
