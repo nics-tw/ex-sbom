@@ -263,11 +263,28 @@ func getVulnDepPaths(vulnComp string, ReverseDependency map[string][]string) []V
 }
 
 func parseVersion(v string) version {
+	// Split by periods to get version segments
 	parts := strings.Split(v, ".")
 	intParts := make([]int, len(parts))
+
 	for i, p := range parts {
-		intParts[i], _ = strconv.Atoi(p)
+		// Extract only the numeric prefix from each part
+		numericPrefix := ""
+		for _, char := range p {
+			if char >= '0' && char <= '9' {
+				numericPrefix += string(char)
+			} else {
+				// Stop at first non-numeric character
+				break
+			}
+		}
+
+		// Convert the numeric prefix to integer
+		if numericPrefix != "" {
+			intParts[i], _ = strconv.Atoi(numericPrefix)
+		}
 	}
+
 	return version{Original: v, Parts: intParts}
 }
 
@@ -291,56 +308,56 @@ func compareVersions(a, b version) int {
 }
 
 func findNearestVersions(target string, versions []string) []string {
-    targetVersion := parseVersion(target)
-    var sameMajorHigher []version  // Same major version and higher than target
-    var differentMajorHigher []version  // Different major version and higher than target
-    allOlder := true
+	targetVersion := parseVersion(target)
+	var sameMajorHigher []version      // Same major version and higher than target
+	var differentMajorHigher []version // Different major version and higher than target
+	allOlder := true
 
-    for _, v := range versions {
-        ver := parseVersion(v)
-        cmp := compareVersions(ver, targetVersion)
-        
-        if cmp > 0 {  // Higher version
-            allOlder = false
-            
-            // Check if same major
-            if len(ver.Parts) > 0 && len(targetVersion.Parts) > 0 && 
-               ver.Parts[0] == targetVersion.Parts[0] {
-                sameMajorHigher = append(sameMajorHigher, ver)
-            } else {
-                differentMajorHigher = append(differentMajorHigher, ver)
-            }
-        } else if cmp == 0 {  // Equal version
-            allOlder = false
-        }
-    }
+	for _, v := range versions {
+		ver := parseVersion(v)
+		cmp := compareVersions(ver, targetVersion)
 
-    // If all versions are older, return empty slice
-    if allOlder {
-        return nil
-    }
+		if cmp > 0 { // Higher version
+			allOlder = false
 
-    // Sort versions in ascending order
-    sort.Slice(sameMajorHigher, func(i, j int) bool {
-        return compareVersions(sameMajorHigher[i], sameMajorHigher[j]) < 0
-    })
-    sort.Slice(differentMajorHigher, func(i, j int) bool {
-        return compareVersions(differentMajorHigher[i], differentMajorHigher[j]) < 0
-    })
+			// Check if same major
+			if len(ver.Parts) > 0 && len(targetVersion.Parts) > 0 &&
+				ver.Parts[0] == targetVersion.Parts[0] {
+				sameMajorHigher = append(sameMajorHigher, ver)
+			} else {
+				differentMajorHigher = append(differentMajorHigher, ver)
+			}
+		} else if cmp == 0 { // Equal version
+			allOlder = false
+		}
+	}
 
-    var result []string
-    
-    // Add lowest same major version (if any)
-    if len(sameMajorHigher) > 0 {
-        result = append(result, sameMajorHigher[0].Original)
-    }
-    
-    // Add lowest different major version (if any)
-    if len(differentMajorHigher) > 0 {
-        result = append(result, differentMajorHigher[0].Original)
-    }
+	// If all versions are older, return empty slice
+	if allOlder {
+		return nil
+	}
 
-    return result
+	// Sort versions in ascending order
+	sort.Slice(sameMajorHigher, func(i, j int) bool {
+		return compareVersions(sameMajorHigher[i], sameMajorHigher[j]) < 0
+	})
+	sort.Slice(differentMajorHigher, func(i, j int) bool {
+		return compareVersions(differentMajorHigher[i], differentMajorHigher[j]) < 0
+	})
+
+	var result []string
+
+	// Add lowest same major version (if any)
+	if len(sameMajorHigher) > 0 {
+		result = append(result, sameMajorHigher[0].Original)
+	}
+
+	// Add lowest different major version (if any)
+	if len(differentMajorHigher) > 0 {
+		result = append(result, differentMajorHigher[0].Original)
+	}
+
+	return result
 }
 
 func getPath(comp, vulnComp string, ReverseDependency map[string][]string) []string {
