@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
@@ -30,10 +32,10 @@ type (
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		// VulnNumber is the number of total vulnerabilities that the component has
-		VulnNumber      int           `json:"vuln_number"`
-		Vulns           []Vuln        `json:"vulns"`
-		ContainsVulnDep bool          `json:"contains_vuln_dep"`
-		VulnDeps        []string      `json:"vuln_deps"`
+		VulnNumber      int      `json:"vuln_number"`
+		Vulns           []Vuln   `json:"vulns"`
+		ContainsVulnDep bool     `json:"contains_vuln_dep"`
+		VulnDeps        []string `json:"vuln_deps"`
 	}
 
 	VulnDepPath struct {
@@ -53,6 +55,11 @@ type (
 		// SuggestFixVersion is a distinct list of versions that the user can upgrade to prevent the vulnerability
 		// here concat the versions with ", " as the separator
 		SuggestFixVersion string `json:"suggest_fix_version"`
+	}
+
+	version struct {
+		Original string `json:"original"`
+		Parts    []int  `json:"parts"`
 	}
 )
 
@@ -143,6 +150,22 @@ func getFixVersion(v osvschema.Vulnerability) string {
 	}
 
 	return fixVersions.String()
+}
+
+func getAllFIxVersions(v osvschema.Vulnerability) []string {
+	var fixVersions []string
+
+	for _, affected := range v.Affected {
+		for _, r := range affected.Ranges {
+			for _, e := range r.Events {
+				if len(e.Fixed) > 0 && !slices.Contains(fixVersions, e.Fixed) {
+					fixVersions = append(fixVersions, e.Fixed)
+				}
+			}
+		}
+	}
+
+	return fixVersions
 }
 
 func getReverseDep(Dependency map[string][]string) map[string][]string {
@@ -239,61 +262,142 @@ func getVulnDepPaths(vulnComp string, ReverseDependency map[string][]string) []V
 	return vulnDepPaths
 }
 
-func getPath(comp, vulnComp string, ReverseDependency map[string][]string) []string {
-    // path is defined as every package name that is in the path from the vulnComp to the root
-    var path []string
-    
-    // If comp is the same as vulnComp, return just the component itself
-    if comp == vulnComp {
-        return []string{vulnComp}
-    }
-    
-    // Use a map to track visited nodes and their parents
-    visited := make(map[string]string)
-    visited[vulnComp] = "" // vulnComp has no parent
-    
-    // Use BFS to find the shortest path from vulnComp to comp
-    queue := []string{vulnComp}
-    found := false
-    
-    for len(queue) > 0 && !found {
-        current := queue[0]
-        queue = queue[1:]
+func parseVersion(v string) version {
+	parts := strings.Split(v, ".")
+	intParts := make([]int, len(parts))
+	for i, p := range parts {
+		intParts[i], _ = strconv.Atoi(p)
+	}
+	return version{Original: v, Parts: intParts}
+}
+
+// Compare a < b: -1, a == b: 0, a > b: 1
+func compareVersions(a, b version) int {
+	for i := 0; i < len(a.Parts) && i < len(b.Parts); i++ {
+		if a.Parts[i] < b.Parts[i] {
+			return -1
+		} else if a.Parts[i] > b.Parts[i] {
+			return 1
+		}
+	}
+
+	if len(a.Parts) < len(b.Parts) {
+		return -1
+	} else if len(a.Parts) > len(b.Parts) {
+		return 1
+	}
+
+	return 0
+}
+
+func findNearestVersions(target string, versions []string) []string {
+    targetVersion := parseVersion(target)
+    var sameMajorHigher []version  // Same major version and higher than target
+    var differentMajorHigher []version  // Different major version and higher than target
+    allOlder := true
+
+    for _, v := range versions {
+        ver := parseVersion(v)
+        cmp := compareVersions(ver, targetVersion)
         
-        // Check all components that depend on the current one
-        for _, dependent := range ReverseDependency[current] {
-            if _, seen := visited[dependent]; seen {
-                continue
+        if cmp > 0 {  // Higher version
+            allOlder = false
+            
+            // Check if same major
+            if len(ver.Parts) > 0 && len(targetVersion.Parts) > 0 && 
+               ver.Parts[0] == targetVersion.Parts[0] {
+                sameMajorHigher = append(sameMajorHigher, ver)
+            } else {
+                differentMajorHigher = append(differentMajorHigher, ver)
             }
-            
-            // Record that we got to dependent from current
-            visited[dependent] = current
-            
-            if dependent == comp {
-                found = true
-                break
-            }
-            
-            queue = append(queue, dependent)
+        } else if cmp == 0 {  // Equal version
+            allOlder = false
         }
     }
-    
-    // If no path was found
-    if !found {
+
+    // If all versions are older, return empty slice
+    if allOlder {
         return nil
     }
+
+    // Sort versions in ascending order
+    sort.Slice(sameMajorHigher, func(i, j int) bool {
+        return compareVersions(sameMajorHigher[i], sameMajorHigher[j]) < 0
+    })
+    sort.Slice(differentMajorHigher, func(i, j int) bool {
+        return compareVersions(differentMajorHigher[i], differentMajorHigher[j]) < 0
+    })
+
+    var result []string
     
-    // Reconstruct the path from comp back to vulnComp
-    reversePath := []string{}
-    for current := comp; current != ""; current = visited[current] {
-        reversePath = append(reversePath, current)
+    // Add lowest same major version (if any)
+    if len(sameMajorHigher) > 0 {
+        result = append(result, sameMajorHigher[0].Original)
     }
     
-    // Reverse the path to get from vulnComp to comp
-    path = make([]string, len(reversePath))
-    for i, c := range reversePath {
-        path[len(reversePath)-1-i] = c
+    // Add lowest different major version (if any)
+    if len(differentMajorHigher) > 0 {
+        result = append(result, differentMajorHigher[0].Original)
     }
-    
-    return path
+
+    return result
+}
+
+func getPath(comp, vulnComp string, ReverseDependency map[string][]string) []string {
+	// path is defined as every package name that is in the path from the vulnComp to the root
+	var path []string
+
+	// If comp is the same as vulnComp, return just the component itself
+	if comp == vulnComp {
+		return []string{vulnComp}
+	}
+
+	// Use a map to track visited nodes and their parents
+	visited := make(map[string]string)
+	visited[vulnComp] = "" // vulnComp has no parent
+
+	// Use BFS to find the shortest path from vulnComp to comp
+	queue := []string{vulnComp}
+	found := false
+
+	for len(queue) > 0 && !found {
+		current := queue[0]
+		queue = queue[1:]
+
+		// Check all components that depend on the current one
+		for _, dependent := range ReverseDependency[current] {
+			if _, seen := visited[dependent]; seen {
+				continue
+			}
+
+			// Record that we got to dependent from current
+			visited[dependent] = current
+
+			if dependent == comp {
+				found = true
+				break
+			}
+
+			queue = append(queue, dependent)
+		}
+	}
+
+	// If no path was found
+	if !found {
+		return nil
+	}
+
+	// Reconstruct the path from comp back to vulnComp
+	reversePath := []string{}
+	for current := comp; current != ""; current = visited[current] {
+		reversePath = append(reversePath, current)
+	}
+
+	// Reverse the path to get from vulnComp to comp
+	path = make([]string, len(reversePath))
+	for i, c := range reversePath {
+		path[len(reversePath)-1-i] = c
+	}
+
+	return path
 }
