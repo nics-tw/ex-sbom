@@ -124,3 +124,40 @@ func TestCompareVersions(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDiff(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        []string
+		b        []string
+		expected []string
+	}{
+		{
+			name:     "no changes",
+			a:        []string{"1.2.3", "1.2.4"},
+			b:        []string{"1.2.3", "1.2.4"},
+			expected: []string{},
+		},
+		{
+			name:     "sub have new element",
+			a:        []string{"1.2.3"},
+			b:        []string{"1.2.3", "1.2.4"},
+			expected: []string{},
+		},
+		{
+			name:     "objects have different elements",
+			a:        []string{"1.2.3", "1.2.4"},
+			b:        []string{"1.2.3"},
+			expected: []string{"1.2.4"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getDiff(tt.a, tt.b)
+			if !assert.ElementsMatch(t, tt.expected, result) {
+				t.Errorf("getDiff() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
