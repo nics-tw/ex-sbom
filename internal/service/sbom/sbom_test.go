@@ -161,3 +161,31 @@ func TestGetDiff(t *testing.T) {
 		})
 	}
 }
+
+func TestGetRootComponents(t *testing.T) {
+	tests := []struct {
+		name     string
+		allComps []string
+		dep      map[int][]string
+		expected []string
+	}{
+		{
+			name:     "one root component",
+			allComps: []string{"a", "b", "c", "d"},
+			dep: map[int][]string{
+				1: {"b", "c"},
+				2: {"d"},
+			},
+			expected: []string{"a"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getRootComponents(tt.allComps, tt.dep)
+			if !assert.ElementsMatch(t, tt.expected, result) {
+				t.Errorf("getRootComponents() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
