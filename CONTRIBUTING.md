@@ -73,6 +73,10 @@ We encourage you to write tests for your code. If you're adding new features or 
 
 Aside from unit tests, we also accept manual testing. Whiling applying manual test as the proof of your changes functioning as expected, please include the steps to reproduce the test in the PR description, image or video for the process and the result would be helpful.
 
+While creating new unit tests or integration test, please remember to at correspondent build tag for the test file, so that it can be run with the `go test` command. For example, if you are creating a unit test for any package, kindly add the `//go:build unit` build tag at the top of the test file. This will help us run the tests selectively based on the build tags.
+
+(Note that for your pilot run of the test, make sure you have add the build tag to your local config to ensure the test can be run as expected.)
+
 ### Documentation
 
 If you are adding new features or making significant changes, please update the documentation accordingly. This includes updating the README file and any relevant API documentation.
