@@ -46,17 +46,17 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 		ComponentInfo:     getSpdxComponentInfo(*document, file, name),
 	}
 
-	withVuln := []string{}
+	compWithVuln := []string{}
 
 	for compName, info := range SBOMs[name].ComponentInfo {
 		if info.VulnNumber > 0 {
-			withVuln = append(withVuln, compName)
+			compWithVuln = append(compWithVuln, compName)
 		}
 	}
 
 	affecteds := []string{}
 
-	for _, compName := range withVuln {
+	for _, compName := range compWithVuln {
 		affected := getAffecteds(compName, SBOMs[name].ReverseDependency)
 
 		if len(affected) > 0 {
@@ -75,7 +75,8 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 
 		componentInfo := SBOMs[name].ComponentInfo[compName]
 		componentInfo.ContainsVulnDep = true
-		componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
+
+		// componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
 		SBOMs[name].ComponentInfo[compName] = componentInfo
 	}
 
@@ -265,7 +266,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 				Name:       p.PackageName,
 				Version:    p.PackageVersion,
 				VulnNumber: getVulnNumber(p.PackageName, vulnPkgs),
-				Vulns:      getVulns(p.PackageName, vulnPkgs),
+				Vulns:      getVulns(p.PackageName, p.PackageVersion, vulnPkgs),
 			}
 		}
 	}

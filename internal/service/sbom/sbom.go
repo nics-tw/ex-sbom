@@ -32,10 +32,10 @@ type (
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		// VulnNumber is the number of total vulnerabilities that the component has
-		VulnNumber      int      `json:"vuln_number"`
-		Vulns           []Vuln   `json:"vulns"`
-		ContainsVulnDep bool     `json:"contains_vuln_dep"`
-		VulnDeps        []string `json:"vuln_deps"`
+		VulnNumber      int           `json:"vuln_number"`
+		Vulns           []Vuln        `json:"vulns"`
+		ContainsVulnDep bool          `json:"contains_vuln_dep"`
+		VulnDeps        []VulnDepPath `json:"vuln_deps"`
 	}
 
 	VulnDepPath struct {
@@ -54,7 +54,11 @@ type (
 		CVSSScore string `json:"cvss_score"`
 		// SuggestFixVersion is a distinct list of versions that the user can upgrade to prevent the vulnerability
 		// here concat the versions with ", " as the separator
+
 		SuggestFixVersion string `json:"suggest_fix_version"`
+		OtherFixVersions  string `json:"other_fix_versions"`
+
+		fixVersions []string
 	}
 
 	version struct {
@@ -112,17 +116,23 @@ func getVulnNumber(name string, vulnMap map[string]models.PackageVulns) int {
 	return 0
 }
 
-func getVulns(name string, vulnMap map[string]models.PackageVulns) []Vuln {
+func getVulns(name string, version string, vulnMap map[string]models.PackageVulns) []Vuln {
 	if vuln, ok := vulnMap[name]; ok {
 		var vulns []Vuln
 		for _, v := range vuln.Vulnerabilities {
+			allFixVers := getAllFixVersions(v)
+			suggestFix := findNearestVersions(version, allFixVers)
+			otherFixVer := getDiff(allFixVers, suggestFix)
 
 			vulns = append(vulns, Vuln{
 				ID:                v.ID,
 				Summary:           v.Summary,
 				Details:           v.Details,
 				CVSSScore:         getCVSS(v.ID, vuln.Groups),
-				SuggestFixVersion: getFixVersion(v),
+				SuggestFixVersion: getVersionString(suggestFix),
+				OtherFixVersions:  getVersionString(otherFixVer),
+
+				fixVersions: getAllFixVersions(v),
 			})
 		}
 
@@ -130,6 +140,22 @@ func getVulns(name string, vulnMap map[string]models.PackageVulns) []Vuln {
 	}
 
 	return nil
+}
+
+func getVersionString(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+
+	var version strings.Builder
+	for i, s := range strs {
+		if i > 0 {
+			version.WriteString(", ")
+		}
+		version.WriteString(s)
+	}
+
+	return version.String()
 }
 
 func getFixVersion(v osvschema.Vulnerability) string {
@@ -152,7 +178,7 @@ func getFixVersion(v osvschema.Vulnerability) string {
 	return fixVersions.String()
 }
 
-func getAllFIxVersions(v osvschema.Vulnerability) []string {
+func getAllFixVersions(v osvschema.Vulnerability) []string {
 	var fixVersions []string
 
 	for _, affected := range v.Affected {
@@ -263,6 +289,10 @@ func getVulnDepPaths(vulnComp string, ReverseDependency map[string][]string) []V
 }
 
 func parseVersion(v string) version {
+	if len(v) > 0 && v[0] == 'v' {
+		v = v[1:]
+	}
+
 	// Split by periods to get version segments
 	parts := strings.Split(v, ".")
 	intParts := make([]int, len(parts))

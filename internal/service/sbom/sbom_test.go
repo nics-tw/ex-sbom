@@ -73,6 +73,14 @@ func TestParseVersion(t *testing.T) {
 				Parts:    []int{1, 2, 3},
 			},
 		},
+				{
+			name:    "prefix v in version",
+			version: "v1.2.3",
+			expected: version{
+				Original: "1.2.3",
+				Parts:    []int{1, 2, 3},
+			},
+		},
 	}
 
 	for _, tt := range tests {

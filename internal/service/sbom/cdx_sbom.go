@@ -66,7 +66,7 @@ func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
 
 		componentInfo := SBOMs[name].ComponentInfo[compName]
 		componentInfo.ContainsVulnDep = true
-		componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
+		// componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
 		SBOMs[name].ComponentInfo[compName] = componentInfo
 	}
 
@@ -269,7 +269,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 				Name:       c.Name,
 				Version:    c.Version,
 				VulnNumber: getVulnNumber(c.Name, vulnPkgs),
-				Vulns:      getVulns(c.Name, vulnPkgs),
+				Vulns:      getVulns(c.Name, c.Version, vulnPkgs),
 			}
 		}
 	}

@@ -196,7 +196,8 @@
           severity: "Severity",
           summary: "Summary",
           details: "Details",
-          fixVersion: "Fix Version",
+          fixVersion: "Suggest Fix Version",
+          otherFixVersions: "Other Available Fix Versions",
           close: "Close",
           loading: "Loading...",
         },
@@ -241,7 +242,8 @@
           severity: "嚴重程度",
           summary: "摘要",
           details: "詳細資訊",
-          fixVersion: "修復版本",
+          fixVersion: "建議修復版本",
+          otherFixVersions: "其他可用修復版本",
           close: "關閉",
           loading: "載入中...",
         },
@@ -1072,6 +1074,17 @@
                         vuln.suggest_fix_version
                       }</p>
                     </div>`
+                      : ""
+                  }
+
+                  ${
+                    vuln.other_fix_versions
+                      ? `<div class="mt-2">
+      <h4 class="text-sm font-medium text-gray-500 mb-1">${t(
+        "otherFixVersions"
+      )}</h4>
+      <p class="text-gray-800">${vuln.other_fix_versions}</p>
+    </div>`
                       : ""
                   }
                 </div>
