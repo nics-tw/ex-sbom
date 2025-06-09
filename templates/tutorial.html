@@ -25,6 +25,10 @@
         background-color: rgba(0, 153, 153, 0.2);
         color: #009999;
       }
+
+      .preserve-whitespace {
+        white-space: pre-line;
+      }
     </style>
   </head>
 
@@ -110,6 +114,13 @@
       </div>
     </header>
 
+    <div>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold mb-4" data-i18n="whyMakeThisTool"></h2>
+        <p class="text-gray-700 preserve-whitespace" data-i18n="reasonParagraph"></p>
+      </div>
+    </div>
+
     <script>
       // Language translations
       const translations = {
@@ -117,13 +128,25 @@
           appTitle: "ex-s",
           appDescription: "SBOM Explorer, designed by NICS-ra",
           backToMain: "Back to Main",
-          // Add tutorial content translations here
+
+          // tutorial contents
+          whyMakeThisTool: "Why we made this tool?",
+          reasonParagraph:
+            "SBOMs (Software Bill of Materials) are essential for understanding the components and dependencies of software systems." +
+            "They help in identifying vulnerabilities, ensuring compliance, and managing software supply chain risks with a more precise and detailed view." +
+            " However, this complexed data can be difficult to interpret for many new users.",
         },
         zh: {
           appTitle: "ex-s",
           appDescription: "SBOM explorer，由 NICS-ra 設計",
           backToMain: "返回主頁",
-          // Add tutorial content translations here
+
+          // tutorial contents
+          whyMakeThisTool: "為什麼我們要做這個工具？",
+          reasonParagraph:
+            "SBOM（軟體物料清單）對於理解軟體系統的元件，以及其之間的依賴關係相當重要。" +
+            "它們以一個更加詳細、且精確的方式協助開發人員識別漏洞、確保合規性以及管理軟體供應鏈風險。" +
+            "然而，這些複雜的數據對許多新用戶來說可能難以解釋。",
         },
       };
 
