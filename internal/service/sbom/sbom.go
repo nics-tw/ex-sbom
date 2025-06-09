@@ -158,26 +158,6 @@ func getVersionString(strs []string) string {
 	return version.String()
 }
 
-func getFixVersion(v osvschema.Vulnerability) string {
-	var fixVersions strings.Builder
-
-	for _, affected := range v.Affected {
-		for _, r := range affected.Ranges {
-			for _, e := range r.Events {
-				if len(e.Fixed) > 0 {
-					if fixVersions.Len() > 0 {
-						fixVersions.WriteString(", ")
-					}
-
-					fixVersions.WriteString(e.Fixed)
-				}
-			}
-		}
-	}
-
-	return fixVersions.String()
-}
-
 func getAllFixVersions(v osvschema.Vulnerability) []string {
 	var fixVersions []string
 
