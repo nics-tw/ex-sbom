@@ -289,7 +289,7 @@ func getVulnDepPaths(vulnComp string, ReverseDependency map[string][]string) []V
 }
 
 func parseVersion(v string) version {
-	if len(v) > 0 && v[0] == 'v' {
+	if len(v) > 0 && rune(v[0]) == 'v' {
 		v = v[1:]
 	}
 
