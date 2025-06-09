@@ -74,6 +74,10 @@ func setupSSR(r *gin.Engine) {
 		c.HTML(http.StatusOK, "index.html", nil)
 	})
 
+	r.GET("/tutorial", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "tutorial.html", nil)
+	})
+
 	faviconFS, _ := fs.Sub(favicon, "static/img")
 	faviconHandler := http.FileServer(http.FS(faviconFS))
 	r.GET("/favicon.ico", func(c *gin.Context) {
