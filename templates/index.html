@@ -28,7 +28,6 @@
     </style>
   </head>
   <body>
-    <!-- Update the header section -->
     <header class="bg-white shadow">
       <div
         class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between"
@@ -72,6 +71,26 @@
               正體中文
             </button>
           </div>
+
+          <button
+            id="tutorial-btn"
+            class="px-3 py-1 bg-[#009999] hover:bg-[#19a3a3] text-white rounded text-sm flex items-center"
+            onclick="window.location.href='/tutorial'"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4 mr-1"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                clip-rule="evenodd"
+                fill-rule="evenodd"
+              />
+            </svg>
+            <span data-i18n="tutorialBtn">Tutorial</span>
+          </button>
 
           <!-- Divider -->
           <div class="text-gray-400">|</div>
@@ -200,6 +219,8 @@
           otherFixVersions: "Other Available Fix Versions",
           close: "Close",
           loading: "Loading...",
+          tutorialBtn: "Tutorial",
+          backToMain: "Back to Main",
         },
         zh: {
           appTitle: "ex-s",
@@ -246,6 +267,8 @@
           otherFixVersions: "其他可用修復版本",
           close: "關閉",
           loading: "載入中...",
+          tutorialBtn: "使用教學",
+          backToMain: "返回主頁",
         },
       };
 
