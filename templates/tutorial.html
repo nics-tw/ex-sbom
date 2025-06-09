@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ex-s</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+    <style>
+      .tab-active {
+        border-bottom: 2px solid #009999;
+        background-color: rgba(0, 153, 153, 0.1);
+      }
+
+      .language-btn {
+        transition: all 0.2s;
+      }
+
+      .language-btn:hover {
+        background-color: rgba(0, 153, 153, 0.1);
+      }
+
+      .active-language {
+        background-color: rgba(0, 153, 153, 0.2);
+        color: #009999;
+      }
+    </style>
+  </head>
+
+  <body>
+    <header class="bg-white shadow">
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between"
+      >
+        <div class="flex items-center space-x-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-7 w-7 text-[#009999]"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <h1
+            class="text-2xl font-bold text-gray-800 tracking-tight"
+            data-i18n="appTitle"
+          >
+            ex-s
+          </h1>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <!-- Language switcher -->
+          <div class="flex text-sm">
+            <button
+              id="lang-en"
+              class="px-2 py-1 rounded font-medium language-btn active-language"
+              onclick="changeLanguage('en')"
+            >
+              EN
+            </button>
+            <button
+              id="lang-zh"
+              class="px-2 py-1 rounded font-medium language-btn"
+              onclick="changeLanguage('zh')"
+            >
+              正體中文
+            </button>
+          </div>
+
+          <div class="ml-6">
+            <button
+              id="back-btn"
+              class="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-sm flex items-center"
+              onclick="window.location.href='/'"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-4 w-4 mr-1"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              <span data-i18n="backToMain">Back to Main Page</span>
+            </button>
+          </div>
+
+          <!-- Divider -->
+          <div class="text-gray-400">|</div>
+
+          <!-- App description -->
+          <div
+            class="text-sm text-gray-600"
+            id="app-description"
+            data-i18n="appDescription"
+          >
+            SBOM Explorer, designed by NICS-ra
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <script>
+      // Language translations
+      const translations = {
+        en: {
+          appTitle: "ex-s",
+          appDescription: "SBOM Explorer, designed by NICS-ra",
+          backToMain: "Back to Main",
+          // Add tutorial content translations here
+        },
+        zh: {
+          appTitle: "ex-s",
+          appDescription: "SBOM explorer，由 NICS-ra 設計",
+          backToMain: "返回主頁",
+          // Add tutorial content translations here
+        },
+      };
+
+      // Current language
+      let currentLanguage = "en";
+
+      // Function to change language
+      function changeLanguage(lang) {
+        currentLanguage = lang;
+        document
+          .getElementById("lang-en")
+          .classList.toggle("active-language", lang === "en");
+        document
+          .getElementById("lang-zh")
+          .classList.toggle("active-language", lang === "zh");
+
+        // Update all text elements with data-i18n attribute
+        document.querySelectorAll("[data-i18n]").forEach((el) => {
+          const key = el.getAttribute("data-i18n");
+          el.textContent = translations[currentLanguage][key] || key;
+        });
+      }
+
+      // Initialize the language based on browser preference
+      document.addEventListener("DOMContentLoaded", function () {
+        const browserLang = navigator.language || navigator.userLanguage;
+        if (browserLang.startsWith("zh")) {
+          changeLanguage("zh");
+        } else {
+          changeLanguage("en");
+        }
+      });
+    </script>
+  </body>
+</html>
