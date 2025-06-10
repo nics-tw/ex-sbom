@@ -36,7 +36,7 @@ func toLevelListResp(bom ssbom.FormattedSBOM) []levelInfo {
 					componentsWithVuln = append(componentsWithVuln, component)
 				}
 
-				if len(info.VulnDeps) > 0 {
+				if info.ContainsVulnDep {
 					componentsWithVulnDep = append(componentsWithVulnDep, component)
 				}
 			}
