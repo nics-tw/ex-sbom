@@ -39,6 +39,7 @@ func toTopoResp(paths []ssbom.VlunDepPath) map[string]interface{} {
 	}
 }
 
+// the GetComponentVulnDep API retrieves the vulnerability dependency paths for a specific component in a given SBOM.
 func GetComponentVulnDep(c *gin.Context) {
 	name := c.Query("name")
 	if len(name) == 0 {
