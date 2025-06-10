@@ -15,5 +15,6 @@ const (
 	ErrParsingJson = "Error parsing JSON:"
 	ErrParsingSPDX = "Error parsing SPDX SBOM"
 
-	ErrMissingParam = "Missing required parameter: %s"
+	ErrMissingParam     = "Missing required parameter: %s"
+	ErrInvalidComponent = "Component or SBOM is not found"
 )
