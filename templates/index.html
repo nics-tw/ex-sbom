@@ -221,6 +221,9 @@
           loading: "Loading...",
           tutorialBtn: "Tutorial",
           backToMain: "Back to Main",
+          dependencyVulnPaths: "Dependency Vulnerability Paths",
+          vulnerablePath: "Vulnerability Path {0}",
+          vulnerableComponent: "(Vulnerable)",
         },
         zh: {
           appTitle: "ex-s",
@@ -269,6 +272,9 @@
           loading: "載入中...",
           tutorialBtn: "使用教學",
           backToMain: "返回主頁",
+          dependencyVulnPaths: "相依性漏洞路徑",
+          vulnerablePath: "漏洞路徑 {0}",
+          vulnerableComponent: "(有漏洞)",
         },
       };
 
@@ -967,22 +973,35 @@
 
         // Fetch component data
         try {
-          const response = await fetch(
-            `/topology/component?name=${encodeURIComponent(
-              fileName
-            )}&component=${encodeURIComponent(component)}`
-          );
+          const [componentResponse, vulnDepResponse] = await Promise.all([
+            fetch(
+              `/topology/component?name=${encodeURIComponent(
+                fileName
+              )}&component=${encodeURIComponent(component)}`
+            ),
+            fetch(
+              `/topology/get_component_vuln_dep?name=${encodeURIComponent(
+                fileName
+              )}&component=${encodeURIComponent(component)}`
+            ),
+          ]);
 
-          if (!response.ok) {
+          if (!componentResponse.ok) {
             throw new Error(
-              `Failed to fetch component details: ${response.status}`
+              `Failed to fetch component details: ${componentResponse.status}`
             );
           }
 
-          const data = await response.json();
+          const componentData = await componentResponse.json();
+          let vulnDepData = null;
 
-          if (data.data) {
-            renderComponentDetails(data.data);
+          // Only process vulnerability dependency data if the request was successful
+          if (vulnDepResponse.ok) {
+            vulnDepData = await vulnDepResponse.json();
+          }
+
+          if (componentData.data) {
+            renderComponentDetails(componentData.data, vulnDepData?.data || []);
           } else {
             throw new Error("No component data available");
           }
@@ -998,7 +1017,7 @@
       }
 
       // Function to render component details
-      function renderComponentDetails(component) {
+      function renderComponentDetails(component, vulnDepPaths = []) {
         const content = document.getElementById("component-modal-content");
         const { name, version, vuln_number = 0, vulns = [] } = component;
 
@@ -1017,6 +1036,62 @@
       </div>
     </div>
   `;
+
+        // Add vulnerability dependency paths section if available
+        if (vulnDepPaths && vulnDepPaths.length > 0) {
+          html += `
+      <div class="mb-6 pb-6 border-b border-gray-200">
+        <h3 class="text-md font-medium mb-3">${t('dependencyVulnPaths')}</h3>
+        <div class="space-y-3">
+    `;
+
+          vulnDepPaths.forEach((path, index) => {
+            html += `
+        <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+          <div class="flex items-center mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span class="font-medium">${t('vulnerablePath', index + 1)}</span>
+          </div>
+          <div class="flex items-center flex-wrap ml-2">
+      `;
+
+            path.path.forEach((pathComponent, i) => {
+              const isFirst = i === 0;
+              const isLast = i === path.path.length - 1;
+              const isVulnerable = pathComponent === path.end;
+
+              if (i > 0) {
+                html += `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mx-1" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+            </svg>
+          `;
+              }
+
+              html += `
+          <span class="px-2 py-1 text-sm rounded ${
+            isVulnerable
+              ? "bg-red-100 text-red-800 font-medium"
+              : "bg-gray-100 text-gray-800"
+          }">
+            ${pathComponent}${isVulnerable ? `` : ""}
+          </span>
+        `;
+            });
+
+            html += `
+          </div>
+        </div>
+      `;
+          });
+
+          html += `
+        </div>
+      </div>
+    `;
+        }
 
         // Add vulnerabilities section if any
         html += `
