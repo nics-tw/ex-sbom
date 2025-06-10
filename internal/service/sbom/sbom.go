@@ -2,7 +2,6 @@ package ssbom
 
 import (
 	"fmt"
-	"log/slog"
 	"slices"
 	"sort"
 	"strconv"
@@ -35,14 +34,12 @@ type (
 		VulnNumber      int           `json:"vuln_number"`
 		Vulns           []Vuln        `json:"vulns"`
 		ContainsVulnDep bool          `json:"contains_vuln_dep"`
-		VulnDeps        []VulnDepPath `json:"vuln_deps"`
 	}
 
-	VulnDepPath struct {
-		Name string `json:"name"`
-		// Path is the path of the dependency in the original SBOM file
-		// the first element is the dependency component with vuln, and the last element is the root component
-		Path []string `json:"path"`
+	VlunDepPath struct {
+		Start string   `json:"start"`
+		End   string   `json:"end"`
+		Path  []string `json:"path"`
 	}
 
 	// Vuln is a struct that contains the information of the vulnerability within the component(if existing)
@@ -73,6 +70,18 @@ var (
 	CVSSThreshold = int(7)
 )
 
+func (bom FormattedSBOM) GetVulnComponents() []string {
+	var vulnComponents []string
+
+	for compName, info := range bom.ComponentInfo {
+		if info.VulnNumber > 0 {
+			vulnComponents = append(vulnComponents, compName)
+		}
+	}
+
+	return vulnComponents
+}
+
 func GetSBOM(name string) (FormattedSBOM, error) {
 	sbom, ok := SBOMs[name]
 	if !ok {
@@ -84,6 +93,67 @@ func GetSBOM(name string) (FormattedSBOM, error) {
 
 func DeleteSBOM(name string) {
 	delete(SBOMs, name)
+}
+
+func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]string) []VlunDepPath {
+	var paths []VlunDepPath
+
+	// If startComp is not in depMap, return empty slice
+	if _, ok := depMap[startComp]; !ok {
+		return paths
+	}
+
+	for _, endComp := range endComps {
+		// Skip if start and end are the same
+		if startComp == endComp {
+			continue
+		}
+
+		// Reset path and visited map for each end component
+		var path []string
+		visited := make(map[string]bool)
+
+		// Recursively find the path from startComp to endComp
+		var findPath func(current string) bool
+		findPath = func(current string) bool {
+			// Prevent cycles by checking if node was already visited
+			if visited[current] {
+				return false
+			}
+			visited[current] = true
+
+			if current == endComp {
+				path = append(path, current)
+				return true
+			}
+
+			// Safely check if the current component exists in depMap
+			deps, ok := depMap[current]
+			if !ok {
+				return false
+			}
+
+			for _, next := range deps {
+				if findPath(next) {
+					path = append([]string{current}, path...)
+					return true
+				}
+			}
+
+			return false
+		}
+
+		// Only proceed if path was found
+		if findPath(startComp) {
+			paths = append(paths, VlunDepPath{
+				Start: startComp,
+				End:   endComp,
+				Path:  path,
+			})
+		}
+	}
+
+	return paths
 }
 
 func getComponentToLevel(DependencyLevel map[int][]string) map[string]int {
@@ -243,31 +313,6 @@ func getAffecteds(name string, ReverseDependency map[string][]string) []string {
 	return affected
 }
 
-func getVulnDepPaths(vulnComp string, ReverseDependency map[string][]string) []VulnDepPath {
-	affecteds := getAffecteds(vulnComp, ReverseDependency)
-
-	if len(affecteds) == 0 {
-		return nil
-	}
-
-	var vulnDepPaths []VulnDepPath
-
-	for _, affected := range affecteds {
-		path := getPath(affected, vulnComp, ReverseDependency)
-		if len(path) == 0 {
-			slog.Error("failed to get path", "affected", affected, "vulnComp", vulnComp)
-			continue
-		}
-
-		vulnDepPaths = append(vulnDepPaths, VulnDepPath{
-			Name: vulnComp,
-			Path: path,
-		})
-	}
-
-	return vulnDepPaths
-}
-
 func parseVersion(v string) version {
 	if len(v) > 0 && rune(v[0]) == 'v' {
 		v = v[1:]
@@ -368,63 +413,4 @@ func findNearestVersions(target string, versions []string) []string {
 	}
 
 	return result
-}
-
-func getPath(comp, vulnComp string, ReverseDependency map[string][]string) []string {
-	// path is defined as every package name that is in the path from the vulnComp to the root
-	var path []string
-
-	// If comp is the same as vulnComp, return just the component itself
-	if comp == vulnComp {
-		return []string{vulnComp}
-	}
-
-	// Use a map to track visited nodes and their parents
-	visited := make(map[string]string)
-	visited[vulnComp] = "" // vulnComp has no parent
-
-	// Use BFS to find the shortest path from vulnComp to comp
-	queue := []string{vulnComp}
-	found := false
-
-	for len(queue) > 0 && !found {
-		current := queue[0]
-		queue = queue[1:]
-
-		// Check all components that depend on the current one
-		for _, dependent := range ReverseDependency[current] {
-			if _, seen := visited[dependent]; seen {
-				continue
-			}
-
-			// Record that we got to dependent from current
-			visited[dependent] = current
-
-			if dependent == comp {
-				found = true
-				break
-			}
-
-			queue = append(queue, dependent)
-		}
-	}
-
-	// If no path was found
-	if !found {
-		return nil
-	}
-
-	// Reconstruct the path from comp back to vulnComp
-	reversePath := []string{}
-	for current := comp; current != ""; current = visited[current] {
-		reversePath = append(reversePath, current)
-	}
-
-	// Reverse the path to get from vulnComp to comp
-	path = make([]string, len(reversePath))
-	for i, c := range reversePath {
-		path[len(reversePath)-1-i] = c
-	}
-
-	return path
 }

@@ -32,6 +32,13 @@ func validateExisting(name, comp string) bool {
 	return true
 }
 
+func toTopoResp(paths []ssbom.VlunDepPath) map[string]interface{} {
+	return map[string]interface{}{
+		msg.RespMsg:  "ok",
+		msg.RespData: paths,
+	}
+}
+
 func GetComponentVulnDep(c *gin.Context) {
 	name := c.Query("name")
 	if len(name) == 0 {
@@ -50,5 +57,17 @@ func GetComponentVulnDep(c *gin.Context) {
 		return
 	}
 
-	
+	vulnComps := ssbom.SBOMs[name].GetVulnComponents()
+	if len(vulnComps) == 0 {
+		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok"})
+		return
+	}
+
+	paths := ssbom.GetVulnDepPaths(comp, vulnComps, ssbom.SBOMs[name].Dependency)
+	if len(paths) == 0 {
+		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok"})
+		return
+	}
+
+	c.JSON(http.StatusOK, toTopoResp(paths))
 }

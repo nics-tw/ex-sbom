@@ -17,7 +17,6 @@ func toComponentResp(c ssbom.Component) map[string]any {
 		"vuln_number":      c.VulnNumber,
 		"vulns":            c.Vulns,
 		"contain_vuln_dep": c.ContainsVulnDep,
-		"vuln_dep":         c.VulnDeps,
 	}
 }
 
