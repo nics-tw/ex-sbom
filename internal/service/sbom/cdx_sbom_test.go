@@ -492,3 +492,104 @@ func TestGetCdxBomRef(t *testing.T) {
         })
     }
 }
+
+func TestGetCdxComponents(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    *[]cdx.Component
+        expected []string
+    }{
+        {
+            name:     "nil input",
+            input:    nil,
+            expected: []string{},
+        },
+        {
+            name:     "empty slice input",
+            input:    &[]cdx.Component{},
+            expected: []string{},
+        },
+        {
+            name: "unique component names",
+            input: &[]cdx.Component{
+                {
+                    Name: "component-a",
+                },
+                {
+                    Name: "component-b",
+                },
+                {
+                    Name: "component-c",
+                },
+            },
+            expected: []string{"component-a", "component-b", "component-c"},
+        },
+        {
+            name: "duplicate component names",
+            input: &[]cdx.Component{
+                {
+                    Name: "component-a",
+                },
+                {
+                    Name: "component-b",
+                },
+                {
+                    Name: "component-a", // Duplicate
+                },
+            },
+            expected: []string{"component-a", "component-b"}, // Should be deduplicated
+        },
+        {
+            name: "empty component names",
+            input: &[]cdx.Component{
+                {
+                    Name: "",
+                },
+                {
+                    Name: "component-b",
+                },
+                {
+                    Name: "", // Duplicate empty name
+                },
+            },
+            expected: []string{"", "component-b"}, // Empty names should be included but deduplicated
+        },
+        {
+            name: "mixed case",
+            input: &[]cdx.Component{
+                {
+                    Name: "component-a",
+                },
+                {
+                    Name: "",
+                },
+                {
+                    Name: "component-b",
+                },
+                {
+                    Name: "component-a", // Duplicate
+                },
+                {
+                    Name: "", // Duplicate empty name
+                },
+                {
+                    Name: "component-c",
+                },
+            },
+            expected: []string{"", "component-a", "component-b", "component-c"},
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getCdxComponents(tt.input)
+            
+            // Sort both slices for deterministic comparison
+            sort.Strings(result)
+            sort.Strings(tt.expected)
+            
+            assert.Equal(t, tt.expected, result, 
+                "Expected components %v, got %v", tt.expected, result)
+        })
+    }
+}
