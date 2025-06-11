@@ -1241,3 +1241,156 @@ func TestDeleteSBOM(t *testing.T) {
         }
     }
 }
+
+func TestGetVulnDepPaths(t *testing.T) {
+    tests := []struct {
+        name      string
+        startComp string
+        endComps  []string
+        depMap    map[string][]string
+        expected  []VlunDepPath
+    }{
+        {
+            name:      "empty dependency map",
+            startComp: "A",
+            endComps:  []string{"B"},
+            depMap:    map[string][]string{},
+            expected:  []VlunDepPath{},
+        },
+        {
+            name:      "start component not in map",
+            startComp: "nonexistent",
+            endComps:  []string{"B"},
+            depMap: map[string][]string{
+                "A": {"B"},
+                "B": {},
+            },
+            expected: []VlunDepPath{},
+        },
+        {
+            name:      "start and end are same",
+            startComp: "A",
+            endComps:  []string{"A"},
+            depMap: map[string][]string{
+                "A": {"B"},
+                "B": {},
+            },
+            expected: []VlunDepPath{},
+        },
+        {
+            name:      "direct path",
+            startComp: "A",
+            endComps:  []string{"B"},
+            depMap: map[string][]string{
+                "A": {"B"},
+                "B": {},
+            },
+            expected: []VlunDepPath{
+                {
+                    Start: "A",
+                    End:   "B",
+                    Path:  []string{"A", "B"},
+                },
+            },
+        },
+        {
+            name:      "multi-step path",
+            startComp: "A",
+            endComps:  []string{"D"},
+            depMap: map[string][]string{
+                "A": {"B"},
+                "B": {"C"},
+                "C": {"D"},
+                "D": {},
+            },
+            expected: []VlunDepPath{
+                {
+                    Start: "A",
+                    End:   "D",
+                    Path:  []string{"A", "B", "C", "D"},
+                },
+            },
+        },
+        {
+            name:      "no path exists",
+            startComp: "A",
+            endComps:  []string{"X"},
+            depMap: map[string][]string{
+                "A": {"B"},
+                "B": {"C"},
+                "X": {"Y"},
+                "Y": {},
+            },
+            expected: []VlunDepPath{},
+        },
+        {
+            name:      "multiple end components",
+            startComp: "A",
+            endComps:  []string{"C", "D", "X"},
+            depMap: map[string][]string{
+                "A": {"B"},
+                "B": {"C", "D"},
+                "C": {},
+                "D": {},
+                "X": {},
+            },
+            expected: []VlunDepPath{
+                {
+                    Start: "A",
+                    End:   "C",
+                    Path:  []string{"A", "B", "C"},
+                },
+                {
+                    Start: "A",
+                    End:   "D",
+                    Path:  []string{"A", "B", "D"},
+                },
+            },
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := GetVulnDepPaths(tt.startComp, tt.endComps, tt.depMap)
+            
+            // Check result length
+            assert.Equal(t, len(tt.expected), len(result), 
+                "Expected %d paths, got %d", len(tt.expected), len(result))
+            
+            // For tests expecting empty results
+            if len(tt.expected) == 0 {
+                assert.Empty(t, result)
+                return
+            }
+            
+            // Create a map for easier comparison by path end
+            resultByEnd := make(map[string]VlunDepPath)
+            for _, path := range result {
+                resultByEnd[path.End] = path
+            }
+            
+            // Check each path
+            for _, expectedPath := range tt.expected {
+                actualPath, found := resultByEnd[expectedPath.End]
+                assert.True(t, found, "Expected path from %s to %s not found", 
+                    expectedPath.Start, expectedPath.End)
+                
+                if found {
+                    // Verify path components
+                    assert.Equal(t, expectedPath.Start, actualPath.Start, "Start component mismatch")
+                    assert.Equal(t, expectedPath.End, actualPath.End, "End component mismatch")
+                    assert.Equal(t, len(expectedPath.Path), len(actualPath.Path), "Path length mismatch")
+                    
+                    // Verify path structure
+                    assert.Equal(t, expectedPath.Start, actualPath.Path[0], "Path should start with correct component")
+                    assert.Equal(t, expectedPath.End, actualPath.Path[len(actualPath.Path)-1], "Path should end with correct component")
+                    
+                    // For specific test cases we can validate the exact path
+                    if tt.name != "cyclic dependency" {
+                        assert.Equal(t, expectedPath.Path, actualPath.Path, "Path sequence mismatch")
+                    }
+                }
+            }
+        })
+    }
+}
