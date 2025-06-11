@@ -315,3 +315,31 @@ func TestHasSevereVuln(t *testing.T) {
 	}
 
 }
+
+func TestIsSevereVuln(t *testing.T) {
+	tests := []struct {
+		name     string
+		vuln     Vuln
+		expected bool
+	}{
+		{
+			name:     "severe vuln",
+			vuln:     Vuln{CVSSScore: "7.5"},
+			expected: true,
+		},
+		{
+			name:     "non-severe vuln",
+			vuln:     Vuln{CVSSScore: "4.0"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsSevereVuln(tt.vuln)
+			if !assert.Equal(t, tt.expected, result) {
+				t.Errorf("IsSevereVuln() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
