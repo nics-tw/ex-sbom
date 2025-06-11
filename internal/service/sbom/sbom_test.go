@@ -278,3 +278,40 @@ func TestIsBreakingChange(t *testing.T) {
 		})
 	}
 }
+
+func TestHasSevereVuln(t *testing.T) {
+	tests := []struct {
+		name     string
+		vulns    []Vuln
+		expected bool
+	}{
+		{
+			name: "has severe vuln",
+			vulns: []Vuln{{CVSSScore: "1.0"}},
+			expected: false,
+		},
+		{
+			name: "has severe vuln with CVSS score",
+			vulns: []Vuln{{CVSSScore: "7.5"}},
+			expected: true,
+		},
+		{
+			name: "multiple vulns with one severe",
+			vulns: []Vuln{
+				{CVSSScore: "4.0"},
+				{CVSSScore: "9.0"},	
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := HasSevereVuln(tt.vulns)
+			if !assert.Equal(t, tt.expected, result) {
+				t.Errorf("HasSevereVuln() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+
+}
