@@ -1,3 +1,5 @@
+//go:build unit
+
 package ssbom
 
 import (
@@ -244,4 +246,35 @@ func TestGetSuggestFixVersions(t *testing.T) {
             }
         })
     }
+}
+
+func TestIsBreakingChange(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   string
+		suggest  string
+		expected bool
+	}{
+		{
+			name:     "breaking change",
+			target:   "1.2.3",
+			suggest:  "2.0.0",
+			expected: true,
+		},
+		{
+			name:     "not breaking change",
+			target:   "1.2.3",
+			suggest:  "1.2.4",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsBreakingChange(tt.target, tt.suggest)
+			if result != tt.expected {
+				t.Errorf("IsBreakingChange(%s, %s) = %v, want %v", tt.target, tt.suggest, result, tt.expected)
+			}
+		})
+	}
 }
