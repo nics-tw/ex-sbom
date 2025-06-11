@@ -31,9 +31,9 @@ type (
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		// VulnNumber is the number of total vulnerabilities that the component has
-		VulnNumber      int           `json:"vuln_number"`
-		Vulns           []Vuln        `json:"vulns"`
-		ContainsVulnDep bool          `json:"contains_vuln_dep"`
+		VulnNumber      int    `json:"vuln_number"`
+		Vulns           []Vuln `json:"vulns"`
+		ContainsVulnDep bool   `json:"contains_vuln_dep"`
 	}
 
 	VlunDepPath struct {
@@ -55,7 +55,7 @@ type (
 		SuggestFixVersion string `json:"suggest_fix_version"`
 		OtherFixVersions  string `json:"other_fix_versions"`
 
-		fixVersions []string
+		FixVersions []string `json:"-"`
 	}
 
 	version struct {
@@ -156,6 +156,65 @@ func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]st
 	return paths
 }
 
+// 1. purge the versions that are lower than the current version
+// 2. find the smallest version of each array
+// 3. return the biggest version from the result of step 2
+// If there are no versions higher than the current version, return an empty string
+func GetSuggestFixVersions(current string, versions ...[]string) string {
+	currentVer := parseVersion(current)
+	var candidates []version
+
+	// Process each version array
+	for _, verList := range versions {
+		var higherVersions []version
+
+		// Filter to only keep versions higher than current
+		for _, ver := range verList {
+			parsedVer := parseVersion(ver)
+			if compareVersions(parsedVer, currentVer) > 0 {
+				higherVersions = append(higherVersions, parsedVer)
+			}
+		}
+
+		// If we have higher versions, find the smallest
+		if len(higherVersions) > 0 {
+			// Sort in ascending order
+			sort.Slice(higherVersions, func(i, j int) bool {
+				return compareVersions(higherVersions[i], higherVersions[j]) < 0
+			})
+
+			// Add the smallest to candidates
+			candidates = append(candidates, higherVersions[0])
+		}
+	}
+
+	// If no candidates, return empty string
+	if len(candidates) == 0 {
+		return ""
+	}
+
+	// Find the biggest among the candidates
+	sort.Slice(candidates, func(i, j int) bool {
+		return compareVersions(candidates[i], candidates[j]) > 0 // Sort in descending order
+	})
+
+	// Return the original string of the highest version
+	return candidates[0].Original
+}
+
+func IsBreakingChange(current, suggest string) bool {
+	currentVer := parseVersion(current)
+	suggestVer := parseVersion(suggest)
+
+	// Compare major versions
+	if len(currentVer.Parts) > 0 && len(suggestVer.Parts) > 0 &&
+		currentVer.Parts[0] != suggestVer.Parts[0] {
+		return true
+	}
+
+	return false
+}
+
 func getComponentToLevel(DependencyLevel map[int][]string) map[string]int {
 	componentToLevel := make(map[string]int)
 
@@ -202,7 +261,7 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 				SuggestFixVersion: getVersionString(suggestFix),
 				OtherFixVersions:  getVersionString(otherFixVer),
 
-				fixVersions: getAllFixVersions(v),
+				FixVersions: getAllFixVersions(v),
 			})
 		}
 
