@@ -224,6 +224,7 @@
           dependencyVulnPaths: "Dependency Vulnerability Paths",
           vulnerablePath: "Vulnerability Path {0}",
           vulnerableComponent: "(Vulnerable)",
+          suggestUpgradeTo: "Suggest upgrade to version {0}",
           breakingChangeWarning: "Warning: Updating to version {0} includes breaking changes that may require code modifications.",
         },
         zh: {
@@ -276,6 +277,7 @@
           dependencyVulnPaths: "相依性漏洞路徑",
           vulnerablePath: "漏洞路徑 {0}",
           vulnerableComponent: "(有漏洞)",
+          suggestUpgradeTo: "建議升級到版本 {0}",
           breakingChangeWarning: "警告：升級到版本 {0} 包含破壞性改動，請依個別情況判斷是否需調整相關程式碼。",
         },
       };
@@ -1046,10 +1048,10 @@
           ${
             suggested_fix_version
               ? `<div class="ml-3 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-1" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd" />
               </svg>
-              <span class="text-blue-600 font-medium">${suggested_fix_version}</span>
+              <span class="text-[#009999] font-medium">${t("suggestUpgradeTo", suggested_fix_version)}</span>
             </div>`
               : ""
           }
