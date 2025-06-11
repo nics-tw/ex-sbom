@@ -1180,3 +1180,64 @@ func TestGetVulnComponents(t *testing.T) {
         })
     }
 }
+
+func TestDeleteSBOM(t *testing.T) {
+    // Save original value to restore later
+    originalSBOMs := SBOMs
+    defer func() {
+        SBOMs = originalSBOMs
+    }()
+    
+    // Setup test data
+    SBOMs = map[string]FormattedSBOM{
+        "sbom1": {
+            Components: []string{"comp1", "comp2"},
+        },
+        "sbom2": {
+            Components: []string{"comp3", "comp4"},
+        },
+    }
+    
+    tests := []struct {
+        name          string
+        sbomToDelete  string
+        checkExisting string
+        shouldExist   bool
+    }{
+        {
+            name:          "delete existing SBOM",
+            sbomToDelete:  "sbom1",
+            checkExisting: "sbom1",
+            shouldExist:   false,
+        },
+        {
+            name:          "delete non-existent SBOM",
+            sbomToDelete:  "nonexistent",
+            checkExisting: "sbom2",
+            shouldExist:   true, // other SBOMs should remain
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // Call the function we're testing
+            DeleteSBOM(tt.sbomToDelete)
+            
+            // Check if the SBOM was deleted
+            _, exists := SBOMs[tt.checkExisting]
+            assert.Equal(t, tt.shouldExist, exists, 
+                "After deletion, SBOM '%s' existence = %v, want %v", 
+                tt.checkExisting, exists, tt.shouldExist)
+        })
+        
+        // Reset test data between tests
+        SBOMs = map[string]FormattedSBOM{
+            "sbom1": {
+                Components: []string{"comp1", "comp2"},
+            },
+            "sbom2": {
+                Components: []string{"comp3", "comp4"},
+            },
+        }
+    }
+}
