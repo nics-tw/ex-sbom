@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"ex-s/util/unique"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
@@ -398,7 +399,7 @@ func getAffecteds(name string, ReverseDependency map[string][]string) []string {
 	}
 
 	traverse(name)
-	return affected
+	return unique.StringSlice(affected)
 }
 
 func parseVersion(v string) version {
