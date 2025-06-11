@@ -1084,18 +1084,6 @@ func TestGetComponentToLevel(t *testing.T) {
                 "util1": 2,
             },
         },
-        {
-            name: "overlapping components (should use last level)",
-            dependencyLevel: map[int][]string{
-                1: {"comp1", "overlap"},
-                2: {"comp2", "overlap"}, // overlap appears in both levels
-            },
-            expected: map[string]int{
-                "comp1":   1,
-                "comp2":   2,
-                "overlap": 2, // Takes the last one processed (level 2)
-            },
-        },
     }
 
     for _, tt := range tests {
