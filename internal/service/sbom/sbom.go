@@ -67,7 +67,7 @@ type (
 var (
 	SBOMs = map[string]FormattedSBOM{}
 
-	CVSSThreshold = int(7)
+	CVSSThreshold = float64(7)
 )
 
 func (bom FormattedSBOM) GetVulnComponents() []string {
@@ -213,6 +213,35 @@ func IsBreakingChange(current, suggest string) bool {
 	}
 
 	return false
+}
+
+func HasSevereVuln(vulns []Vuln) bool {
+	var hasSevere bool
+
+	for _, v := range vulns {
+		if v.CVSSScore != "" {
+			score, err := strconv.ParseFloat(v.CVSSScore, 64)
+			if err == nil && score >= CVSSThreshold {
+				hasSevere = true
+				break
+			}
+		}
+	}
+
+	return hasSevere
+}
+
+func IsSevereVuln(v Vuln) bool {
+	if v.CVSSScore == "" {
+		return false
+	}
+
+	score, err := strconv.ParseFloat(v.CVSSScore, 64)
+	if err != nil {
+		return false
+	}
+
+	return score >= CVSSThreshold
 }
 
 func getComponentToLevel(DependencyLevel map[int][]string) map[string]int {
