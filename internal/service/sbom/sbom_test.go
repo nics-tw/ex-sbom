@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/ossf/osv-schema/bindings/go/osvschema"
 )
 
 func TestFindNearestVersions(t *testing.T) {
@@ -466,6 +467,146 @@ func TestGetReverseDep(t *testing.T) {
                 resultSlice, ok := result[k]
                 assert.True(t, ok, "Expected key %s not found in result", k)
                 assert.ElementsMatch(t, expectedSlice, resultSlice, "Values for key %s don't match", k)
+            }
+        })
+    }
+}
+
+func TestGetAllFixVersions(t *testing.T) {
+    tests := []struct {
+        name     string
+        vuln     osvschema.Vulnerability
+        expected []string
+    }{
+        {
+            name:     "empty vulnerability",
+            vuln:     osvschema.Vulnerability{},
+            expected: []string{},
+        },
+        {
+            name: "single fixed version",
+            vuln: osvschema.Vulnerability{
+                Affected: []osvschema.Affected{
+                    {
+                        Ranges: []osvschema.Range{
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "1.2.3"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            expected: []string{"1.2.3"},
+        },
+        {
+            name: "multiple fixed versions",
+            vuln: osvschema.Vulnerability{
+                Affected: []osvschema.Affected{
+                    {
+                        Ranges: []osvschema.Range{
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "1.2.3"},
+                                    {Fixed: "2.0.0"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            expected: []string{"1.2.3", "2.0.0"},
+        },
+        {
+            name: "duplicate fixed versions",
+            vuln: osvschema.Vulnerability{
+                Affected: []osvschema.Affected{
+                    {
+                        Ranges: []osvschema.Range{
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "1.2.3"},
+                                    {Fixed: "1.2.3"}, // Duplicate
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            expected: []string{"1.2.3"}, // Should only appear once
+        },
+        {
+            name: "multiple affected packages with different fixed versions",
+            vuln: osvschema.Vulnerability{
+                Affected: []osvschema.Affected{
+                    {
+                        Ranges: []osvschema.Range{
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "1.2.3"},
+                                },
+                            },
+                        },
+                    },
+                    {
+                        Ranges: []osvschema.Range{
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "4.5.6"},
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            expected: []string{"1.2.3", "4.5.6"},
+        },
+        {
+            name: "complex nested structure",
+            vuln: osvschema.Vulnerability{
+                Affected: []osvschema.Affected{
+                    {
+                        Ranges: []osvschema.Range{
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "1.2.3"},
+                                },
+                            },
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "2.3.4"},
+                                    {Fixed: ""},   // Empty fixed version
+                                },
+                            },
+                        },
+                    },
+                    {
+                        Ranges: []osvschema.Range{
+                            {
+                                Events: []osvschema.Event{
+                                    {Fixed: "3.4.5"},
+                                    {Fixed: "1.2.3"}, // Duplicate across packages
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            expected: []string{"1.2.3", "2.3.4", "3.4.5"},
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getAllFixVersions(tt.vuln)
+            
+            // Sort both slices for consistent comparison
+            sort.Strings(result)
+            sort.Strings(tt.expected)
+            
+            if !assert.ElementsMatch(t, tt.expected, result) {
+                t.Errorf("getAllFixVersions() = %v, want %v", result, tt.expected)
             }
         })
     }
