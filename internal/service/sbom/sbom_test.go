@@ -967,3 +967,67 @@ func TestGetCVSS(t *testing.T) {
         })
     }
 }
+
+func TestGetSBOM(t *testing.T) {
+    // Save original value to restore later
+    originalSBOMs := SBOMs
+    defer func() {
+        SBOMs = originalSBOMs
+    }()
+    
+    // Setup test data
+    SBOMs = map[string]FormattedSBOM{
+        "existing": {
+            Components: []string{"comp1", "comp2"},
+            Dependency: map[string][]string{
+                "comp1": {"comp2"},
+            },
+            ComponentInfo: map[string]Component{
+                "comp1": {Name: "comp1", Version: "1.0"},
+            },
+        },
+    }
+    
+    tests := []struct {
+        name          string
+        sbomName      string
+        expectError   bool
+        validateSBOM  bool
+        expectedComps []string
+    }{
+        {
+            name:          "existing SBOM",
+            sbomName:      "existing",
+            expectError:   false,
+            validateSBOM:  true,
+            expectedComps: []string{"comp1", "comp2"},
+        },
+        {
+            name:         "non-existent SBOM",
+            sbomName:     "nonexistent",
+            expectError:  true,
+            validateSBOM: false,
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result, err := GetSBOM(tt.sbomName)
+            
+            if tt.expectError {
+                assert.Error(t, err)
+                assert.Contains(t, err.Error(), "SBOM not found")
+                assert.Equal(t, FormattedSBOM{}, result)
+            } else {
+                assert.NoError(t, err)
+                
+                if tt.validateSBOM {
+                    assert.Equal(t, tt.expectedComps, result.Components)
+                    assert.Contains(t, result.Dependency, "comp1")
+                    assert.Contains(t, result.ComponentInfo, "comp1")
+                    assert.Equal(t, "1.0", result.ComponentInfo["comp1"].Version)
+                }
+            }
+        })
+    }
+}
