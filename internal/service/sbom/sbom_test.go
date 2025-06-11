@@ -878,3 +878,92 @@ func TestGetVulnNumber(t *testing.T) {
         })
     }
 }
+
+func TestGetCVSS(t *testing.T) {
+    tests := []struct {
+        name      string
+        id        string
+        groups    []models.GroupInfo
+        expected  string
+    }{
+        {
+            name: "ID found in single group",
+            id:   "CVE-2023-1234",
+            groups: []models.GroupInfo{
+                {
+                    IDs:         []string{"CVE-2023-1234"},
+                    MaxSeverity: "7.5",
+                },
+            },
+            expected: "7.5",
+        },
+        {
+            name: "ID found in multiple groups",
+            id:   "CVE-2023-1234",
+            groups: []models.GroupInfo{
+                {
+                    IDs:         []string{"CVE-2023-5678"},
+                    MaxSeverity: "4.5",
+                },
+                {
+                    IDs:         []string{"CVE-2023-1234", "CVE-2023-9012"},
+                    MaxSeverity: "8.0",
+                },
+            },
+            expected: "8.0",
+        },
+        {
+            name: "ID not found in any group",
+            id:   "CVE-2023-9999",
+            groups: []models.GroupInfo{
+                {
+                    IDs:         []string{"CVE-2023-1234"},
+                    MaxSeverity: "7.5",
+                },
+                {
+                    IDs:         []string{"CVE-2023-5678"},
+                    MaxSeverity: "4.5",
+                },
+            },
+            expected: "",
+        },
+        {
+            name:      "Empty groups array",
+            id:        "CVE-2023-1234",
+            groups:    []models.GroupInfo{},
+            expected:  "",
+        },
+        {
+            name: "Empty IDs array",
+            id:   "CVE-2023-1234",
+            groups: []models.GroupInfo{
+                {
+                    IDs:         []string{},
+                    MaxSeverity: "7.5",
+                },
+            },
+            expected: "",
+        },
+        {
+            name: "Group with nil IDs",
+            id:   "CVE-2023-1234",
+            groups: []models.GroupInfo{
+                {
+                    IDs:         nil,
+                    MaxSeverity: "7.5",
+                },
+            },
+            expected: "",
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getCVSS(tt.id, tt.groups)
+            if result != tt.expected {
+                t.Errorf("getCVSS(%s, groups) = %s, want %s", 
+                    tt.id, result, tt.expected)
+            }
+        })
+    }
+}
