@@ -611,3 +611,36 @@ func TestGetAllFixVersions(t *testing.T) {
         })
     }
 }
+
+func TestGetVersionString(t *testing.T) {
+	tests := []struct {
+		name     string
+		versions []string
+		expected string
+	}{
+		{
+			name:     "single version",
+			versions: []string{"1.2.3"},
+			expected: "1.2.3",
+		},
+		{
+			name:     "multiple versions",
+			versions: []string{"1.2.3", "2.3.4"},
+			expected: "1.2.3, 2.3.4",
+		},
+		{
+			name:     "empty versions",
+			versions: []string{},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getVersionString(tt.versions)
+			if !assert.Equal(t, tt.expected, result) {
+				t.Errorf("getVersionString() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
