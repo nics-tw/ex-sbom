@@ -126,7 +126,7 @@ func TestCompareVersions(t *testing.T) {
 			v2 := parseVersion(tt.v2)
 
 			result := compareVersions(v1, v2)
-			if result != tt.expected {
+			if !assert.Equal(t, tt.expected, result) {
 				t.Errorf("compareVersions(%s, %s) = %d, want %d", tt.v1, tt.v2, result, tt.expected)
 			}
 		})
@@ -199,53 +199,53 @@ func TestGetRootComponents(t *testing.T) {
 }
 
 func TestGetSuggestFixVersions(t *testing.T) {
-    tests := []struct {
-        name     string
-        target   string
-        versions [][]string  // Changed from []string to [][]string
-        expected string
-    }{
-        {
-            name:     "single array",
-            target:   "1.2.3",
-            versions: [][]string{{"1.2.4", "1.3.0", "2.0.0"}},
-            expected: "1.2.4",
-        },
-        {
-            name:     "trim older versions",
-            target:   "1.2.3",
-            versions: [][]string{{"0.2.2"}},
-            expected: "",
-        },
-        {
-            name:     "suggest breaking change version",
-            target:   "1.2.3",
-            versions: [][]string{{"2.0.0", "3.0.0"}},
-            expected: "2.0.0",
-        },
-        {
-            name:     "multiple version arrays",
-            target:   "1.2.3",
-            versions: [][]string{{"1.3.0", "1.4.0"}, {"2.0.0", "3.0.0"}},
-            expected: "2.0.0", // Highest from the smallest of each array
-        },
-        {
-            name:     "mixed version arrays with different orders",
-            target:   "1.2.3",
-            versions: [][]string{{"2.0.0", "1.3.0"}, {"1.2.5", "1.2.4"}},
-            expected: "1.3.0", // 1.3.0 > 1.2.4
-        },
-    }
+	tests := []struct {
+		name     string
+		target   string
+		versions [][]string // Changed from []string to [][]string
+		expected string
+	}{
+		{
+			name:     "single array",
+			target:   "1.2.3",
+			versions: [][]string{{"1.2.4", "1.3.0", "2.0.0"}},
+			expected: "1.2.4",
+		},
+		{
+			name:     "trim older versions",
+			target:   "1.2.3",
+			versions: [][]string{{"0.2.2"}},
+			expected: "",
+		},
+		{
+			name:     "suggest breaking change version",
+			target:   "1.2.3",
+			versions: [][]string{{"2.0.0", "3.0.0"}},
+			expected: "2.0.0",
+		},
+		{
+			name:     "multiple version arrays",
+			target:   "1.2.3",
+			versions: [][]string{{"1.3.0", "1.4.0"}, {"2.0.0", "3.0.0"}},
+			expected: "2.0.0", // Highest from the smallest of each array
+		},
+		{
+			name:     "mixed version arrays with different orders",
+			target:   "1.2.3",
+			versions: [][]string{{"2.0.0", "1.3.0"}, {"1.2.5", "1.2.4"}},
+			expected: "1.3.0", // 1.3.0 > 1.2.4
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            // Use unpacking operator to pass multiple slices
-            result := GetSuggestFixVersions(tt.target, tt.versions...)
-            if !assert.Equal(t, tt.expected, result) {
-                t.Errorf("getSuggestFixVersions() = %v, want %v", result, tt.expected)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use unpacking operator to pass multiple slices
+			result := GetSuggestFixVersions(tt.target, tt.versions...)
+			if !assert.Equal(t, tt.expected, result) {
+				t.Errorf("getSuggestFixVersions() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
 }
 
 func TestIsBreakingChange(t *testing.T) {
@@ -286,20 +286,20 @@ func TestHasSevereVuln(t *testing.T) {
 		expected bool
 	}{
 		{
-			name: "has severe vuln",
-			vulns: []Vuln{{CVSSScore: "1.0"}},
+			name:     "has severe vuln",
+			vulns:    []Vuln{{CVSSScore: "1.0"}},
 			expected: false,
 		},
 		{
-			name: "has severe vuln with CVSS score",
-			vulns: []Vuln{{CVSSScore: "7.5"}},
+			name:     "has severe vuln with CVSS score",
+			vulns:    []Vuln{{CVSSScore: "7.5"}},
 			expected: true,
 		},
 		{
 			name: "multiple vulns with one severe",
 			vulns: []Vuln{
 				{CVSSScore: "4.0"},
-				{CVSSScore: "9.0"},	
+				{CVSSScore: "9.0"},
 			},
 			expected: true,
 		},
