@@ -405,3 +405,68 @@ func TestGetAffecteds(t *testing.T) {
 		})
 	}
 }
+
+func TestGetReverseDep(t *testing.T) {
+    tests := []struct {
+        name       string
+        dependency map[string][]string
+        expected   map[string][]string
+    }{
+        {
+            name:       "empty dependency map",
+            dependency: map[string][]string{},
+            expected:   map[string][]string{},
+        },
+        {
+            name: "simple dependency map",
+            dependency: map[string][]string{
+                "A": {"B", "C"},
+            },
+            expected: map[string][]string{
+                "B": {"A"},
+                "C": {"A"},
+            },
+        },
+        {
+            name: "complex dependency map",
+            dependency: map[string][]string{
+                "A": {"B", "C"},
+                "B": {"D"},
+                "E": {"C", "F"},
+            },
+            expected: map[string][]string{
+                "B": {"A"},
+                "C": {"A", "E"},
+                "D": {"B"},
+                "F": {"E"},
+            },
+        },
+        {
+            name: "component with multiple dependents",
+            dependency: map[string][]string{
+                "app1": {"lib1"},
+                "app2": {"lib1"},
+                "app3": {"lib1"},
+            },
+            expected: map[string][]string{
+                "lib1": {"app1", "app2", "app3"},
+            },
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getReverseDep(tt.dependency)
+            
+            // Check maps have same number of keys
+            assert.Equal(t, len(tt.expected), len(result))
+            
+            // For each key, check values
+            for k, expectedSlice := range tt.expected {
+                resultSlice, ok := result[k]
+                assert.True(t, ok, "Expected key %s not found in result", k)
+                assert.ElementsMatch(t, expectedSlice, resultSlice, "Values for key %s don't match", k)
+            }
+        })
+    }
+}
