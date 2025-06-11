@@ -809,3 +809,72 @@ func TestGetVulns(t *testing.T) {
         })
     }
 }
+
+func TestGetVulnNumber(t *testing.T) {
+    // Setup test data
+    mockVulnMap := map[string]models.PackageVulns{
+        "package1": {
+            Vulnerabilities: []osvschema.Vulnerability{
+                {ID: "CVE-2023-1111"},
+                {ID: "CVE-2023-2222"},
+                {ID: "CVE-2023-3333"},
+            },
+        },
+        "package2": {
+            Vulnerabilities: []osvschema.Vulnerability{
+                {ID: "CVE-2023-4444"},
+            },
+        },
+        "package3": {
+            Vulnerabilities: []osvschema.Vulnerability{},
+        },
+    }
+
+    tests := []struct {
+        name         string
+        packageName  string
+        vulnMap      map[string]models.PackageVulns
+        expectedVuln int
+    }{
+        {
+            name:         "package with multiple vulnerabilities",
+            packageName:  "package1",
+            vulnMap:      mockVulnMap,
+            expectedVuln: 3,
+        },
+        {
+            name:         "package with single vulnerability",
+            packageName:  "package2",
+            vulnMap:      mockVulnMap,
+            expectedVuln: 1,
+        },
+        {
+            name:         "package with no vulnerabilities",
+            packageName:  "package3",
+            vulnMap:      mockVulnMap,
+            expectedVuln: 0,
+        },
+        {
+            name:         "package not in vulnerability map",
+            packageName:  "nonexistent",
+            vulnMap:      mockVulnMap,
+            expectedVuln: 0,
+        },
+        {
+            name:         "empty vulnerability map",
+            packageName:  "package1",
+            vulnMap:      map[string]models.PackageVulns{},
+            expectedVuln: 0,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getVulnNumber(tt.packageName, tt.vulnMap)
+            if !assert.Equal(t, tt.expectedVuln, result) {
+                t.Errorf("getVulnNumber(%s, vulnMap) = %d, want %d", 
+                    tt.packageName, result, tt.expectedVuln)
+            }
+        })
+    }
+}
