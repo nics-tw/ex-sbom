@@ -226,370 +226,370 @@ func TestGetCdxDep(t *testing.T) {
 }
 
 func TestGetCdxBomRefToName(t *testing.T) {
-    tests := []struct {
-        name     string
-        input    *[]cdx.Component
-        expected map[string]string
-    }{
-        {
-            name:     "nil input",
-            input:    nil,
-            expected: map[string]string{},
-        },
-        {
-            name:     "empty component list",
-            input:    &[]cdx.Component{},
-            expected: map[string]string{},
-        },
-        {
-            name: "components with empty BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "",
-                    Name:   "component-b",
-                },
-            },
-            expected: map[string]string{}, // Empty BOMRefs should be skipped
-        },
-        {
-            name: "components with valid BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "ref-2",
-                    Name:   "component-b",
-                },
-                {
-                    BOMRef: "ref-3",
-                    Name:   "component-c",
-                },
-            },
-            expected: map[string]string{
-                "ref-1": "component-a",
-                "ref-2": "component-b",
-                "ref-3": "component-c",
-            },
-        },
-        {
-            name: "mixed components with valid and empty BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "",
-                    Name:   "component-b", // Should be skipped
-                },
-                {
-                    BOMRef: "ref-3",
-                    Name:   "component-c",
-                },
-            },
-            expected: map[string]string{
-                "ref-1": "component-a",
-                "ref-3": "component-c",
-            },
-        },
-        {
-            name: "duplicate BOMRefs with different names",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "ref-1", // Duplicate BOMRef
-                    Name:   "component-b",
-                },
-            },
-            expected: map[string]string{
-                "ref-1": "component-b", // Last one wins
-            },
-        },
-        {
-            name: "components with same name but different BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "ref-2",
-                    Name:   "component-a", // Same name, different ref
-                },
-            },
-            expected: map[string]string{
-                "ref-1": "component-a",
-                "ref-2": "component-a",
-            },
-        },
-    }
+	tests := []struct {
+		name     string
+		input    *[]cdx.Component
+		expected map[string]string
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: map[string]string{},
+		},
+		{
+			name:     "empty component list",
+			input:    &[]cdx.Component{},
+			expected: map[string]string{},
+		},
+		{
+			name: "components with empty BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "",
+					Name:   "component-b",
+				},
+			},
+			expected: map[string]string{}, // Empty BOMRefs should be skipped
+		},
+		{
+			name: "components with valid BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "ref-2",
+					Name:   "component-b",
+				},
+				{
+					BOMRef: "ref-3",
+					Name:   "component-c",
+				},
+			},
+			expected: map[string]string{
+				"ref-1": "component-a",
+				"ref-2": "component-b",
+				"ref-3": "component-c",
+			},
+		},
+		{
+			name: "mixed components with valid and empty BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "",
+					Name:   "component-b", // Should be skipped
+				},
+				{
+					BOMRef: "ref-3",
+					Name:   "component-c",
+				},
+			},
+			expected: map[string]string{
+				"ref-1": "component-a",
+				"ref-3": "component-c",
+			},
+		},
+		{
+			name: "duplicate BOMRefs with different names",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "ref-1", // Duplicate BOMRef
+					Name:   "component-b",
+				},
+			},
+			expected: map[string]string{
+				"ref-1": "component-b", // Last one wins
+			},
+		},
+		{
+			name: "components with same name but different BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "ref-2",
+					Name:   "component-a", // Same name, different ref
+				},
+			},
+			expected: map[string]string{
+				"ref-1": "component-a",
+				"ref-2": "component-a",
+			},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getCdxBomRefToName(tt.input)
-            
-            // Check if result has the expected size
-            assert.Equal(t, len(tt.expected), len(result),
-                "Expected map size %d, got %d", len(tt.expected), len(result))
-            
-            // Check each key-value pair
-            for ref, expectedName := range tt.expected {
-                name, exists := result[ref]
-                assert.True(t, exists, "Expected BOMRef %s not found in result", ref)
-                assert.Equal(t, expectedName, name, 
-                    "For BOMRef %s, expected name %s, got %s", ref, expectedName, name)
-            }
-            
-            // Check that no extra keys exist in the result
-            for ref := range result {
-                _, exists := tt.expected[ref]
-                assert.True(t, exists, "Unexpected BOMRef %s found in result", ref)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getCdxBomRefToName(tt.input)
+
+			// Check if result has the expected size
+			assert.Equal(t, len(tt.expected), len(result),
+				"Expected map size %d, got %d", len(tt.expected), len(result))
+
+			// Check each key-value pair
+			for ref, expectedName := range tt.expected {
+				name, exists := result[ref]
+				assert.True(t, exists, "Expected BOMRef %s not found in result", ref)
+				assert.Equal(t, expectedName, name,
+					"For BOMRef %s, expected name %s, got %s", ref, expectedName, name)
+			}
+
+			// Check that no extra keys exist in the result
+			for ref := range result {
+				_, exists := tt.expected[ref]
+				assert.True(t, exists, "Unexpected BOMRef %s found in result", ref)
+			}
+		})
+	}
 }
 
 func TestGetCdxBomRef(t *testing.T) {
-    tests := []struct {
-        name     string
-        input    *[]cdx.Component
-        expected []string
-    }{
-        {
-            name:     "nil input",
-            input:    nil,
-            expected: []string{},
-        },
-        {
-            name:     "empty component list",
-            input:    &[]cdx.Component{},
-            expected: []string{},
-        },
-        {
-            name: "components with empty BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "",
-                    Name:   "component-b",
-                },
-            },
-            expected: []string{}, // Empty BOMRefs should be skipped
-        },
-        {
-            name: "components with valid BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "ref-2",
-                    Name:   "component-b",
-                },
-                {
-                    BOMRef: "ref-3",
-                    Name:   "component-c",
-                },
-            },
-            expected: []string{"ref-1", "ref-2", "ref-3"},
-        },
-        {
-            name: "mixed components with valid and empty BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "",
-                    Name:   "component-b", // Should be skipped
-                },
-                {
-                    BOMRef: "ref-3",
-                    Name:   "component-c",
-                },
-            },
-            expected: []string{"ref-1", "ref-3"},
-        },
-        {
-            name: "components with duplicate BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "ref-2",
-                    Name:   "component-b",
-                },
-                {
-                    BOMRef: "ref-1", // Duplicate, should be deduplicated
-                    Name:   "component-c",
-                },
-            },
-            expected: []string{"ref-1", "ref-2"}, // unique.StringSlice should deduplicate
-        },
-        {
-            name: "complex mix of valid, empty, and duplicate BOMRefs",
-            input: &[]cdx.Component{
-                {
-                    BOMRef: "ref-1",
-                    Name:   "component-a",
-                },
-                {
-                    BOMRef: "",
-                    Name:   "component-b", // Should be skipped
-                },
-                {
-                    BOMRef: "ref-2",
-                    Name:   "component-c",
-                },
-                {
-                    BOMRef: "ref-1", // Duplicate, should be deduplicated
-                    Name:   "component-d",
-                },
-                {
-                    BOMRef: "",
-                    Name:   "component-e", // Should be skipped
-                },
-                {
-                    BOMRef: "ref-3",
-                    Name:   "component-f",
-                },
-            },
-            expected: []string{"ref-1", "ref-2", "ref-3"},
-        },
-    }
+	tests := []struct {
+		name     string
+		input    *[]cdx.Component
+		expected []string
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: []string{},
+		},
+		{
+			name:     "empty component list",
+			input:    &[]cdx.Component{},
+			expected: []string{},
+		},
+		{
+			name: "components with empty BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "",
+					Name:   "component-b",
+				},
+			},
+			expected: []string{}, // Empty BOMRefs should be skipped
+		},
+		{
+			name: "components with valid BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "ref-2",
+					Name:   "component-b",
+				},
+				{
+					BOMRef: "ref-3",
+					Name:   "component-c",
+				},
+			},
+			expected: []string{"ref-1", "ref-2", "ref-3"},
+		},
+		{
+			name: "mixed components with valid and empty BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "",
+					Name:   "component-b", // Should be skipped
+				},
+				{
+					BOMRef: "ref-3",
+					Name:   "component-c",
+				},
+			},
+			expected: []string{"ref-1", "ref-3"},
+		},
+		{
+			name: "components with duplicate BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "ref-2",
+					Name:   "component-b",
+				},
+				{
+					BOMRef: "ref-1", // Duplicate, should be deduplicated
+					Name:   "component-c",
+				},
+			},
+			expected: []string{"ref-1", "ref-2"}, // unique.StringSlice should deduplicate
+		},
+		{
+			name: "complex mix of valid, empty, and duplicate BOMRefs",
+			input: &[]cdx.Component{
+				{
+					BOMRef: "ref-1",
+					Name:   "component-a",
+				},
+				{
+					BOMRef: "",
+					Name:   "component-b", // Should be skipped
+				},
+				{
+					BOMRef: "ref-2",
+					Name:   "component-c",
+				},
+				{
+					BOMRef: "ref-1", // Duplicate, should be deduplicated
+					Name:   "component-d",
+				},
+				{
+					BOMRef: "",
+					Name:   "component-e", // Should be skipped
+				},
+				{
+					BOMRef: "ref-3",
+					Name:   "component-f",
+				},
+			},
+			expected: []string{"ref-1", "ref-2", "ref-3"},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getCdxBomRef(tt.input)
-            
-            // Check if the result has the expected length
-            assert.Equal(t, len(tt.expected), len(result),
-                "Expected %d BOMRefs, got %d", len(tt.expected), len(result))
-            
-            // Check if each expected BOMRef is in the result
-            // Sort both slices for deterministic comparison
-            sort.Strings(result)
-            sort.Strings(tt.expected)
-            
-            assert.Equal(t, tt.expected, result, 
-                "Expected BOMRefs %v, got %v", tt.expected, result)
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getCdxBomRef(tt.input)
+
+			// Check if the result has the expected length
+			assert.Equal(t, len(tt.expected), len(result),
+				"Expected %d BOMRefs, got %d", len(tt.expected), len(result))
+
+			// Check if each expected BOMRef is in the result
+			// Sort both slices for deterministic comparison
+			sort.Strings(result)
+			sort.Strings(tt.expected)
+
+			assert.Equal(t, tt.expected, result,
+				"Expected BOMRefs %v, got %v", tt.expected, result)
+		})
+	}
 }
 
 func TestGetCdxComponents(t *testing.T) {
-    tests := []struct {
-        name     string
-        input    *[]cdx.Component
-        expected []string
-    }{
-        {
-            name:     "nil input",
-            input:    nil,
-            expected: []string{},
-        },
-        {
-            name:     "empty slice input",
-            input:    &[]cdx.Component{},
-            expected: []string{},
-        },
-        {
-            name: "unique component names",
-            input: &[]cdx.Component{
-                {
-                    Name: "component-a",
-                },
-                {
-                    Name: "component-b",
-                },
-                {
-                    Name: "component-c",
-                },
-            },
-            expected: []string{"component-a", "component-b", "component-c"},
-        },
-        {
-            name: "duplicate component names",
-            input: &[]cdx.Component{
-                {
-                    Name: "component-a",
-                },
-                {
-                    Name: "component-b",
-                },
-                {
-                    Name: "component-a", // Duplicate
-                },
-            },
-            expected: []string{"component-a", "component-b"}, // Should be deduplicated
-        },
-        {
-            name: "empty component names",
-            input: &[]cdx.Component{
-                {
-                    Name: "",
-                },
-                {
-                    Name: "component-b",
-                },
-                {
-                    Name: "", // Duplicate empty name
-                },
-            },
-            expected: []string{"", "component-b"}, // Empty names should be included but deduplicated
-        },
-        {
-            name: "mixed case",
-            input: &[]cdx.Component{
-                {
-                    Name: "component-a",
-                },
-                {
-                    Name: "",
-                },
-                {
-                    Name: "component-b",
-                },
-                {
-                    Name: "component-a", // Duplicate
-                },
-                {
-                    Name: "", // Duplicate empty name
-                },
-                {
-                    Name: "component-c",
-                },
-            },
-            expected: []string{"", "component-a", "component-b", "component-c"},
-        },
-    }
+	tests := []struct {
+		name     string
+		input    *[]cdx.Component
+		expected []string
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: []string{},
+		},
+		{
+			name:     "empty slice input",
+			input:    &[]cdx.Component{},
+			expected: []string{},
+		},
+		{
+			name: "unique component names",
+			input: &[]cdx.Component{
+				{
+					Name: "component-a",
+				},
+				{
+					Name: "component-b",
+				},
+				{
+					Name: "component-c",
+				},
+			},
+			expected: []string{"component-a", "component-b", "component-c"},
+		},
+		{
+			name: "duplicate component names",
+			input: &[]cdx.Component{
+				{
+					Name: "component-a",
+				},
+				{
+					Name: "component-b",
+				},
+				{
+					Name: "component-a", // Duplicate
+				},
+			},
+			expected: []string{"component-a", "component-b"}, // Should be deduplicated
+		},
+		{
+			name: "empty component names",
+			input: &[]cdx.Component{
+				{
+					Name: "",
+				},
+				{
+					Name: "component-b",
+				},
+				{
+					Name: "", // Duplicate empty name
+				},
+			},
+			expected: []string{"", "component-b"}, // Empty names should be included but deduplicated
+		},
+		{
+			name: "mixed case",
+			input: &[]cdx.Component{
+				{
+					Name: "component-a",
+				},
+				{
+					Name: "",
+				},
+				{
+					Name: "component-b",
+				},
+				{
+					Name: "component-a", // Duplicate
+				},
+				{
+					Name: "", // Duplicate empty name
+				},
+				{
+					Name: "component-c",
+				},
+			},
+			expected: []string{"", "component-a", "component-b", "component-c"},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getCdxComponents(tt.input)
-            
-            // Sort both slices for deterministic comparison
-            sort.Strings(result)
-            sort.Strings(tt.expected)
-            
-            assert.Equal(t, tt.expected, result, 
-                "Expected components %v, got %v", tt.expected, result)
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getCdxComponents(tt.input)
+
+			// Sort both slices for deterministic comparison
+			sort.Strings(result)
+			sort.Strings(tt.expected)
+
+			assert.Equal(t, tt.expected, result,
+				"Expected components %v, got %v", tt.expected, result)
+		})
+	}
 }
