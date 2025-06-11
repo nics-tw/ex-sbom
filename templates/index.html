@@ -224,6 +224,7 @@
           dependencyVulnPaths: "Dependency Vulnerability Paths",
           vulnerablePath: "Vulnerability Path {0}",
           vulnerableComponent: "(Vulnerable)",
+          breakingChangeWarning: "Warning: Updating to version {0} includes breaking changes that may require code modifications.",
         },
         zh: {
           appTitle: "ex-s",
@@ -275,6 +276,7 @@
           dependencyVulnPaths: "相依性漏洞路徑",
           vulnerablePath: "漏洞路徑 {0}",
           vulnerableComponent: "(有漏洞)",
+          breakingChangeWarning: "警告：升級到版本 {0} 包含破壞性改動，請依個別情況判斷是否需調整相關程式碼。",
         },
       };
 
@@ -1019,7 +1021,14 @@
       // Function to render component details
       function renderComponentDetails(component, vulnDepPaths = []) {
         const content = document.getElementById("component-modal-content");
-        const { name, version, vuln_number = 0, vulns = [] } = component;
+        const {
+          name,
+          version,
+          vuln_number = 0,
+          vulns = [],
+          suggested_fix_version,
+          is_breaking_change,
+        } = component;
 
         // Start with component metadata
         let html = `
@@ -1032,7 +1041,32 @@
         <h3 class="text-sm font-medium text-gray-500">${t(
           "componentVersion"
         )}</h3>
-        <p class="mt-2">${version || "—"}</p>
+        <div class="mt-2 flex items-center">
+          <span>${version || "—"}</span>
+          ${
+            suggested_fix_version
+              ? `<div class="ml-3 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-500 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd" />
+              </svg>
+              <span class="text-blue-600 font-medium">${suggested_fix_version}</span>
+            </div>`
+              : ""
+          }
+        </div>
+        ${
+          is_breaking_change && suggested_fix_version
+            ? `<div class="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm flex items-start">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500 mr-1 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm-1-8a1 1 0 0 0-1 1v3a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1z" clip-rule="evenodd" />
+            </svg>
+            <span class="text-yellow-700">${t(
+              "breakingChangeWarning",
+              suggested_fix_version
+            )}</span>
+          </div>`
+            : ""
+        }
       </div>
     </div>
   `;
