@@ -1,5 +1,3 @@
-//go:build unit
-
 package ssbom
 
 import (
@@ -73,7 +71,7 @@ func TestParseVersion(t *testing.T) {
 				Parts:    []int{1, 2, 3},
 			},
 		},
-				{
+		{
 			name:    "prefix v in version",
 			version: "v1.2.3",
 			expected: version{
@@ -196,4 +194,54 @@ func TestGetRootComponents(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetSuggestFixVersions(t *testing.T) {
+    tests := []struct {
+        name     string
+        target   string
+        versions [][]string  // Changed from []string to [][]string
+        expected string
+    }{
+        {
+            name:     "single array",
+            target:   "1.2.3",
+            versions: [][]string{{"1.2.4", "1.3.0", "2.0.0"}},
+            expected: "1.2.4",
+        },
+        {
+            name:     "trim older versions",
+            target:   "1.2.3",
+            versions: [][]string{{"0.2.2"}},
+            expected: "",
+        },
+        {
+            name:     "suggest breaking change version",
+            target:   "1.2.3",
+            versions: [][]string{{"2.0.0", "3.0.0"}},
+            expected: "2.0.0",
+        },
+        {
+            name:     "multiple version arrays",
+            target:   "1.2.3",
+            versions: [][]string{{"1.3.0", "1.4.0"}, {"2.0.0", "3.0.0"}},
+            expected: "2.0.0", // Highest from the smallest of each array
+        },
+        {
+            name:     "mixed version arrays with different orders",
+            target:   "1.2.3",
+            versions: [][]string{{"2.0.0", "1.3.0"}, {"1.2.5", "1.2.4"}},
+            expected: "1.3.0", // 1.3.0 > 1.2.4
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // Use unpacking operator to pass multiple slices
+            result := GetSuggestFixVersions(tt.target, tt.versions...)
+            if !assert.Equal(t, tt.expected, result) {
+                t.Errorf("getSuggestFixVersions() = %v, want %v", result, tt.expected)
+            }
+        })
+    }
 }
