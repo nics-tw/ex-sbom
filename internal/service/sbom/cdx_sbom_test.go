@@ -224,3 +224,136 @@ func TestGetCdxDep(t *testing.T) {
 		})
 	}
 }
+
+func TestGetCdxBomRefToName(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    *[]cdx.Component
+        expected map[string]string
+    }{
+        {
+            name:     "nil input",
+            input:    nil,
+            expected: map[string]string{},
+        },
+        {
+            name:     "empty component list",
+            input:    &[]cdx.Component{},
+            expected: map[string]string{},
+        },
+        {
+            name: "components with empty BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "",
+                    Name:   "component-b",
+                },
+            },
+            expected: map[string]string{}, // Empty BOMRefs should be skipped
+        },
+        {
+            name: "components with valid BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "ref-2",
+                    Name:   "component-b",
+                },
+                {
+                    BOMRef: "ref-3",
+                    Name:   "component-c",
+                },
+            },
+            expected: map[string]string{
+                "ref-1": "component-a",
+                "ref-2": "component-b",
+                "ref-3": "component-c",
+            },
+        },
+        {
+            name: "mixed components with valid and empty BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "",
+                    Name:   "component-b", // Should be skipped
+                },
+                {
+                    BOMRef: "ref-3",
+                    Name:   "component-c",
+                },
+            },
+            expected: map[string]string{
+                "ref-1": "component-a",
+                "ref-3": "component-c",
+            },
+        },
+        {
+            name: "duplicate BOMRefs with different names",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "ref-1", // Duplicate BOMRef
+                    Name:   "component-b",
+                },
+            },
+            expected: map[string]string{
+                "ref-1": "component-b", // Last one wins
+            },
+        },
+        {
+            name: "components with same name but different BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "ref-2",
+                    Name:   "component-a", // Same name, different ref
+                },
+            },
+            expected: map[string]string{
+                "ref-1": "component-a",
+                "ref-2": "component-a",
+            },
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getCdxBomRefToName(tt.input)
+            
+            // Check if result has the expected size
+            assert.Equal(t, len(tt.expected), len(result),
+                "Expected map size %d, got %d", len(tt.expected), len(result))
+            
+            // Check each key-value pair
+            for ref, expectedName := range tt.expected {
+                name, exists := result[ref]
+                assert.True(t, exists, "Expected BOMRef %s not found in result", ref)
+                assert.Equal(t, expectedName, name, 
+                    "For BOMRef %s, expected name %s, got %s", ref, expectedName, name)
+            }
+            
+            // Check that no extra keys exist in the result
+            for ref := range result {
+                _, exists := tt.expected[ref]
+                assert.True(t, exists, "Unexpected BOMRef %s found in result", ref)
+            }
+        })
+    }
+}
