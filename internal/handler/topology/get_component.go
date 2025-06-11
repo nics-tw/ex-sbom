@@ -11,12 +11,21 @@ import (
 )
 
 func toComponentResp(c ssbom.Component) map[string]any {
+	var versions [][]string
+	for _, v := range c.Vulns {
+		versions = append(versions, v.FixVersions)
+	}
+
+	suggest := ssbom.GetSuggestFixVersions(c.Version, versions...)
+
 	return map[string]any{
 		"name":             c.Name,
 		"version":          c.Version,
 		"vuln_number":      c.VulnNumber,
 		"vulns":            c.Vulns,
 		"contain_vuln_dep": c.ContainsVulnDep,
+		"suggested_fix_version": suggest,
+		"is_breaking_change": ssbom.IsBreakingChange(c.Version, suggest),
 	}
 }
 
