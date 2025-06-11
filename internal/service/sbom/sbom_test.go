@@ -1115,3 +1115,68 @@ func TestGetComponentToLevel(t *testing.T) {
         })
     }
 }
+
+func TestGetVulnComponents(t *testing.T) {
+    tests := []struct {
+        name           string
+        componentInfo  map[string]Component
+        expected       []string
+    }{
+        {
+            name: "no vulnerable components",
+            componentInfo: map[string]Component{
+                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 0},
+                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
+            },
+            expected: []string{},
+        },
+        {
+            name: "some vulnerable components",
+            componentInfo: map[string]Component{
+                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 2},
+                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
+                "comp3": {Name: "comp3", Version: "1.2", VulnNumber: 1},
+            },
+            expected: []string{"comp1", "comp3"},
+        },
+        {
+            name: "all vulnerable components",
+            componentInfo: map[string]Component{
+                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 1},
+                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 3},
+            },
+            expected: []string{"comp1", "comp2"},
+        },
+        {
+            name:          "empty component info",
+            componentInfo: map[string]Component{},
+            expected:      []string{},
+        },
+        {
+            name: "components with different vuln counts",
+            componentInfo: map[string]Component{
+                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 5},
+                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
+                "comp3": {Name: "comp3", Version: "1.2", VulnNumber: 10},
+            },
+            expected: []string{"comp1", "comp3"},
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            sbom := FormattedSBOM{
+                ComponentInfo: tt.componentInfo,
+            }
+            
+            result := sbom.GetVulnComponents()
+            
+            // Sort both slices for deterministic comparison
+            sort.Strings(result)
+            sort.Strings(tt.expected)
+            
+            assert.ElementsMatch(t, tt.expected, result, 
+                "GetVulnComponents() returned %v, want %v", result, tt.expected)
+        })
+    }
+}
