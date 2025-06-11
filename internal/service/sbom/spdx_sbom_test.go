@@ -500,150 +500,150 @@ func TestGetSpdxIdentifierToName(t *testing.T) {
 }
 
 func TestGetSpdxComponents(t *testing.T) {
-    tests := []struct {
-        name     string
-        document spdx.Document
-        expected []string
-    }{
-        {
-            name: "empty document",
-            document: spdx.Document{
-                Packages: []*spdx.Package{},
-            },
-            expected: []string{},
-        },
-        {
-            name: "document with valid packages",
-            document: spdx.Document{
-                Packages: []*spdx.Package{
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg1",
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg2",
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg3",
-                    },
-                },
-            },
-            expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2", "SPDXRef-pkg3"},
-        },
-        {
-            name: "document with empty identifiers",
-            document: spdx.Document{
-                Packages: []*spdx.Package{
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg1",
-                    },
-                    {
-                        PackageSPDXIdentifier: "", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg3",
-                    },
-                },
-            },
-            expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
-        },
-        {
-            name: "document with generated root packages",
-            document: spdx.Document{
-                Packages: []*spdx.Package{
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg1",
-                    },
-                    {
-                        PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "File-something", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg3",
-                    },
-                },
-            },
-            expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
-        },
-        {
-            name: "document with duplicate packages",
-            document: spdx.Document{
-                Packages: []*spdx.Package{
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg1",
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg2",
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
-                    },
-                },
-            },
-            expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
-        },
-        {
-            name: "document with mixed packages",
-            document: spdx.Document{
-                Packages: []*spdx.Package{
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg1",
-                    },
-                    {
-                        PackageSPDXIdentifier: "", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg2",
-                    },
-                    {
-                        PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
-                    },
-                    {
-                        PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
-                    },
-                },
-            },
-            expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
-        },
-        {
-            name: "document with only filtered packages",
-            document: spdx.Document{
-                Packages: []*spdx.Package{
-                    {
-                        PackageSPDXIdentifier: "", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
-                    },
-                    {
-                        PackageSPDXIdentifier: "File-something", // Should be filtered out
-                    },
-                },
-            },
-            expected: []string{},
-        },
-    }
+	tests := []struct {
+		name     string
+		document spdx.Document
+		expected []string
+	}{
+		{
+			name: "empty document",
+			document: spdx.Document{
+				Packages: []*spdx.Package{},
+			},
+			expected: []string{},
+		},
+		{
+			name: "document with valid packages",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg2",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg3",
+					},
+				},
+			},
+			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2", "SPDXRef-pkg3"},
+		},
+		{
+			name: "document with empty identifiers",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+					},
+					{
+						PackageSPDXIdentifier: "", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg3",
+					},
+				},
+			},
+			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
+		},
+		{
+			name: "document with generated root packages",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+					},
+					{
+						PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "File-something", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg3",
+					},
+				},
+			},
+			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
+		},
+		{
+			name: "document with duplicate packages",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg2",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
+					},
+				},
+			},
+			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
+		},
+		{
+			name: "document with mixed packages",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+					},
+					{
+						PackageSPDXIdentifier: "", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg2",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
+					},
+					{
+						PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
+					},
+				},
+			},
+			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
+		},
+		{
+			name: "document with only filtered packages",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
+					},
+					{
+						PackageSPDXIdentifier: "File-something", // Should be filtered out
+					},
+				},
+			},
+			expected: []string{},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getSpdxComponents(tt.document)
-            
-            // Sort both slices for consistent comparison
-            sort.Strings(result)
-            sort.Strings(tt.expected)
-            
-            assert.Equal(t, tt.expected, result, 
-                "Expected %v components, got %v", tt.expected, result)
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getSpdxComponents(tt.document)
+
+			// Sort both slices for consistent comparison
+			sort.Strings(result)
+			sort.Strings(tt.expected)
+
+			assert.Equal(t, tt.expected, result,
+				"Expected %v components, got %v", tt.expected, result)
+		})
+	}
 }
