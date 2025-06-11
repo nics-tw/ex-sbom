@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"github.com/google/osv-scanner/v2/pkg/models"
 )
 
 func TestFindNearestVersions(t *testing.T) {
@@ -643,4 +644,168 @@ func TestGetVersionString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetVulns(t *testing.T) {
+    // Setup test data
+    mockVulnMap := map[string]models.PackageVulns{
+        "package1": {
+            Vulnerabilities: []osvschema.Vulnerability{
+                {
+                    ID:      "CVE-2023-1234",
+                    Summary: "Test vulnerability 1",
+                    Details: "Details for test vulnerability 1",
+                    Affected: []osvschema.Affected{
+                        {
+                            Ranges: []osvschema.Range{
+                                {
+                                    Events: []osvschema.Event{
+                                        {Fixed: "1.2.4"},
+                                        {Fixed: "2.0.0"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            Groups: []models.GroupInfo{
+                {
+                    IDs:         []string{"CVE-2023-1234"},
+                    MaxSeverity: "7.5",
+                },
+            },
+        },
+        "package2": {
+            Vulnerabilities: []osvschema.Vulnerability{
+                {
+                    ID:      "CVE-2023-5678",
+                    Summary: "Test vulnerability 2",
+                    Details: "Details for test vulnerability 2",
+                    Affected: []osvschema.Affected{
+                        {
+                            Ranges: []osvschema.Range{
+                                {
+                                    Events: []osvschema.Event{
+                                        {Fixed: "2.3.0"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                {
+                    ID:      "CVE-2023-9012",
+                    Summary: "Test vulnerability 3",
+                    Details: "Details for test vulnerability 3",
+                    Affected: []osvschema.Affected{
+                        {
+                            Ranges: []osvschema.Range{
+                                {
+                                    Events: []osvschema.Event{
+                                        {Fixed: "3.0.0"},
+                                        {Fixed: "2.5.0"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            Groups: []models.GroupInfo{
+                {
+                    IDs:         []string{"CVE-2023-5678"},
+                    MaxSeverity: "4.5",
+                },
+                {
+                    IDs:         []string{"CVE-2023-9012"},
+                    MaxSeverity: "8.0",
+                },
+            },
+        },
+        "package3": {
+            Vulnerabilities: []osvschema.Vulnerability{},
+            Groups:          []models.GroupInfo{},
+        },
+    }
+
+    tests := []struct {
+        name          string
+        packageName   string
+        packageVer    string
+        expectedCount int
+        checkDetails  bool
+    }{
+        {
+            name:          "package with one vulnerability",
+            packageName:   "package1",
+            packageVer:    "1.2.3",
+            expectedCount: 1,
+            checkDetails:  true,
+        },
+        {
+            name:          "package with multiple vulnerabilities",
+            packageName:   "package2",
+            packageVer:    "2.0.0",
+            expectedCount: 2,
+            checkDetails:  true,
+        },
+        {
+            name:          "package with no vulnerabilities",
+            packageName:   "package3",
+            packageVer:    "1.0.0",
+            expectedCount: 0,
+            checkDetails:  false,
+        },
+        {
+            name:          "package not in vulnerability map",
+            packageName:   "nonexistent",
+            packageVer:    "1.0.0",
+            expectedCount: 0,
+            checkDetails:  false,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getVulns(tt.packageName, tt.packageVer, mockVulnMap)
+            
+            // Check the length of result
+            assert.Equal(t, tt.expectedCount, len(result))
+            
+            if tt.checkDetails {
+                // Check if the result contains the expected vulnerabilities
+                switch tt.packageName {
+                case "package1":
+                    assert.Equal(t, "CVE-2023-1234", result[0].ID)
+                    assert.Equal(t, "Test vulnerability 1", result[0].Summary)
+                    assert.Equal(t, "Details for test vulnerability 1", result[0].Details)
+                    assert.Equal(t, "7.5", result[0].CVSSScore)
+                    assert.Contains(t, result[0].FixVersions, "1.2.4")
+                    assert.Contains(t, result[0].FixVersions, "2.0.0")
+                    
+                case "package2":
+                    // Check first vulnerability
+                    assert.Equal(t, "CVE-2023-5678", result[0].ID)
+                    assert.Equal(t, "4.5", result[0].CVSSScore)
+                    assert.Contains(t, result[0].FixVersions, "2.3.0")
+                    
+                    // Check second vulnerability
+                    assert.Equal(t, "CVE-2023-9012", result[1].ID)
+                    assert.Equal(t, "8.0", result[1].CVSSScore)
+                    assert.Contains(t, result[1].FixVersions, "3.0.0")
+                    assert.Contains(t, result[1].FixVersions, "2.5.0")
+                    
+                    // Check suggestion logic
+                    if tt.packageVer == "2.0.0" {
+                        assert.Equal(t, "2.3.0", result[0].SuggestFixVersion)
+                        assert.Equal(t, "2.5.0, 3.0.0", result[1].SuggestFixVersion)
+                    }
+                }
+            } else if tt.expectedCount == 0 {
+                // For packages with no vulns or nonexistent packages
+                assert.Nil(t, result)
+            }
+        })
+    }
 }
