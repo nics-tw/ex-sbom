@@ -332,3 +332,169 @@ func TestGetSpdxDep(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSpdxIdentifierToName(t *testing.T) {
+	tests := []struct {
+		name     string
+		document spdx.Document
+		expected map[string]string
+	}{
+		{
+			name: "empty document",
+			document: spdx.Document{
+				Packages: []*spdx.Package{},
+			},
+			expected: map[string]string{},
+		},
+		{
+			name: "document with valid packages",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+						PackageName:           "package-a",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg2",
+						PackageName:           "package-b",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg3",
+						PackageName:           "package-c",
+					},
+				},
+			},
+			expected: map[string]string{
+				"SPDXRef-pkg1": "package-a",
+				"SPDXRef-pkg2": "package-b",
+				"SPDXRef-pkg3": "package-c",
+			},
+		},
+		{
+			name: "document with filtered packages",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+						PackageName:           "package-a",
+					},
+					{
+						PackageSPDXIdentifier: "DOCUMENT",
+						PackageName:           "document-root",
+					},
+					{
+						PackageSPDXIdentifier: "DocumentRoot-something",
+						PackageName:           "document-generated",
+					},
+					{
+						PackageSPDXIdentifier: "File-something",
+						PackageName:           "file-generated",
+					},
+				},
+			},
+			expected: map[string]string{
+				"SPDXRef-pkg1": "package-a",
+				// Others should be filtered out
+			},
+		},
+		{
+			name: "document with empty identifiers",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+						PackageName:           "package-a",
+					},
+					{
+						PackageSPDXIdentifier: "",
+						PackageName:           "package-b",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg3",
+						PackageName:           "package-c",
+					},
+				},
+			},
+			expected: map[string]string{
+				"SPDXRef-pkg1": "package-a",
+				"SPDXRef-pkg3": "package-c",
+				// Empty identifier should be filtered out
+			},
+		},
+		{
+			name: "document with mixed identifiers",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+						PackageName:           "package-a",
+					},
+					{
+						PackageSPDXIdentifier: "DocumentRoot-something",
+						PackageName:           "document-generated",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg3",
+						PackageName:           "package-c",
+					},
+					{
+						PackageSPDXIdentifier: "",
+						PackageName:           "package-empty",
+					},
+					{
+						PackageSPDXIdentifier: "DOCUMENT",
+						PackageName:           "document-root",
+					},
+				},
+			},
+			expected: map[string]string{
+				"SPDXRef-pkg1": "package-a",
+				"SPDXRef-pkg3": "package-c",
+				// Others should be filtered out
+			},
+		},
+		{
+			name: "document with same name but different identifiers",
+			document: spdx.Document{
+				Packages: []*spdx.Package{
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg1",
+						PackageName:           "package-a",
+					},
+					{
+						PackageSPDXIdentifier: "SPDXRef-pkg2",
+						PackageName:           "package-a", // Same name, different ID
+					},
+				},
+			},
+			expected: map[string]string{
+				"SPDXRef-pkg1": "package-a",
+				"SPDXRef-pkg2": "package-a",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getSpdxIdentifierToName(tt.document)
+
+			// Verify map sizes match
+			assert.Equal(t, len(tt.expected), len(result),
+				"Expected map size %d, got %d", len(tt.expected), len(result))
+
+			// Verify each expected entry exists with correct value
+			for id, name := range tt.expected {
+				resultName, exists := result[id]
+				assert.True(t, exists, "Expected identifier %s not found in result", id)
+				assert.Equal(t, name, resultName,
+					"For identifier %s, expected name %s, got %s", id, name, resultName)
+			}
+
+			// Verify no extra entries exist in result
+			for id := range result {
+				_, exists := tt.expected[id]
+				assert.True(t, exists, "Unexpected identifier %s found in result", id)
+			}
+		})
+	}
+}
