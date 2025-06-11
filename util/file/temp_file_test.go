@@ -5,6 +5,7 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -134,5 +135,107 @@ func TestCopyAndCreate(t *testing.T) {
 
 		_, err := CopyAndCreate(input)
 		assert.Error(t, err)
+	})
+}
+
+func TestDelete(t *testing.T) {
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "file_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir) // Clean up when done
+
+	// Save current working directory
+	originalWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current working directory: %v", err)
+	}
+
+	// Change to temp directory for the test
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
+	defer os.Chdir(originalWd) // Restore working directory when done
+
+	tests := []struct {
+		name        string
+		fileName    string
+		setup       func(string) error
+		expectError bool
+	}{
+		{
+			name:        "delete existing file",
+			fileName:    "test.txt",
+			setup:       func(name string) error { return os.WriteFile(name, []byte("test content"), 0644) },
+			expectError: false,
+		},
+		{
+			name:        "delete non-existent file",
+			fileName:    "non-existent-file.txt",
+			setup:       func(name string) error { return nil }, // No setup needed
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup
+			if err := tt.setup(tt.fileName); err != nil {
+				t.Fatalf("Setup failed: %v", err)
+			}
+
+			// Call the function we're testing
+			err := Delete(tt.fileName)
+
+			// Check results
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.True(t, os.IsNotExist(err), "Expected 'file not exist' error")
+			} else {
+				assert.NoError(t, err)
+
+				// Verify file was deleted
+				_, statErr := os.Stat(tt.fileName)
+				assert.True(t, os.IsNotExist(statErr), "File should no longer exist after deletion")
+			}
+		})
+	}
+
+	// Test permission error case
+	t.Run("delete file without permission", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Skipping permission test on Windows")
+		}
+
+		// Create a read-only directory
+		readOnlyDir := filepath.Join(tempDir, "readonly")
+		if err := os.Mkdir(readOnlyDir, 0700); err != nil {
+			t.Fatalf("Failed to create directory: %v", err)
+		}
+
+		// Create a file in the directory
+		testFile := filepath.Join(readOnlyDir, "test.txt")
+		if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		// Make the directory read-only after creating the file
+		if err := os.Chmod(readOnlyDir, 0500); err != nil {
+			t.Fatalf("Failed to change directory permissions: %v", err)
+		}
+
+		// Try to delete the file (should fail on Unix systems)
+		err := Delete(testFile)
+
+		// On some systems this may still succeed, so we check conditionally
+		if err != nil {
+			// We got an error as expected
+			assert.Error(t, err)
+			assert.False(t, os.IsNotExist(err), "Should be a permission error, not 'not exist' error")
+		}
+
+		// Restore permissions for cleanup
+		_ = os.Chmod(readOnlyDir, 0700)
 	})
 }
