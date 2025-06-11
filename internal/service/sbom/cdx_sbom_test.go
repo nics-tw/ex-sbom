@@ -357,3 +357,138 @@ func TestGetCdxBomRefToName(t *testing.T) {
         })
     }
 }
+
+func TestGetCdxBomRef(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    *[]cdx.Component
+        expected []string
+    }{
+        {
+            name:     "nil input",
+            input:    nil,
+            expected: []string{},
+        },
+        {
+            name:     "empty component list",
+            input:    &[]cdx.Component{},
+            expected: []string{},
+        },
+        {
+            name: "components with empty BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "",
+                    Name:   "component-b",
+                },
+            },
+            expected: []string{}, // Empty BOMRefs should be skipped
+        },
+        {
+            name: "components with valid BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "ref-2",
+                    Name:   "component-b",
+                },
+                {
+                    BOMRef: "ref-3",
+                    Name:   "component-c",
+                },
+            },
+            expected: []string{"ref-1", "ref-2", "ref-3"},
+        },
+        {
+            name: "mixed components with valid and empty BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "",
+                    Name:   "component-b", // Should be skipped
+                },
+                {
+                    BOMRef: "ref-3",
+                    Name:   "component-c",
+                },
+            },
+            expected: []string{"ref-1", "ref-3"},
+        },
+        {
+            name: "components with duplicate BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "ref-2",
+                    Name:   "component-b",
+                },
+                {
+                    BOMRef: "ref-1", // Duplicate, should be deduplicated
+                    Name:   "component-c",
+                },
+            },
+            expected: []string{"ref-1", "ref-2"}, // unique.StringSlice should deduplicate
+        },
+        {
+            name: "complex mix of valid, empty, and duplicate BOMRefs",
+            input: &[]cdx.Component{
+                {
+                    BOMRef: "ref-1",
+                    Name:   "component-a",
+                },
+                {
+                    BOMRef: "",
+                    Name:   "component-b", // Should be skipped
+                },
+                {
+                    BOMRef: "ref-2",
+                    Name:   "component-c",
+                },
+                {
+                    BOMRef: "ref-1", // Duplicate, should be deduplicated
+                    Name:   "component-d",
+                },
+                {
+                    BOMRef: "",
+                    Name:   "component-e", // Should be skipped
+                },
+                {
+                    BOMRef: "ref-3",
+                    Name:   "component-f",
+                },
+            },
+            expected: []string{"ref-1", "ref-2", "ref-3"},
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getCdxBomRef(tt.input)
+            
+            // Check if the result has the expected length
+            assert.Equal(t, len(tt.expected), len(result),
+                "Expected %d BOMRefs, got %d", len(tt.expected), len(result))
+            
+            // Check if each expected BOMRef is in the result
+            // Sort both slices for deterministic comparison
+            sort.Strings(result)
+            sort.Strings(tt.expected)
+            
+            assert.Equal(t, tt.expected, result, 
+                "Expected BOMRefs %v, got %v", tt.expected, result)
+        })
+    }
+}
