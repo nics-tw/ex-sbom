@@ -3,6 +3,7 @@
 package ssbom
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -339,6 +340,67 @@ func TestIsSevereVuln(t *testing.T) {
 			result := IsSevereVuln(tt.vuln)
 			if !assert.Equal(t, tt.expected, result) {
 				t.Errorf("IsSevereVuln() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetAffecteds(t *testing.T) {
+	tests := []struct {
+		name              string
+		component         string
+		reverseDependency map[string][]string
+		expected          []string
+	}{
+		{
+			name:              "no dependents",
+			component:         "isolated",
+			reverseDependency: map[string][]string{},
+			expected:          []string{},
+		},
+		{
+			name:      "direct dependents only",
+			component: "base",
+			reverseDependency: map[string][]string{
+				"base": {"app1", "app2"},
+			},
+			expected: []string{"app1", "app2"},
+		},
+		{
+			name:      "direct and indirect dependents",
+			component: "lib",
+			reverseDependency: map[string][]string{
+				"lib":   {"util1", "util2"},
+				"util1": {"app1", "app2"},
+				"util2": {"app3"},
+			},
+			expected: []string{"util1", "util2", "app1", "app2", "app3"},
+		},
+		{
+			name:      "multiple dependency paths",
+			component: "core",
+			reverseDependency: map[string][]string{
+				"core":  {"lib1", "lib2"},
+				"lib1":  {"app1", "app2"},
+				"lib2":  {"app2", "app3"}, // app2 depends on both lib1 and lib2
+				"app3":  {"plugin1"},
+				"app1":  {"plugin2"},
+				"other": {"unrelated"},
+			},
+			expected: []string{"lib1", "lib2", "app1", "app2", "app3", "plugin1", "plugin2"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getAffecteds(tt.component, tt.reverseDependency)
+
+			// Sort both slices for deterministic comparison
+			sort.Strings(result)
+			sort.Strings(tt.expected)
+
+			if !assert.ElementsMatch(t, tt.expected, result) {
+				t.Errorf("getAffecteds() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
