@@ -1031,3 +1031,87 @@ func TestGetSBOM(t *testing.T) {
         })
     }
 }
+
+func TestGetComponentToLevel(t *testing.T) {
+    tests := []struct {
+        name            string
+        dependencyLevel map[int][]string
+        expected        map[string]int
+    }{
+        {
+            name:            "empty dependency map",
+            dependencyLevel: map[int][]string{},
+            expected:        map[string]int{},
+        },
+        {
+            name: "single level",
+            dependencyLevel: map[int][]string{
+                1: {"comp1", "comp2", "comp3"},
+            },
+            expected: map[string]int{
+                "comp1": 1,
+                "comp2": 1,
+                "comp3": 1,
+            },
+        },
+        {
+            name: "multiple levels",
+            dependencyLevel: map[int][]string{
+                1: {"comp1", "comp2"},
+                2: {"comp3", "comp4"},
+                3: {"comp5"},
+            },
+            expected: map[string]int{
+                "comp1": 1,
+                "comp2": 1,
+                "comp3": 2,
+                "comp4": 2,
+                "comp5": 3,
+            },
+        },
+        {
+            name: "zero level components",
+            dependencyLevel: map[int][]string{
+                0: {"root1", "root2"},
+                1: {"lib1", "lib2"},
+                2: {"util1"},
+            },
+            expected: map[string]int{
+                "root1": 0,
+                "root2": 0,
+                "lib1":  1,
+                "lib2":  1,
+                "util1": 2,
+            },
+        },
+        {
+            name: "overlapping components (should use last level)",
+            dependencyLevel: map[int][]string{
+                1: {"comp1", "overlap"},
+                2: {"comp2", "overlap"}, // overlap appears in both levels
+            },
+            expected: map[string]int{
+                "comp1":   1,
+                "comp2":   2,
+                "overlap": 2, // Takes the last one processed (level 2)
+            },
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := getComponentToLevel(tt.dependencyLevel)
+            
+            // Check maps have same number of keys
+            assert.Equal(t, len(tt.expected), len(result), "Maps have different sizes")
+            
+            // For each key, check if the level matches
+            for comp, expectedLevel := range tt.expected {
+                resultLevel, ok := result[comp]
+                assert.True(t, ok, "Component %s not found in result", comp)
+                assert.Equal(t, expectedLevel, resultLevel, "Component %s has level %d, want %d", 
+                    comp, resultLevel, expectedLevel)
+            }
+        })
+    }
+}
