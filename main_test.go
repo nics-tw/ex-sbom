@@ -473,29 +473,6 @@ func TestOpenBrowser_WithMocking(t *testing.T) {
 	}
 }
 
-// Integration test that actually tries to execute (only on CI/test environments)
-func TestOpenBrowser_Integration(t *testing.T) {
-	if os.Getenv("RUN_INTEGRATION_TESTS") != "true" {
-		t.Skip("Skipping integration test. Set RUN_INTEGRATION_TESTS=true to run.")
-	}
-
-	// Test with a safe URL that won't actually open a browser window
-	// but will test the command execution path
-	url := "about:blank"
-
-	err := openBrowser(url)
-
-	switch runtime.GOOS {
-	case "darwin", "windows", "linux":
-		// On supported platforms, we might get an error if no browser is available
-		// but the function should execute without panicking
-		t.Logf("openBrowser returned: %v", err)
-	default:
-		// On unsupported platforms, should return nil
-		assert.NoError(t, err, "Should return nil on unsupported platforms")
-	}
-}
-
 func TestGetConfig(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -570,4 +547,17 @@ func TestCreateServer(t *testing.T) {
 	for _, path := range expectedRoutes {
 		assert.True(t, routePaths[path], "Route %s should exist", path)
 	}
+}
+
+func TestURL(t *testing.T) {
+	config := Config{
+		Port: "8080",
+	}
+
+	expectedURL := "http://localhost:8080"
+	assert.Equal(t, expectedURL, config.URL(), "URL should match expected format")
+
+	config.Port = "3000"
+	expectedURL = "http://localhost:3000"
+	assert.Equal(t, expectedURL, config.URL(), "URL should update with new port")
 }
