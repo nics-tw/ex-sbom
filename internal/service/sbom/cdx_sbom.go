@@ -173,22 +173,27 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 	// considering with negative list way, if it's with depth that is not 0, that means it's not root
 	roots = getRootComponents(allComponents, result)
 
-	// if level 0 contain no components, we need to move all level's components to their level -1
-	if len(result[0]) == 0 {
-		var levels []int
-		for level := range result {
-			levels = append(levels, level)
-		}
-
-		slices.Sort(levels)
-
-		for _, level := range levels {
-			if level == 0 {
+	if len(result[0]) != 0  {
+		// move components from current level to the next level
+		for level := 0; level < len(result); level++ {
+			if _, ok := result[level]; !ok {
 				continue
 			}
 
-			result[level-1] = result[level]
-			delete(result, level)
+			for _, component := range result[level] {
+				if _, ok := refToName[component]; !ok {
+					slog.Error("failed to get ref name", "ref", component)
+					continue
+				}
+
+				// if the component is not root, move it to the next level
+				if !slices.Contains(roots, component) {
+					result[level+1] = append(result[level+1], component)
+				}
+			}
+
+			// clear the current level
+			result[level] = nil
 		}
 	}
 
