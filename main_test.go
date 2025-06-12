@@ -495,3 +495,79 @@ func TestOpenBrowser_Integration(t *testing.T) {
 		assert.NoError(t, err, "Should return nil on unsupported platforms")
 	}
 }
+
+func TestGetConfig(t *testing.T) {
+	tests := []struct {
+		name            string
+		portEnv         string
+		browserEnv      string
+		expectedPort    string
+		expectedBrowser bool
+	}{
+		{
+			name:            "default values",
+			portEnv:         "",
+			browserEnv:      "",
+			expectedPort:    "8080",
+			expectedBrowser: true,
+		},
+		{
+			name:            "custom port",
+			portEnv:         "3000",
+			browserEnv:      "",
+			expectedPort:    "3000",
+			expectedBrowser: true,
+		},
+		{
+			name:            "browser disabled",
+			portEnv:         "",
+			browserEnv:      "false",
+			expectedPort:    "8080",
+			expectedBrowser: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original env
+			originalPort := os.Getenv("PORT")
+			originalBrowser := os.Getenv("AUTO_OPEN_BROWSER")
+			defer func() {
+				os.Setenv("PORT", originalPort)
+				os.Setenv("AUTO_OPEN_BROWSER", originalBrowser)
+			}()
+
+			// Set test env
+			os.Setenv("PORT", tt.portEnv)
+			os.Setenv("AUTO_OPEN_BROWSER", tt.browserEnv)
+
+			config := getConfig()
+
+			assert.Equal(t, tt.expectedPort, config.Port)
+			assert.Equal(t, tt.expectedBrowser, config.AutoOpenBrowser)
+		})
+	}
+}
+
+func TestCreateServer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := createServer()
+
+	assert.NotNil(t, server)
+
+	// Test that routes are set up
+	routes := server.Routes()
+	assert.Greater(t, len(routes), 0, "Server should have routes configured")
+
+	// Test specific routes exist
+	routePaths := make(map[string]bool)
+	for _, route := range routes {
+		routePaths[route.Path] = true
+	}
+
+	expectedRoutes := []string{"/", "/tutorial", "/favicon.ico"}
+	for _, path := range expectedRoutes {
+		assert.True(t, routePaths[path], "Route %s should exist", path)
+	}
+}
