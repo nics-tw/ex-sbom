@@ -28,24 +28,50 @@ var image embed.FS
 var image2 embed.FS
 
 func main() {
-	r := gin.Default()
+	config := getConfig()
+	server := createServer()
 
-	setupSSR(r)
-	handler.SetupRouterGroup(r)
+	if config.AutoOpenBrowser {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			if err := openBrowser(config.URL()); err != nil {
+				slog.Error("Failed to open browser", "error", err)
+			}
+		}()
+	}
 
+	startServer(server, config.Port)
+}
+
+type Config struct {
+	Port            string
+	AutoOpenBrowser bool
+}
+
+func getConfig() Config {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		url := "http://localhost:" + port
-		if err := openBrowser(url); err != nil {
-			slog.Error("Failed to open browser", "error", err)
-		}
-	}()
+	return Config{
+		Port:            port,
+		AutoOpenBrowser: os.Getenv("AUTO_OPEN_BROWSER") != "false",
+	}
+}
 
+func (c Config) URL() string {
+	return "http://localhost:" + c.Port
+}
+
+func createServer() *gin.Engine {
+	r := gin.Default()
+	setupSSR(r)
+	handler.SetupRouterGroup(r)
+	return r
+}
+
+func startServer(r *gin.Engine, port string) {
 	r.Run(":" + port)
 }
 
