@@ -1,4 +1,4 @@
-module ex-s
+module ex-sbom
 
 go 1.24.2
 

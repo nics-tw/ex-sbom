@@ -6,8 +6,8 @@ package ssbom
 
 import (
 	"errors"
-	"ex-s/util/file"
-	"ex-s/util/unique"
+	"ex-sbom/util/file"
+	"ex-sbom/util/unique"
 	"fmt"
 	"log/slog"
 	"slices"

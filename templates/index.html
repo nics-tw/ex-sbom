@@ -8,7 +8,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ex-s</title>
+    <title>ex-sbom</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.0"></script>
     <style>
@@ -53,7 +53,7 @@
             class="text-2xl font-bold text-gray-800 tracking-tight"
             data-i18n="appTitle"
           >
-            ex-s
+            ex-sbom
           </h1>
         </div>
 
@@ -178,7 +178,7 @@
       // Language translations
       const translations = {
         en: {
-          appTitle: "ex-s",
+          appTitle: "ex-sbom",
           appDescription: "SBOM Explorer, designed by NICS-ra",
           selectFiles: "Select SBOM Files",
           selectedFiles: "Selected files:",
@@ -233,7 +233,7 @@
             "This component contains security vulnerabilities with a CVSS score of 7.0 or higher. The suggested fix version is based on these vulnerabilities.",
         },
         zh: {
-          appTitle: "ex-s",
+          appTitle: "ex-sbom",
           appDescription: "SBOM explorer，由 NICS-ra 設計",
           selectFiles: "選擇 SBOM 檔案",
           selectedFiles: "已選擇的檔案：",
@@ -839,17 +839,17 @@
                   let icon;
                   if (hasVuln) {
                     // Red warning icon for direct vulnerabilities
-                    icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-red-500 mr-2 flex-sbomhrink-0" viewBox="0 0 20 20" fill="currentColor">
       <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
     </svg>`;
                   } else if (hasVulnDep) {
                     // Yellow warning icon for dependency vulnerabilities
-                    icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-500 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-500 mr-2 flex-sbomhrink-0" viewBox="0 0 20 20" fill="currentColor">
       <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
     </svg>`;
                   } else {
                     // Default component icon for no vulnerabilities
-                    icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mr-2 flex-sbomhrink-0" viewBox="0 0 20 20" fill="currentColor">
       <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" />
     </svg>`;
                   }
@@ -1066,7 +1066,7 @@
         ${
           is_breaking_change && suggested_fix_version
             ? `<div class="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm flex items-start">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500 mr-1 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500 mr-1 flex-sbomhrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm-1-8a1 1 0 0 0-1 1v3a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1z" clip-rule="evenodd" />
             </svg>
             <span class="text-yellow-700">${t(
@@ -1079,7 +1079,7 @@
         ${
           has_severe_vuln
             ? `<div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm flex items-start">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-1 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-1 flex-sbomhrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm-1-8a1 1 0 0 0-1 1v3a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1z" clip-rule="evenodd" />
             </svg>
             <span class="text-red-700">${t("severeVulnWarning")}</span>

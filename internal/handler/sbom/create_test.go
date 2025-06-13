@@ -7,7 +7,7 @@
 package sbom
 
 import (
-	"ex-s/util/msg"
+	"ex-sbom/util/msg"
 	"testing"
 
 	"github.com/gin-gonic/gin"

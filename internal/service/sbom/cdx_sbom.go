@@ -6,8 +6,8 @@ package ssbom
 
 import (
 	"errors"
-	"ex-s/util/file"
-	"ex-s/util/unique"
+	"ex-sbom/util/file"
+	"ex-sbom/util/unique"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -177,7 +177,7 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 	// considering with negative list way, if it's with depth that is not 0, that means it's not root
 	roots = getRootComponents(allComponents, result)
 
-	if len(result[0]) != 0  {
+	if len(result[0]) != 0 {
 		// move components from current level to the next level
 		for level := 0; level < len(result); level++ {
 			if _, ok := result[level]; !ok {

@@ -5,12 +5,12 @@
 package ssbom
 
 import (
+	"ex-sbom/util/unique"
 	"fmt"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
-	"ex-s/util/unique"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"

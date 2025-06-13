@@ -5,8 +5,8 @@
 package topology
 
 import (
-	ssbom "ex-s/internal/service/sbom"
-	"ex-s/util/msg"
+	ssbom "ex-sbom/internal/service/sbom"
+	"ex-sbom/util/msg"
 	"fmt"
 	"log/slog"
 	"net/http"

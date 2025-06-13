@@ -1,9 +1,9 @@
-# ex-s
+# ex-sbom
 
-ex-s, 簡稱 Explorer of SBOM，是一個實驗性的 SBOM 分析可視化工具。
+ex-sbom, 簡稱 Explorer of SBOM，是一個實驗性的 SBOM 分析可視化工具。
 目前仍處於開發的早期階段，有部分功能並沒有相當穩定。（我們認為目前的狀態處於 pre-alpha 階段）歡迎任何反饋或改進建議。
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-s.svg)](https://pkg.go.dev/github.com/nics-tw/ex-s)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-sbom.svg)](https://pkg.go.dev/github.com/nics-tw/ex-sbom)
 
 ## 使用方法
 
@@ -27,7 +27,7 @@ ex-s, 簡稱 Explorer of SBOM，是一個實驗性的 SBOM 分析可視化工具
    ```
 1. 複製此 repo 至您要執行的電腦：
    ```bash
-   git clone git@github.com:nics-tw/ex-s.git
+   git clone git@github.com:nics-tw/ex-sbom.git
    ```
 2. 執行以下命令以安裝所需的依賴項：
    ```bash
@@ -35,17 +35,17 @@ ex-s, 簡稱 Explorer of SBOM，是一個實驗性的 SBOM 分析可視化工具
    ```
 3. 編譯專案：
    ```bash
-   go build -o ex-s
+   go build -o ex-sbom
    ```
 4. 執行專案：
    ```bash
-   ./ex-s
+   ./ex-sbom
    ```
 5. 您的瀏覽器應該會自動打開一個新標籤頁，網址為 `http://localhost:8080`。如果沒有自動打開，您可以手動在瀏覽器中輸入此網址。
    （如果是本地開發，您可以直接執行 `go run main.go` 來啟動它。）
 
 ## API 文件
-我們使用 Postman 來記錄 API 文件。您可以在根目錄中找到名為 `ex-s.postman_collection.json` 的文件。您可以將此文件匯入 Postman 以查看 API 文件。
+我們使用 Postman 來記錄 API 文件。您可以在根目錄中找到名為 `ex-sbom.postman_collection.json` 的文件。您可以將此文件匯入 Postman 以查看 API 文件。
 
 ## 貢獻
 如果您想要貢獻此專案，請參考 [CONTRIBUTING.md](CONTRIBUTING.md) 文件以了解如何開始。

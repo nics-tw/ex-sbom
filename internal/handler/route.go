@@ -5,8 +5,8 @@
 package handler
 
 import (
-	"ex-s/internal/handler/sbom"
-	"ex-s/internal/handler/topology"
+	"ex-sbom/internal/handler/sbom"
+	"ex-sbom/internal/handler/topology"
 
 	"github.com/gin-gonic/gin"
 )

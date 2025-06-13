@@ -1,12 +1,12 @@
-# ex-s
+# ex-sbom
 
 正體中文說明請參考 [README.zh-TW.md](README.zh-TW.md)
 
-ex-s, abbreviation for Explorer of SBOM, is currently an experimental visualization tool for SBOM analysis.
+ex-sbom, abbreviation for Explorer of SBOM, is currently an experimental visualization tool for SBOM analysis.
 
 Disclaimer: This tool is still in the early stages of development and may not be fully functional.(We considering the current state is in pre-alpha status) We welcome any feedback or suggestions for improvement.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-s.svg)](https://pkg.go.dev/github.com/nics-tw/ex-s)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-sbom.svg)](https://pkg.go.dev/github.com/nics-tw/ex-sbom)
 
 ## Usage
 
@@ -32,7 +32,7 @@ brew install go
 
 1. Clone the repository:
 ```bash
-git clone git@github.com:nics-tw/ex-s.git
+git clone git@github.com:nics-tw/ex-sbom.git
 ```
 
 2. Execute the following command to install the required dependencies:
@@ -42,12 +42,12 @@ go mod tidy
 
 3. Build the project:
 ```bash
-go build -o ex-s
+go build -o ex-sbom
 ```
 
 4. Run the project:
 ```bash
-./ex-s
+./ex-sbom
 ```
 
 5. Your browser should automatically open a new tab with the URL `http://localhost:8080`. If it doesn't, you can manually open your browser and enter the URL.
@@ -56,7 +56,7 @@ go build -o ex-s
 
 ## API documentation
 
-We use Postman to document our API. You can find the documentation json file in the root directory with name `ex-s.postman_collection.json`. You can import this file into Postman to view the API documentation.
+We use Postman to document our API. You can find the documentation json file in the root directory with name `ex-sbom.postman_collection.json`. You can import this file into Postman to view the API documentation.
 
 ## Contributing
 

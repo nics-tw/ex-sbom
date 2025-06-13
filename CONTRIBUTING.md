@@ -1,6 +1,6 @@
-# Contributing to ex-s
+# Contributing to ex-sbom
 
-Again, thank you for your interest in contributing to ex-s! We appreciate your willingness to help us improve the project. Before you start contributing, please take a moment to read through our guidelines to ensure a smooth collaboration.
+Again, thank you for your interest in contributing to ex-sbom! We appreciate your willingness to help us improve the project. Before you start contributing, please take a moment to read through our guidelines to ensure a smooth collaboration.
 
 ## Code of Conduct
 
@@ -18,12 +18,12 @@ We expect all contributors to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md
 - Fork the repository on GitHub.
 - Clone your forked repository to your local machine:
   ```bash
-  git clone https://github.com/YOUR-USERNAME/ex-s.git
-  cd ex-s
+  git clone https://github.com/YOUR-USERNAME/ex-sbom.git
+  cd ex-sbom
   ```
 - Add the original repository as an upstream remote:
   ```bash
-  git remote add upstream https://github.com/nics-tw/ex-s.git
+  git remote add upstream https://github.com/nics-tw/ex-sbom.git
     ```
 - Install Go dependencies:
   ```bash
@@ -31,7 +31,7 @@ We expect all contributors to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md
   ```
 - Build the project:
   ```bash
-  go build -o ex-s
+  go build -o ex-sbom
   ```
 - Or just run on local for testing:
   ```bash
@@ -91,4 +91,4 @@ By contributing to this project, you agree that your contributions will be licen
 
 ## Acknowledgments
 
-We appreciate your interest in contributing to ex-s! Your contributions help us improve the project and make it more useful for everyone. If you have any questions or need assistance, feel free to reach out to the maintainers. Thanks in advance for your contributions!
+We appreciate your interest in contributing to ex-sbom! Your contributions help us improve the project and make it more useful for everyone. If you have any questions or need assistance, feel free to reach out to the maintainers. Thanks in advance for your contributions!

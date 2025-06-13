@@ -1,8 +1,8 @@
 {
 	"info": {
 		"_postman_id": "a5ef74e8-af34-4948-b09c-2061df16d1c1",
-		"name": "ex-s",
-		"description": "# Overview\n\nThis file is the api documentation of the [ex-s](https://github.com/nics-tw/ex-s).",
+		"name": "ex-sbom",
+		"description": "# Overview\n\nThis file is the api documentation of the [ex-sbom](https://github.com/nics-tw/ex-sbom).",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "34288674"
 	},
@@ -37,7 +37,7 @@
 						}
 					]
 				},
-				"description": "Upload SBOM API is responsible for upload the SBOM data into the backend side of ex-s."
+				"description": "Upload SBOM API is responsible for upload the SBOM data into the backend side of ex-sbom."
 			},
 			"response": [
 				{

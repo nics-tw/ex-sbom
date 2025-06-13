@@ -6,7 +6,7 @@ package main
 
 import (
 	"embed"
-	"ex-s/internal/handler"
+	"ex-sbom/internal/handler"
 	"html/template"
 	"io/fs"
 	"log/slog"
