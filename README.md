@@ -15,6 +15,13 @@ Disclaimer: This tool is still in the early stages of development and may not be
 - Also, the impact chain of the vulnerabilities in the system can be visualized, analyzed, which helps you understand the potential risks in your system.
 - Aside from visualization, the detailed information of each component can be viewed, which may be helpful for you to plan the remediation of the vulnerabilities.
 
+## To whom this tool is for
+This tool is designed for developers, security engineers, and anyone who wants to analyze the SBOM of their software projects. It can help you:
+- Visualize the SBOM of your software projects.
+- Understand the relationships between different components in your software.
+- Analyze the vulnerabilities in your software and their impact on the software supply chain.
+- Plan the remediation of the vulnerabilities in your software.
+
 ## Why we make this project
 
 In the very beginning, we were looking for a tool that could visualize the SBOM and the vulnerabilities in it(indeed, there's not-so-many options for us to choose from). And since we are also surveying the impact of the vulnerabilities among the software supply chain, we thought it would be great if we could visualize that along with the SBOM data. Hence, we decided to homebrew this tool.
