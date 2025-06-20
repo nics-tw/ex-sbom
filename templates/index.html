@@ -165,7 +165,7 @@
           class="text-gray-500 italic"
           data-i18n="noFilesUploaded"
         >
-          No files uploaded yet
+          No files processed yet
         </div>
       </div>
     </div>
@@ -182,10 +182,10 @@
           appDescription: "SBOM Explorer, designed by NICS-ra",
           selectFiles: "Select SBOM Files",
           selectedFiles: "Selected files:",
-          uploadedFiles: "Uploaded SBOM Files",
-          noFilesUploaded: "No files uploaded yet",
-          uploading: "Uploading {0}...",
-          uploadedSuccessfully: "{0} uploaded successfully",
+          uploadedFiles: "Processed SBOM Files",
+          noFilesUploaded: "No files selected yet",
+          uploading: "Processing {0}...",
+          uploadedSuccessfully: "{0} processed successfully",
           uploadFailed: "{0}: {1}",
           errorReadingFile: "Error reading file",
           warningOverwrite:
@@ -237,10 +237,10 @@
           appDescription: "SBOM explorer，由 NICS-ra 設計",
           selectFiles: "選擇 SBOM 檔案",
           selectedFiles: "已選擇的檔案：",
-          uploadedFiles: "已上傳的 SBOM 檔案",
+          uploadedFiles: "已選擇的 SBOM 檔案",
           noFilesUploaded: "尚未上傳檔案",
-          uploading: "正在上傳 {0}...",
-          uploadedSuccessfully: "{0} 上傳成功",
+          uploading: "正在處理 {0}...",
+          uploadedSuccessfully: "{0} 的資料彙整完畢",
           uploadFailed: "{0}: {1}",
           errorReadingFile: "讀取檔案錯誤",
           warningOverwrite:
@@ -1338,7 +1338,7 @@
               } else {
                 // Show "no files" message
                 document.getElementById("tab-content").innerHTML =
-                  '<div id="no-tabs-message" class="text-gray-500 italic">No files uploaded yet</div>';
+                  '<div id="no-tabs-message" class="text-gray-500 italic">No files processed yet</div>';
               }
             }
 
