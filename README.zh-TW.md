@@ -57,7 +57,7 @@ ex-sbom, 簡稱 Explorer of SBOM，是一個實驗性的 SBOM 分析可視化工
 我們使用 Postman 來記錄 API 文件。您可以在根目錄中找到名為 `ex-sbom.postman_collection.json` 的文件。您可以將此文件匯入 Postman 以查看 API 文件。
 
 ## 貢獻
-如果您想要貢獻此專案，請參考 [CONTRIBUTING.md](CONTRIBUTING.md) 文件以了解如何開始。
+如果您想要對此專案提出任何形式的貢獻（例如：錯誤回報、提出 PR 等等），請參考 [CONTRIBUTING.md](CONTRIBUTING.md) 文件以了解如何開始。
 
-順帶一提，當你在使用此工具時，請務必遵守我們的 [Code of Conduct](CODE_OF_CONDUCT.md) 和 [License](LICENSE)。
+順帶一提，當你在使用此工具時，請務必遵守我們的 [Code of Conduct](CODE_OF_CONDUCT.md) 並確保符合 [License](LICENSE)的授權內容。
    
