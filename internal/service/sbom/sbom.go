@@ -312,7 +312,16 @@ func getCVEFromAliases(aliases []string) string {
 		}
 	}
 
-	return ""
+	var nonCVEAliases strings.Builder
+
+	for i, alias := range aliases {
+		nonCVEAliases.WriteString(alias)
+		if i != len(aliases)-1 {
+			nonCVEAliases.WriteString(", ")
+		}
+	}
+
+	return nonCVEAliases.String()
 }
 
 func getVersionString(strs []string) string {
