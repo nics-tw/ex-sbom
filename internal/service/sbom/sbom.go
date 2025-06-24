@@ -288,7 +288,7 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 			otherFixVer := getDiff(allFixVers, suggestFix)
 
 			vulns = append(vulns, Vuln{
-				ID:                v.ID,
+				ID:                getCVEFromAliases(v.Aliases),
 				Summary:           v.Summary,
 				Details:           v.Details,
 				CVSSScore:         getCVSS(v.ID, vuln.Groups),
@@ -303,6 +303,16 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 	}
 
 	return nil
+}
+
+func getCVEFromAliases(aliases []string) string {
+	for _, alias := range aliases {
+		if strings.HasPrefix(alias, "CVE-") {
+			return alias
+		}
+	}
+
+	return ""
 }
 
 func getVersionString(strs []string) string {
