@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License. See LICENSE file in the project root for license information.
 
-package chunk
+package util
 
 func ChunkSlice(a []string, chunkSize int) [][]string {
 	if len(a) == 0 || chunkSize <= 0 {

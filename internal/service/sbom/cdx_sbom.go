@@ -6,8 +6,8 @@ package ssbom
 
 import (
 	"errors"
+	"ex-sbom/util"
 	"ex-sbom/util/file"
-	"ex-sbom/util/unique"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -59,7 +59,7 @@ func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
 		}
 	}
 
-	distinct := unique.StringSlice(affecteds)
+	distinct := util.StringSlice(affecteds)
 
 	for _, compName := range distinct {
 		if _, ok := SBOMs[name]; !ok {
@@ -96,7 +96,7 @@ func getCdxComponents(input *[]cdx.Component) []string {
 		}
 	}
 
-	return unique.StringSlice(components)
+	return util.StringSlice(components)
 }
 
 func getCdxBomRef(input *[]cdx.Component) []string {
@@ -110,7 +110,7 @@ func getCdxBomRef(input *[]cdx.Component) []string {
 		}
 	}
 
-	return unique.StringSlice(components)
+	return util.StringSlice(components)
 }
 
 func getCdxBomRefToName(input *[]cdx.Component) map[string]string {

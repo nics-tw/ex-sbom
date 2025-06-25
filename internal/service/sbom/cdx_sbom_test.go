@@ -444,7 +444,7 @@ func TestGetCdxBomRef(t *testing.T) {
 					Name:   "component-c",
 				},
 			},
-			expected: []string{"ref-1", "ref-2"}, // unique.StringSlice should deduplicate
+			expected: []string{"ref-1", "ref-2"}, // util.StringSlice should deduplicate
 		},
 		{
 			name: "complex mix of valid, empty, and duplicate BOMRefs",

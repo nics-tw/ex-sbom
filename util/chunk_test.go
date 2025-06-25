@@ -4,7 +4,7 @@
 
 //go:build unit
 
-package chunk
+package util
 
 import (
 	"testing"

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License. See LICENSE file in the project root for license information.
 
-package unique
+package util
 
 func StringSlice(input []string) []string {
 	unique := make(map[string]struct{})

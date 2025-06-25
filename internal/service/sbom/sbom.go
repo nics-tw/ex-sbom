@@ -5,7 +5,7 @@
 package ssbom
 
 import (
-	"ex-sbom/util/unique"
+	"ex-sbom/util"
 	"fmt"
 	"slices"
 	"sort"
@@ -422,7 +422,7 @@ func getAffecteds(name string, ReverseDependency map[string][]string) []string {
 	}
 
 	traverse(name)
-	return unique.StringSlice(affected)
+	return util.StringSlice(affected)
 }
 
 func parseVersion(v string) version {

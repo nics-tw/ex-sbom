@@ -6,8 +6,8 @@ package ssbom
 
 import (
 	"errors"
+	"ex-sbom/util"
 	"ex-sbom/util/file"
-	"ex-sbom/util/unique"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -68,7 +68,7 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 		}
 	}
 
-	distinct := unique.StringSlice(affecteds)
+	distinct := util.StringSlice(affecteds)
 
 	for _, compName := range distinct {
 		if _, ok := SBOMs[name]; !ok {
@@ -197,7 +197,7 @@ func getSpdxComponents(input spdx.Document) []string {
 
 	// Currently there's some bugs that will result in duplicated package information existing at the same time for some SBOM scanning tool
 	// ref: https://github.com/aquasecurity/trivy/issues/7824
-	return unique.StringSlice(components)
+	return util.StringSlice(components)
 }
 
 func getSpdxIdentifierToName(input spdx.Document) map[string]string {

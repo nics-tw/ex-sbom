@@ -4,7 +4,7 @@
 
 //go:build unit
 
-package unique
+package util
 
 import (
 	"testing"
