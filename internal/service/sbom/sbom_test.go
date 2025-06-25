@@ -10,9 +10,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/ossf/osv-schema/bindings/go/osvschema"
 	"github.com/google/osv-scanner/v2/pkg/models"
+	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFindNearestVersions(t *testing.T) {
@@ -413,208 +413,208 @@ func TestGetAffecteds(t *testing.T) {
 }
 
 func TestGetReverseDep(t *testing.T) {
-    tests := []struct {
-        name       string
-        dependency map[string][]string
-        expected   map[string][]string
-    }{
-        {
-            name:       "empty dependency map",
-            dependency: map[string][]string{},
-            expected:   map[string][]string{},
-        },
-        {
-            name: "simple dependency map",
-            dependency: map[string][]string{
-                "A": {"B", "C"},
-            },
-            expected: map[string][]string{
-                "B": {"A"},
-                "C": {"A"},
-            },
-        },
-        {
-            name: "complex dependency map",
-            dependency: map[string][]string{
-                "A": {"B", "C"},
-                "B": {"D"},
-                "E": {"C", "F"},
-            },
-            expected: map[string][]string{
-                "B": {"A"},
-                "C": {"A", "E"},
-                "D": {"B"},
-                "F": {"E"},
-            },
-        },
-        {
-            name: "component with multiple dependents",
-            dependency: map[string][]string{
-                "app1": {"lib1"},
-                "app2": {"lib1"},
-                "app3": {"lib1"},
-            },
-            expected: map[string][]string{
-                "lib1": {"app1", "app2", "app3"},
-            },
-        },
-    }
+	tests := []struct {
+		name       string
+		dependency map[string][]string
+		expected   map[string][]string
+	}{
+		{
+			name:       "empty dependency map",
+			dependency: map[string][]string{},
+			expected:   map[string][]string{},
+		},
+		{
+			name: "simple dependency map",
+			dependency: map[string][]string{
+				"A": {"B", "C"},
+			},
+			expected: map[string][]string{
+				"B": {"A"},
+				"C": {"A"},
+			},
+		},
+		{
+			name: "complex dependency map",
+			dependency: map[string][]string{
+				"A": {"B", "C"},
+				"B": {"D"},
+				"E": {"C", "F"},
+			},
+			expected: map[string][]string{
+				"B": {"A"},
+				"C": {"A", "E"},
+				"D": {"B"},
+				"F": {"E"},
+			},
+		},
+		{
+			name: "component with multiple dependents",
+			dependency: map[string][]string{
+				"app1": {"lib1"},
+				"app2": {"lib1"},
+				"app3": {"lib1"},
+			},
+			expected: map[string][]string{
+				"lib1": {"app1", "app2", "app3"},
+			},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getReverseDep(tt.dependency)
-            
-            // Check maps have same number of keys
-            assert.Equal(t, len(tt.expected), len(result))
-            
-            // For each key, check values
-            for k, expectedSlice := range tt.expected {
-                resultSlice, ok := result[k]
-                assert.True(t, ok, "Expected key %s not found in result", k)
-                assert.ElementsMatch(t, expectedSlice, resultSlice, "Values for key %s don't match", k)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getReverseDep(tt.dependency)
+
+			// Check maps have same number of keys
+			assert.Equal(t, len(tt.expected), len(result))
+
+			// For each key, check values
+			for k, expectedSlice := range tt.expected {
+				resultSlice, ok := result[k]
+				assert.True(t, ok, "Expected key %s not found in result", k)
+				assert.ElementsMatch(t, expectedSlice, resultSlice, "Values for key %s don't match", k)
+			}
+		})
+	}
 }
 
 func TestGetAllFixVersions(t *testing.T) {
-    tests := []struct {
-        name     string
-        vuln     osvschema.Vulnerability
-        expected []string
-    }{
-        {
-            name:     "empty vulnerability",
-            vuln:     osvschema.Vulnerability{},
-            expected: []string{},
-        },
-        {
-            name: "single fixed version",
-            vuln: osvschema.Vulnerability{
-                Affected: []osvschema.Affected{
-                    {
-                        Ranges: []osvschema.Range{
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "1.2.3"},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            expected: []string{"1.2.3"},
-        },
-        {
-            name: "multiple fixed versions",
-            vuln: osvschema.Vulnerability{
-                Affected: []osvschema.Affected{
-                    {
-                        Ranges: []osvschema.Range{
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "1.2.3"},
-                                    {Fixed: "2.0.0"},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            expected: []string{"1.2.3", "2.0.0"},
-        },
-        {
-            name: "duplicate fixed versions",
-            vuln: osvschema.Vulnerability{
-                Affected: []osvschema.Affected{
-                    {
-                        Ranges: []osvschema.Range{
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "1.2.3"},
-                                    {Fixed: "1.2.3"}, // Duplicate
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            expected: []string{"1.2.3"}, // Should only appear once
-        },
-        {
-            name: "multiple affected packages with different fixed versions",
-            vuln: osvschema.Vulnerability{
-                Affected: []osvschema.Affected{
-                    {
-                        Ranges: []osvschema.Range{
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "1.2.3"},
-                                },
-                            },
-                        },
-                    },
-                    {
-                        Ranges: []osvschema.Range{
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "4.5.6"},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            expected: []string{"1.2.3", "4.5.6"},
-        },
-        {
-            name: "complex nested structure",
-            vuln: osvschema.Vulnerability{
-                Affected: []osvschema.Affected{
-                    {
-                        Ranges: []osvschema.Range{
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "1.2.3"},
-                                },
-                            },
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "2.3.4"},
-                                    {Fixed: ""},   // Empty fixed version
-                                },
-                            },
-                        },
-                    },
-                    {
-                        Ranges: []osvschema.Range{
-                            {
-                                Events: []osvschema.Event{
-                                    {Fixed: "3.4.5"},
-                                    {Fixed: "1.2.3"}, // Duplicate across packages
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            expected: []string{"1.2.3", "2.3.4", "3.4.5"},
-        },
-    }
+	tests := []struct {
+		name     string
+		vuln     osvschema.Vulnerability
+		expected []string
+	}{
+		{
+			name:     "empty vulnerability",
+			vuln:     osvschema.Vulnerability{},
+			expected: []string{},
+		},
+		{
+			name: "single fixed version",
+			vuln: osvschema.Vulnerability{
+				Affected: []osvschema.Affected{
+					{
+						Ranges: []osvschema.Range{
+							{
+								Events: []osvschema.Event{
+									{Fixed: "1.2.3"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"1.2.3"},
+		},
+		{
+			name: "multiple fixed versions",
+			vuln: osvschema.Vulnerability{
+				Affected: []osvschema.Affected{
+					{
+						Ranges: []osvschema.Range{
+							{
+								Events: []osvschema.Event{
+									{Fixed: "1.2.3"},
+									{Fixed: "2.0.0"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"1.2.3", "2.0.0"},
+		},
+		{
+			name: "duplicate fixed versions",
+			vuln: osvschema.Vulnerability{
+				Affected: []osvschema.Affected{
+					{
+						Ranges: []osvschema.Range{
+							{
+								Events: []osvschema.Event{
+									{Fixed: "1.2.3"},
+									{Fixed: "1.2.3"}, // Duplicate
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"1.2.3"}, // Should only appear once
+		},
+		{
+			name: "multiple affected packages with different fixed versions",
+			vuln: osvschema.Vulnerability{
+				Affected: []osvschema.Affected{
+					{
+						Ranges: []osvschema.Range{
+							{
+								Events: []osvschema.Event{
+									{Fixed: "1.2.3"},
+								},
+							},
+						},
+					},
+					{
+						Ranges: []osvschema.Range{
+							{
+								Events: []osvschema.Event{
+									{Fixed: "4.5.6"},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"1.2.3", "4.5.6"},
+		},
+		{
+			name: "complex nested structure",
+			vuln: osvschema.Vulnerability{
+				Affected: []osvschema.Affected{
+					{
+						Ranges: []osvschema.Range{
+							{
+								Events: []osvschema.Event{
+									{Fixed: "1.2.3"},
+								},
+							},
+							{
+								Events: []osvschema.Event{
+									{Fixed: "2.3.4"},
+									{Fixed: ""}, // Empty fixed version
+								},
+							},
+						},
+					},
+					{
+						Ranges: []osvschema.Range{
+							{
+								Events: []osvschema.Event{
+									{Fixed: "3.4.5"},
+									{Fixed: "1.2.3"}, // Duplicate across packages
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"1.2.3", "2.3.4", "3.4.5"},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getAllFixVersions(tt.vuln)
-            
-            // Sort both slices for consistent comparison
-            sort.Strings(result)
-            sort.Strings(tt.expected)
-            
-            if !assert.ElementsMatch(t, tt.expected, result) {
-                t.Errorf("getAllFixVersions() = %v, want %v", result, tt.expected)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getAllFixVersions(tt.vuln)
+
+			// Sort both slices for consistent comparison
+			sort.Strings(result)
+			sort.Strings(tt.expected)
+
+			if !assert.ElementsMatch(t, tt.expected, result) {
+				t.Errorf("getAllFixVersions() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
 }
 
 func TestGetVersionString(t *testing.T) {
@@ -651,738 +651,741 @@ func TestGetVersionString(t *testing.T) {
 }
 
 func TestGetVulns(t *testing.T) {
-    // Setup test data
-    mockVulnMap := map[string]models.PackageVulns{
-        "package1": {
-            Vulnerabilities: []osvschema.Vulnerability{
-                {
-                    ID:      "CVE-2023-1234",
-                    Summary: "Test vulnerability 1",
-                    Details: "Details for test vulnerability 1",
-                    Affected: []osvschema.Affected{
-                        {
-                            Ranges: []osvschema.Range{
-                                {
-                                    Events: []osvschema.Event{
-                                        {Fixed: "1.2.4"},
-                                        {Fixed: "2.0.0"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            Groups: []models.GroupInfo{
-                {
-                    IDs:         []string{"CVE-2023-1234"},
-                    MaxSeverity: "7.5",
-                },
-            },
-        },
-        "package2": {
-            Vulnerabilities: []osvschema.Vulnerability{
-                {
-                    ID:      "CVE-2023-5678",
-                    Summary: "Test vulnerability 2",
-                    Details: "Details for test vulnerability 2",
-                    Affected: []osvschema.Affected{
-                        {
-                            Ranges: []osvschema.Range{
-                                {
-                                    Events: []osvschema.Event{
-                                        {Fixed: "2.3.0"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-                {
-                    ID:      "CVE-2023-9012",
-                    Summary: "Test vulnerability 3",
-                    Details: "Details for test vulnerability 3",
-                    Affected: []osvschema.Affected{
-                        {
-                            Ranges: []osvschema.Range{
-                                {
-                                    Events: []osvschema.Event{
-                                        {Fixed: "3.0.0"},
-                                        {Fixed: "2.5.0"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-            Groups: []models.GroupInfo{
-                {
-                    IDs:         []string{"CVE-2023-5678"},
-                    MaxSeverity: "4.5",
-                },
-                {
-                    IDs:         []string{"CVE-2023-9012"},
-                    MaxSeverity: "8.0",
-                },
-            },
-        },
-        "package3": {
-            Vulnerabilities: []osvschema.Vulnerability{},
-            Groups:          []models.GroupInfo{},
-        },
-    }
+	// Setup test data
+	mockVulnMap := map[string]models.PackageVulns{
+		"package1": {
+			Vulnerabilities: []osvschema.Vulnerability{
+				{
+					ID:      "CVE-2023-1234",
+					Summary: "Test vulnerability 1",
+					Details: "Details for test vulnerability 1",
+					Aliases: []string{"CVE-2023-1234", "GHSA-1234"},
+					Affected: []osvschema.Affected{
+						{
+							Ranges: []osvschema.Range{
+								{
+									Events: []osvschema.Event{
+										{Fixed: "1.2.4"},
+										{Fixed: "2.0.0"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			Groups: []models.GroupInfo{
+				{
+					IDs:         []string{"CVE-2023-1234"},
+					MaxSeverity: "7.5",
+				},
+			},
+		},
+		"package2": {
+			Vulnerabilities: []osvschema.Vulnerability{
+				{
+					ID:      "CVE-2023-5678",
+					Summary: "Test vulnerability 2",
+					Details: "Details for test vulnerability 2",
+					Aliases: []string{"CVE-2023-5678", "GHSA-5678"},
+					Affected: []osvschema.Affected{
+						{
+							Ranges: []osvschema.Range{
+								{
+									Events: []osvschema.Event{
+										{Fixed: "2.3.0"},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					ID:      "CVE-2023-9012",
+					Summary: "Test vulnerability 3",
+					Details: "Details for test vulnerability 3",
+					Aliases: []string{"CVE-2023-9012", "GHSA-9012"},
+					Affected: []osvschema.Affected{
+						{
+							Ranges: []osvschema.Range{
+								{
+									Events: []osvschema.Event{
+										{Fixed: "3.0.0"},
+										{Fixed: "2.5.0"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			Groups: []models.GroupInfo{
+				{
+					IDs:         []string{"CVE-2023-5678"},
+					MaxSeverity: "4.5",
+				},
+				{
+					IDs:         []string{"CVE-2023-9012"},
+					MaxSeverity: "8.0",
+				},
+			},
+		},
+		"package3": {
+			Vulnerabilities: []osvschema.Vulnerability{},
+			Groups:          []models.GroupInfo{},
+		},
+	}
 
-    tests := []struct {
-        name          string
-        packageName   string
-        packageVer    string
-        expectedCount int
-        checkDetails  bool
-    }{
-        {
-            name:          "package with one vulnerability",
-            packageName:   "package1",
-            packageVer:    "1.2.3",
-            expectedCount: 1,
-            checkDetails:  true,
-        },
-        {
-            name:          "package with multiple vulnerabilities",
-            packageName:   "package2",
-            packageVer:    "2.0.0",
-            expectedCount: 2,
-            checkDetails:  true,
-        },
-        {
-            name:          "package with no vulnerabilities",
-            packageName:   "package3",
-            packageVer:    "1.0.0",
-            expectedCount: 0,
-            checkDetails:  false,
-        },
-        {
-            name:          "package not in vulnerability map",
-            packageName:   "nonexistent",
-            packageVer:    "1.0.0",
-            expectedCount: 0,
-            checkDetails:  false,
-        },
-    }
+	tests := []struct {
+		name          string
+		packageName   string
+		packageVer    string
+		expectedCount int
+		checkDetails  bool
+	}{
+		{
+			name:          "package with one vulnerability",
+			packageName:   "package1",
+			packageVer:    "1.2.3",
+			expectedCount: 1,
+			checkDetails:  true,
+		},
+		{
+			name:          "package with multiple vulnerabilities",
+			packageName:   "package2",
+			packageVer:    "2.0.0",
+			expectedCount: 2,
+			checkDetails:  true,
+		},
+		{
+			name:          "package with no vulnerabilities",
+			packageName:   "package3",
+			packageVer:    "1.0.0",
+			expectedCount: 0,
+			checkDetails:  false,
+		},
+		{
+			name:          "package not in vulnerability map",
+			packageName:   "nonexistent",
+			packageVer:    "1.0.0",
+			expectedCount: 0,
+			checkDetails:  false,
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getVulns(tt.packageName, tt.packageVer, mockVulnMap)
-            
-            // Check the length of result
-            assert.Equal(t, tt.expectedCount, len(result))
-            
-            if tt.checkDetails {
-                // Check if the result contains the expected vulnerabilities
-                switch tt.packageName {
-                case "package1":
-                    assert.Equal(t, "CVE-2023-1234", result[0].ID)
-                    assert.Equal(t, "Test vulnerability 1", result[0].Summary)
-                    assert.Equal(t, "Details for test vulnerability 1", result[0].Details)
-                    assert.Equal(t, "7.5", result[0].CVSSScore)
-                    assert.Contains(t, result[0].FixVersions, "1.2.4")
-                    assert.Contains(t, result[0].FixVersions, "2.0.0")
-                    
-                case "package2":
-                    // Check first vulnerability
-                    assert.Equal(t, "CVE-2023-5678", result[0].ID)
-                    assert.Equal(t, "4.5", result[0].CVSSScore)
-                    assert.Contains(t, result[0].FixVersions, "2.3.0")
-                    
-                    // Check second vulnerability
-                    assert.Equal(t, "CVE-2023-9012", result[1].ID)
-                    assert.Equal(t, "8.0", result[1].CVSSScore)
-                    assert.Contains(t, result[1].FixVersions, "3.0.0")
-                    assert.Contains(t, result[1].FixVersions, "2.5.0")
-                    
-                    // Check suggestion logic
-                    if tt.packageVer == "2.0.0" {
-                        assert.Equal(t, "2.3.0", result[0].SuggestFixVersion)
-                        assert.Equal(t, "2.5.0, 3.0.0", result[1].SuggestFixVersion)
-                    }
-                }
-            } else if tt.expectedCount == 0 {
-                // For packages with no vulns or nonexistent packages
-                assert.Nil(t, result)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getVulns(tt.packageName, tt.packageVer, mockVulnMap)
+
+			// Check the length of result
+			assert.Equal(t, tt.expectedCount, len(result))
+
+			if tt.checkDetails {
+				// Check if the result contains the expected vulnerabilities
+				switch tt.packageName {
+				case "package1":
+					assert.Equal(t, "CVE-2023-1234", result[0].ID)
+					assert.Equal(t, "Test vulnerability 1", result[0].Summary)
+					assert.Equal(t, "Details for test vulnerability 1", result[0].Details)
+					assert.Equal(t, "7.5", result[0].CVSSScore)
+					assert.Contains(t, result[0].FixVersions, "1.2.4")
+					assert.Contains(t, result[0].FixVersions, "2.0.0")
+
+				case "package2":
+					// Check first vulnerability
+					assert.Equal(t, "CVE-2023-5678", result[0].ID)
+					assert.Equal(t, "4.5", result[0].CVSSScore)
+					assert.Contains(t, result[0].FixVersions, "2.3.0")
+
+					// Check second vulnerability
+					assert.Equal(t, "CVE-2023-9012", result[1].ID)
+					assert.Equal(t, "8.0", result[1].CVSSScore)
+					assert.Contains(t, result[1].FixVersions, "3.0.0")
+					assert.Contains(t, result[1].FixVersions, "2.5.0")
+
+					// Check suggestion logic
+					if tt.packageVer == "2.0.0" {
+						assert.Equal(t, "2.3.0", result[0].SuggestFixVersion)
+						assert.Equal(t, "2.5.0, 3.0.0", result[1].SuggestFixVersion)
+					}
+				}
+			} else if tt.expectedCount == 0 {
+				// For packages with no vulns or nonexistent packages
+				assert.Nil(t, result)
+			}
+		})
+	}
 }
 
 func TestGetVulnNumber(t *testing.T) {
-    // Setup test data
-    mockVulnMap := map[string]models.PackageVulns{
-        "package1": {
-            Vulnerabilities: []osvschema.Vulnerability{
-                {ID: "CVE-2023-1111"},
-                {ID: "CVE-2023-2222"},
-                {ID: "CVE-2023-3333"},
-            },
-        },
-        "package2": {
-            Vulnerabilities: []osvschema.Vulnerability{
-                {ID: "CVE-2023-4444"},
-            },
-        },
-        "package3": {
-            Vulnerabilities: []osvschema.Vulnerability{},
-        },
-    }
+	// Setup test data
+	mockVulnMap := map[string]models.PackageVulns{
+		"package1": {
+			Vulnerabilities: []osvschema.Vulnerability{
+				{ID: "CVE-2023-1111"},
+				{ID: "CVE-2023-2222"},
+				{ID: "CVE-2023-3333"},
+			},
+		},
+		"package2": {
+			Vulnerabilities: []osvschema.Vulnerability{
+				{ID: "CVE-2023-4444"},
+			},
+		},
+		"package3": {
+			Vulnerabilities: []osvschema.Vulnerability{},
+		},
+	}
 
-    tests := []struct {
-        name         string
-        packageName  string
-        vulnMap      map[string]models.PackageVulns
-        expectedVuln int
-    }{
-        {
-            name:         "package with multiple vulnerabilities",
-            packageName:  "package1",
-            vulnMap:      mockVulnMap,
-            expectedVuln: 3,
-        },
-        {
-            name:         "package with single vulnerability",
-            packageName:  "package2",
-            vulnMap:      mockVulnMap,
-            expectedVuln: 1,
-        },
-        {
-            name:         "package with no vulnerabilities",
-            packageName:  "package3",
-            vulnMap:      mockVulnMap,
-            expectedVuln: 0,
-        },
-        {
-            name:         "package not in vulnerability map",
-            packageName:  "nonexistent",
-            vulnMap:      mockVulnMap,
-            expectedVuln: 0,
-        },
-        {
-            name:         "empty vulnerability map",
-            packageName:  "package1",
-            vulnMap:      map[string]models.PackageVulns{},
-            expectedVuln: 0,
-        },
-    }
+	tests := []struct {
+		name         string
+		packageName  string
+		vulnMap      map[string]models.PackageVulns
+		expectedVuln int
+	}{
+		{
+			name:         "package with multiple vulnerabilities",
+			packageName:  "package1",
+			vulnMap:      mockVulnMap,
+			expectedVuln: 3,
+		},
+		{
+			name:         "package with single vulnerability",
+			packageName:  "package2",
+			vulnMap:      mockVulnMap,
+			expectedVuln: 1,
+		},
+		{
+			name:         "package with no vulnerabilities",
+			packageName:  "package3",
+			vulnMap:      mockVulnMap,
+			expectedVuln: 0,
+		},
+		{
+			name:         "package not in vulnerability map",
+			packageName:  "nonexistent",
+			vulnMap:      mockVulnMap,
+			expectedVuln: 0,
+		},
+		{
+			name:         "empty vulnerability map",
+			packageName:  "package1",
+			vulnMap:      map[string]models.PackageVulns{},
+			expectedVuln: 0,
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getVulnNumber(tt.packageName, tt.vulnMap)
-            if !assert.Equal(t, tt.expectedVuln, result) {
-                t.Errorf("getVulnNumber(%s, vulnMap) = %d, want %d", 
-                    tt.packageName, result, tt.expectedVuln)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getVulnNumber(tt.packageName, tt.vulnMap)
+			if !assert.Equal(t, tt.expectedVuln, result) {
+				t.Errorf("getVulnNumber(%s, vulnMap) = %d, want %d",
+					tt.packageName, result, tt.expectedVuln)
+			}
+		})
+	}
 }
 
 func TestGetCVSS(t *testing.T) {
-    tests := []struct {
-        name      string
-        id        string
-        groups    []models.GroupInfo
-        expected  string
-    }{
-        {
-            name: "ID found in single group",
-            id:   "CVE-2023-1234",
-            groups: []models.GroupInfo{
-                {
-                    IDs:         []string{"CVE-2023-1234"},
-                    MaxSeverity: "7.5",
-                },
-            },
-            expected: "7.5",
-        },
-        {
-            name: "ID found in multiple groups",
-            id:   "CVE-2023-1234",
-            groups: []models.GroupInfo{
-                {
-                    IDs:         []string{"CVE-2023-5678"},
-                    MaxSeverity: "4.5",
-                },
-                {
-                    IDs:         []string{"CVE-2023-1234", "CVE-2023-9012"},
-                    MaxSeverity: "8.0",
-                },
-            },
-            expected: "8.0",
-        },
-        {
-            name: "ID not found in any group",
-            id:   "CVE-2023-9999",
-            groups: []models.GroupInfo{
-                {
-                    IDs:         []string{"CVE-2023-1234"},
-                    MaxSeverity: "7.5",
-                },
-                {
-                    IDs:         []string{"CVE-2023-5678"},
-                    MaxSeverity: "4.5",
-                },
-            },
-            expected: "",
-        },
-        {
-            name:      "Empty groups array",
-            id:        "CVE-2023-1234",
-            groups:    []models.GroupInfo{},
-            expected:  "",
-        },
-        {
-            name: "Empty IDs array",
-            id:   "CVE-2023-1234",
-            groups: []models.GroupInfo{
-                {
-                    IDs:         []string{},
-                    MaxSeverity: "7.5",
-                },
-            },
-            expected: "",
-        },
-        {
-            name: "Group with nil IDs",
-            id:   "CVE-2023-1234",
-            groups: []models.GroupInfo{
-                {
-                    IDs:         nil,
-                    MaxSeverity: "7.5",
-                },
-            },
-            expected: "",
-        },
-    }
+	tests := []struct {
+		name     string
+		id       string
+		groups   []models.GroupInfo
+		expected string
+	}{
+		{
+			name: "ID found in single group",
+			id:   "CVE-2023-1234",
+			groups: []models.GroupInfo{
+				{
+					IDs:         []string{"CVE-2023-1234"},
+					MaxSeverity: "7.5",
+				},
+			},
+			expected: "7.5",
+		},
+		{
+			name: "ID found in multiple groups",
+			id:   "CVE-2023-1234",
+			groups: []models.GroupInfo{
+				{
+					IDs:         []string{"CVE-2023-5678"},
+					MaxSeverity: "4.5",
+				},
+				{
+					IDs:         []string{"CVE-2023-1234", "CVE-2023-9012"},
+					MaxSeverity: "8.0",
+				},
+			},
+			expected: "8.0",
+		},
+		{
+			name: "ID not found in any group",
+			id:   "CVE-2023-9999",
+			groups: []models.GroupInfo{
+				{
+					IDs:         []string{"CVE-2023-1234"},
+					MaxSeverity: "7.5",
+				},
+				{
+					IDs:         []string{"CVE-2023-5678"},
+					MaxSeverity: "4.5",
+				},
+			},
+			expected: "",
+		},
+		{
+			name:     "Empty groups array",
+			id:       "CVE-2023-1234",
+			groups:   []models.GroupInfo{},
+			expected: "",
+		},
+		{
+			name: "Empty IDs array",
+			id:   "CVE-2023-1234",
+			groups: []models.GroupInfo{
+				{
+					IDs:         []string{},
+					MaxSeverity: "7.5",
+				},
+			},
+			expected: "",
+		},
+		{
+			name: "Group with nil IDs",
+			id:   "CVE-2023-1234",
+			groups: []models.GroupInfo{
+				{
+					IDs:         nil,
+					MaxSeverity: "7.5",
+				},
+			},
+			expected: "",
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getCVSS(tt.id, tt.groups)
-            if result != tt.expected {
-                t.Errorf("getCVSS(%s, groups) = %s, want %s", 
-                    tt.id, result, tt.expected)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getCVSS(tt.id, tt.groups)
+			if result != tt.expected {
+				t.Errorf("getCVSS(%s, groups) = %s, want %s",
+					tt.id, result, tt.expected)
+			}
+		})
+	}
 }
 
 func TestGetSBOM(t *testing.T) {
-    // Save original value to restore later
-    originalSBOMs := SBOMs
-    defer func() {
-        SBOMs = originalSBOMs
-    }()
-    
-    // Setup test data
-    SBOMs = map[string]FormattedSBOM{
-        "existing": {
-            Components: []string{"comp1", "comp2"},
-            Dependency: map[string][]string{
-                "comp1": {"comp2"},
-            },
-            ComponentInfo: map[string]Component{
-                "comp1": {Name: "comp1", Version: "1.0"},
-            },
-        },
-    }
-    
-    tests := []struct {
-        name          string
-        sbomName      string
-        expectError   bool
-        validateSBOM  bool
-        expectedComps []string
-    }{
-        {
-            name:          "existing SBOM",
-            sbomName:      "existing",
-            expectError:   false,
-            validateSBOM:  true,
-            expectedComps: []string{"comp1", "comp2"},
-        },
-        {
-            name:         "non-existent SBOM",
-            sbomName:     "nonexistent",
-            expectError:  true,
-            validateSBOM: false,
-        },
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result, err := GetSBOM(tt.sbomName)
-            
-            if tt.expectError {
-                assert.Error(t, err)
-                assert.Contains(t, err.Error(), "SBOM not found")
-                assert.Equal(t, FormattedSBOM{}, result)
-            } else {
-                assert.NoError(t, err)
-                
-                if tt.validateSBOM {
-                    assert.Equal(t, tt.expectedComps, result.Components)
-                    assert.Contains(t, result.Dependency, "comp1")
-                    assert.Contains(t, result.ComponentInfo, "comp1")
-                    assert.Equal(t, "1.0", result.ComponentInfo["comp1"].Version)
-                }
-            }
-        })
-    }
+	// Save original value to restore later
+	originalSBOMs := SBOMs
+	defer func() {
+		SBOMs = originalSBOMs
+	}()
+
+	// Setup test data
+	SBOMs = map[string]FormattedSBOM{
+		"existing": {
+			Components: []string{"comp1", "comp2"},
+			Dependency: map[string][]string{
+				"comp1": {"comp2"},
+			},
+			ComponentInfo: map[string]Component{
+				"comp1": {Name: "comp1", Version: "1.0"},
+			},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		sbomName      string
+		expectError   bool
+		validateSBOM  bool
+		expectedComps []string
+	}{
+		{
+			name:          "existing SBOM",
+			sbomName:      "existing",
+			expectError:   false,
+			validateSBOM:  true,
+			expectedComps: []string{"comp1", "comp2"},
+		},
+		{
+			name:         "non-existent SBOM",
+			sbomName:     "nonexistent",
+			expectError:  true,
+			validateSBOM: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := GetSBOM(tt.sbomName)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "SBOM not found")
+				assert.Equal(t, FormattedSBOM{}, result)
+			} else {
+				assert.NoError(t, err)
+
+				if tt.validateSBOM {
+					assert.Equal(t, tt.expectedComps, result.Components)
+					assert.Contains(t, result.Dependency, "comp1")
+					assert.Contains(t, result.ComponentInfo, "comp1")
+					assert.Equal(t, "1.0", result.ComponentInfo["comp1"].Version)
+				}
+			}
+		})
+	}
 }
 
 func TestGetComponentToLevel(t *testing.T) {
-    tests := []struct {
-        name            string
-        dependencyLevel map[int][]string
-        expected        map[string]int
-    }{
-        {
-            name:            "empty dependency map",
-            dependencyLevel: map[int][]string{},
-            expected:        map[string]int{},
-        },
-        {
-            name: "single level",
-            dependencyLevel: map[int][]string{
-                1: {"comp1", "comp2", "comp3"},
-            },
-            expected: map[string]int{
-                "comp1": 1,
-                "comp2": 1,
-                "comp3": 1,
-            },
-        },
-        {
-            name: "multiple levels",
-            dependencyLevel: map[int][]string{
-                1: {"comp1", "comp2"},
-                2: {"comp3", "comp4"},
-                3: {"comp5"},
-            },
-            expected: map[string]int{
-                "comp1": 1,
-                "comp2": 1,
-                "comp3": 2,
-                "comp4": 2,
-                "comp5": 3,
-            },
-        },
-        {
-            name: "zero level components",
-            dependencyLevel: map[int][]string{
-                0: {"root1", "root2"},
-                1: {"lib1", "lib2"},
-                2: {"util1"},
-            },
-            expected: map[string]int{
-                "root1": 0,
-                "root2": 0,
-                "lib1":  1,
-                "lib2":  1,
-                "util1": 2,
-            },
-        },
-    }
+	tests := []struct {
+		name            string
+		dependencyLevel map[int][]string
+		expected        map[string]int
+	}{
+		{
+			name:            "empty dependency map",
+			dependencyLevel: map[int][]string{},
+			expected:        map[string]int{},
+		},
+		{
+			name: "single level",
+			dependencyLevel: map[int][]string{
+				1: {"comp1", "comp2", "comp3"},
+			},
+			expected: map[string]int{
+				"comp1": 1,
+				"comp2": 1,
+				"comp3": 1,
+			},
+		},
+		{
+			name: "multiple levels",
+			dependencyLevel: map[int][]string{
+				1: {"comp1", "comp2"},
+				2: {"comp3", "comp4"},
+				3: {"comp5"},
+			},
+			expected: map[string]int{
+				"comp1": 1,
+				"comp2": 1,
+				"comp3": 2,
+				"comp4": 2,
+				"comp5": 3,
+			},
+		},
+		{
+			name: "zero level components",
+			dependencyLevel: map[int][]string{
+				0: {"root1", "root2"},
+				1: {"lib1", "lib2"},
+				2: {"util1"},
+			},
+			expected: map[string]int{
+				"root1": 0,
+				"root2": 0,
+				"lib1":  1,
+				"lib2":  1,
+				"util1": 2,
+			},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := getComponentToLevel(tt.dependencyLevel)
-            
-            // Check maps have same number of keys
-            assert.Equal(t, len(tt.expected), len(result), "Maps have different sizes")
-            
-            // For each key, check if the level matches
-            for comp, expectedLevel := range tt.expected {
-                resultLevel, ok := result[comp]
-                assert.True(t, ok, "Component %s not found in result", comp)
-                assert.Equal(t, expectedLevel, resultLevel, "Component %s has level %d, want %d", 
-                    comp, resultLevel, expectedLevel)
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getComponentToLevel(tt.dependencyLevel)
+
+			// Check maps have same number of keys
+			assert.Equal(t, len(tt.expected), len(result), "Maps have different sizes")
+
+			// For each key, check if the level matches
+			for comp, expectedLevel := range tt.expected {
+				resultLevel, ok := result[comp]
+				assert.True(t, ok, "Component %s not found in result", comp)
+				assert.Equal(t, expectedLevel, resultLevel, "Component %s has level %d, want %d",
+					comp, resultLevel, expectedLevel)
+			}
+		})
+	}
 }
 
 func TestGetVulnComponents(t *testing.T) {
-    tests := []struct {
-        name           string
-        componentInfo  map[string]Component
-        expected       []string
-    }{
-        {
-            name: "no vulnerable components",
-            componentInfo: map[string]Component{
-                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 0},
-                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
-            },
-            expected: []string{},
-        },
-        {
-            name: "some vulnerable components",
-            componentInfo: map[string]Component{
-                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 2},
-                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
-                "comp3": {Name: "comp3", Version: "1.2", VulnNumber: 1},
-            },
-            expected: []string{"comp1", "comp3"},
-        },
-        {
-            name: "all vulnerable components",
-            componentInfo: map[string]Component{
-                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 1},
-                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 3},
-            },
-            expected: []string{"comp1", "comp2"},
-        },
-        {
-            name:          "empty component info",
-            componentInfo: map[string]Component{},
-            expected:      []string{},
-        },
-        {
-            name: "components with different vuln counts",
-            componentInfo: map[string]Component{
-                "comp1": {Name: "comp1", Version: "1.0", VulnNumber: 5},
-                "comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
-                "comp3": {Name: "comp3", Version: "1.2", VulnNumber: 10},
-            },
-            expected: []string{"comp1", "comp3"},
-        },
-    }
+	tests := []struct {
+		name          string
+		componentInfo map[string]Component
+		expected      []string
+	}{
+		{
+			name: "no vulnerable components",
+			componentInfo: map[string]Component{
+				"comp1": {Name: "comp1", Version: "1.0", VulnNumber: 0},
+				"comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
+			},
+			expected: []string{},
+		},
+		{
+			name: "some vulnerable components",
+			componentInfo: map[string]Component{
+				"comp1": {Name: "comp1", Version: "1.0", VulnNumber: 2},
+				"comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
+				"comp3": {Name: "comp3", Version: "1.2", VulnNumber: 1},
+			},
+			expected: []string{"comp1", "comp3"},
+		},
+		{
+			name: "all vulnerable components",
+			componentInfo: map[string]Component{
+				"comp1": {Name: "comp1", Version: "1.0", VulnNumber: 1},
+				"comp2": {Name: "comp2", Version: "1.1", VulnNumber: 3},
+			},
+			expected: []string{"comp1", "comp2"},
+		},
+		{
+			name:          "empty component info",
+			componentInfo: map[string]Component{},
+			expected:      []string{},
+		},
+		{
+			name: "components with different vuln counts",
+			componentInfo: map[string]Component{
+				"comp1": {Name: "comp1", Version: "1.0", VulnNumber: 5},
+				"comp2": {Name: "comp2", Version: "1.1", VulnNumber: 0},
+				"comp3": {Name: "comp3", Version: "1.2", VulnNumber: 10},
+			},
+			expected: []string{"comp1", "comp3"},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            sbom := FormattedSBOM{
-                ComponentInfo: tt.componentInfo,
-            }
-            
-            result := sbom.GetVulnComponents()
-            
-            // Sort both slices for deterministic comparison
-            sort.Strings(result)
-            sort.Strings(tt.expected)
-            
-            assert.ElementsMatch(t, tt.expected, result, 
-                "GetVulnComponents() returned %v, want %v", result, tt.expected)
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sbom := FormattedSBOM{
+				ComponentInfo: tt.componentInfo,
+			}
+
+			result := sbom.GetVulnComponents()
+
+			// Sort both slices for deterministic comparison
+			sort.Strings(result)
+			sort.Strings(tt.expected)
+
+			assert.ElementsMatch(t, tt.expected, result,
+				"GetVulnComponents() returned %v, want %v", result, tt.expected)
+		})
+	}
 }
 
 func TestDeleteSBOM(t *testing.T) {
-    // Save original value to restore later
-    originalSBOMs := SBOMs
-    defer func() {
-        SBOMs = originalSBOMs
-    }()
-    
-    // Setup test data
-    SBOMs = map[string]FormattedSBOM{
-        "sbom1": {
-            Components: []string{"comp1", "comp2"},
-        },
-        "sbom2": {
-            Components: []string{"comp3", "comp4"},
-        },
-    }
-    
-    tests := []struct {
-        name          string
-        sbomToDelete  string
-        checkExisting string
-        shouldExist   bool
-    }{
-        {
-            name:          "delete existing SBOM",
-            sbomToDelete:  "sbom1",
-            checkExisting: "sbom1",
-            shouldExist:   false,
-        },
-        {
-            name:          "delete non-existent SBOM",
-            sbomToDelete:  "nonexistent",
-            checkExisting: "sbom2",
-            shouldExist:   true, // other SBOMs should remain
-        },
-    }
-    
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            // Call the function we're testing
-            DeleteSBOM(tt.sbomToDelete)
-            
-            // Check if the SBOM was deleted
-            _, exists := SBOMs[tt.checkExisting]
-            assert.Equal(t, tt.shouldExist, exists, 
-                "After deletion, SBOM '%s' existence = %v, want %v", 
-                tt.checkExisting, exists, tt.shouldExist)
-        })
-        
-        // Reset test data between tests
-        SBOMs = map[string]FormattedSBOM{
-            "sbom1": {
-                Components: []string{"comp1", "comp2"},
-            },
-            "sbom2": {
-                Components: []string{"comp3", "comp4"},
-            },
-        }
-    }
+	// Save original value to restore later
+	originalSBOMs := SBOMs
+	defer func() {
+		SBOMs = originalSBOMs
+	}()
+
+	// Setup test data
+	SBOMs = map[string]FormattedSBOM{
+		"sbom1": {
+			Components: []string{"comp1", "comp2"},
+		},
+		"sbom2": {
+			Components: []string{"comp3", "comp4"},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		sbomToDelete  string
+		checkExisting string
+		shouldExist   bool
+	}{
+		{
+			name:          "delete existing SBOM",
+			sbomToDelete:  "sbom1",
+			checkExisting: "sbom1",
+			shouldExist:   false,
+		},
+		{
+			name:          "delete non-existent SBOM",
+			sbomToDelete:  "nonexistent",
+			checkExisting: "sbom2",
+			shouldExist:   true, // other SBOMs should remain
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Call the function we're testing
+			DeleteSBOM(tt.sbomToDelete)
+
+			// Check if the SBOM was deleted
+			_, exists := SBOMs[tt.checkExisting]
+			assert.Equal(t, tt.shouldExist, exists,
+				"After deletion, SBOM '%s' existence = %v, want %v",
+				tt.checkExisting, exists, tt.shouldExist)
+		})
+
+		// Reset test data between tests
+		SBOMs = map[string]FormattedSBOM{
+			"sbom1": {
+				Components: []string{"comp1", "comp2"},
+			},
+			"sbom2": {
+				Components: []string{"comp3", "comp4"},
+			},
+		}
+	}
 }
 
 func TestGetVulnDepPaths(t *testing.T) {
-    tests := []struct {
-        name      string
-        startComp string
-        endComps  []string
-        depMap    map[string][]string
-        expected  []VlunDepPath
-    }{
-        {
-            name:      "empty dependency map",
-            startComp: "A",
-            endComps:  []string{"B"},
-            depMap:    map[string][]string{},
-            expected:  []VlunDepPath{},
-        },
-        {
-            name:      "start component not in map",
-            startComp: "nonexistent",
-            endComps:  []string{"B"},
-            depMap: map[string][]string{
-                "A": {"B"},
-                "B": {},
-            },
-            expected: []VlunDepPath{},
-        },
-        {
-            name:      "start and end are same",
-            startComp: "A",
-            endComps:  []string{"A"},
-            depMap: map[string][]string{
-                "A": {"B"},
-                "B": {},
-            },
-            expected: []VlunDepPath{},
-        },
-        {
-            name:      "direct path",
-            startComp: "A",
-            endComps:  []string{"B"},
-            depMap: map[string][]string{
-                "A": {"B"},
-                "B": {},
-            },
-            expected: []VlunDepPath{
-                {
-                    Start: "A",
-                    End:   "B",
-                    Path:  []string{"A", "B"},
-                },
-            },
-        },
-        {
-            name:      "multi-step path",
-            startComp: "A",
-            endComps:  []string{"D"},
-            depMap: map[string][]string{
-                "A": {"B"},
-                "B": {"C"},
-                "C": {"D"},
-                "D": {},
-            },
-            expected: []VlunDepPath{
-                {
-                    Start: "A",
-                    End:   "D",
-                    Path:  []string{"A", "B", "C", "D"},
-                },
-            },
-        },
-        {
-            name:      "no path exists",
-            startComp: "A",
-            endComps:  []string{"X"},
-            depMap: map[string][]string{
-                "A": {"B"},
-                "B": {"C"},
-                "X": {"Y"},
-                "Y": {},
-            },
-            expected: []VlunDepPath{},
-        },
-        {
-            name:      "multiple end components",
-            startComp: "A",
-            endComps:  []string{"C", "D", "X"},
-            depMap: map[string][]string{
-                "A": {"B"},
-                "B": {"C", "D"},
-                "C": {},
-                "D": {},
-                "X": {},
-            },
-            expected: []VlunDepPath{
-                {
-                    Start: "A",
-                    End:   "C",
-                    Path:  []string{"A", "B", "C"},
-                },
-                {
-                    Start: "A",
-                    End:   "D",
-                    Path:  []string{"A", "B", "D"},
-                },
-            },
-        },
-    }
+	tests := []struct {
+		name      string
+		startComp string
+		endComps  []string
+		depMap    map[string][]string
+		expected  []VlunDepPath
+	}{
+		{
+			name:      "empty dependency map",
+			startComp: "A",
+			endComps:  []string{"B"},
+			depMap:    map[string][]string{},
+			expected:  []VlunDepPath{},
+		},
+		{
+			name:      "start component not in map",
+			startComp: "nonexistent",
+			endComps:  []string{"B"},
+			depMap: map[string][]string{
+				"A": {"B"},
+				"B": {},
+			},
+			expected: []VlunDepPath{},
+		},
+		{
+			name:      "start and end are same",
+			startComp: "A",
+			endComps:  []string{"A"},
+			depMap: map[string][]string{
+				"A": {"B"},
+				"B": {},
+			},
+			expected: []VlunDepPath{},
+		},
+		{
+			name:      "direct path",
+			startComp: "A",
+			endComps:  []string{"B"},
+			depMap: map[string][]string{
+				"A": {"B"},
+				"B": {},
+			},
+			expected: []VlunDepPath{
+				{
+					Start: "A",
+					End:   "B",
+					Path:  []string{"A", "B"},
+				},
+			},
+		},
+		{
+			name:      "multi-step path",
+			startComp: "A",
+			endComps:  []string{"D"},
+			depMap: map[string][]string{
+				"A": {"B"},
+				"B": {"C"},
+				"C": {"D"},
+				"D": {},
+			},
+			expected: []VlunDepPath{
+				{
+					Start: "A",
+					End:   "D",
+					Path:  []string{"A", "B", "C", "D"},
+				},
+			},
+		},
+		{
+			name:      "no path exists",
+			startComp: "A",
+			endComps:  []string{"X"},
+			depMap: map[string][]string{
+				"A": {"B"},
+				"B": {"C"},
+				"X": {"Y"},
+				"Y": {},
+			},
+			expected: []VlunDepPath{},
+		},
+		{
+			name:      "multiple end components",
+			startComp: "A",
+			endComps:  []string{"C", "D", "X"},
+			depMap: map[string][]string{
+				"A": {"B"},
+				"B": {"C", "D"},
+				"C": {},
+				"D": {},
+				"X": {},
+			},
+			expected: []VlunDepPath{
+				{
+					Start: "A",
+					End:   "C",
+					Path:  []string{"A", "B", "C"},
+				},
+				{
+					Start: "A",
+					End:   "D",
+					Path:  []string{"A", "B", "D"},
+				},
+			},
+		},
+	}
 
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            result := GetVulnDepPaths(tt.startComp, tt.endComps, tt.depMap)
-            
-            // Check result length
-            assert.Equal(t, len(tt.expected), len(result), 
-                "Expected %d paths, got %d", len(tt.expected), len(result))
-            
-            // For tests expecting empty results
-            if len(tt.expected) == 0 {
-                assert.Empty(t, result)
-                return
-            }
-            
-            // Create a map for easier comparison by path end
-            resultByEnd := make(map[string]VlunDepPath)
-            for _, path := range result {
-                resultByEnd[path.End] = path
-            }
-            
-            // Check each path
-            for _, expectedPath := range tt.expected {
-                actualPath, found := resultByEnd[expectedPath.End]
-                assert.True(t, found, "Expected path from %s to %s not found", 
-                    expectedPath.Start, expectedPath.End)
-                
-                if found {
-                    // Verify path components
-                    assert.Equal(t, expectedPath.Start, actualPath.Start, "Start component mismatch")
-                    assert.Equal(t, expectedPath.End, actualPath.End, "End component mismatch")
-                    assert.Equal(t, len(expectedPath.Path), len(actualPath.Path), "Path length mismatch")
-                    
-                    // Verify path structure
-                    assert.Equal(t, expectedPath.Start, actualPath.Path[0], "Path should start with correct component")
-                    assert.Equal(t, expectedPath.End, actualPath.Path[len(actualPath.Path)-1], "Path should end with correct component")
-                    
-                    // For specific test cases we can validate the exact path
-                    if tt.name != "cyclic dependency" {
-                        assert.Equal(t, expectedPath.Path, actualPath.Path, "Path sequence mismatch")
-                    }
-                }
-            }
-        })
-    }
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetVulnDepPaths(tt.startComp, tt.endComps, tt.depMap)
+
+			// Check result length
+			assert.Equal(t, len(tt.expected), len(result),
+				"Expected %d paths, got %d", len(tt.expected), len(result))
+
+			// For tests expecting empty results
+			if len(tt.expected) == 0 {
+				assert.Empty(t, result)
+				return
+			}
+
+			// Create a map for easier comparison by path end
+			resultByEnd := make(map[string]VlunDepPath)
+			for _, path := range result {
+				resultByEnd[path.End] = path
+			}
+
+			// Check each path
+			for _, expectedPath := range tt.expected {
+				actualPath, found := resultByEnd[expectedPath.End]
+				assert.True(t, found, "Expected path from %s to %s not found",
+					expectedPath.Start, expectedPath.End)
+
+				if found {
+					// Verify path components
+					assert.Equal(t, expectedPath.Start, actualPath.Start, "Start component mismatch")
+					assert.Equal(t, expectedPath.End, actualPath.End, "End component mismatch")
+					assert.Equal(t, len(expectedPath.Path), len(actualPath.Path), "Path length mismatch")
+
+					// Verify path structure
+					assert.Equal(t, expectedPath.Start, actualPath.Path[0], "Path should start with correct component")
+					assert.Equal(t, expectedPath.End, actualPath.Path[len(actualPath.Path)-1], "Path should end with correct component")
+
+					// For specific test cases we can validate the exact path
+					if tt.name != "cyclic dependency" {
+						assert.Equal(t, expectedPath.Path, actualPath.Path, "Path sequence mismatch")
+					}
+				}
+			}
+		})
+	}
 }
