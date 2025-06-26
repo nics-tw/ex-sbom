@@ -38,7 +38,7 @@ func GetByChunk(cves []string) ([]first.EPSS, error) {
 	jobsCh := make(chan []string, len(chunks))
 
 	var wg sync.WaitGroup
-	for i := 0; i < workerCount; i++ {
+	for range workerCount {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
