@@ -244,32 +244,6 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 	return finalResult
 }
 
-func checkIfSkippinpFirstLevel(levelMap map[int][]string) bool {
-	return len(levelMap[0]) == 0
-}
-
-func shiftLevelForward(levelMap map[int][]string) map[int][]string {
-	var newLevelMap = make(map[int][]string)
-
-	for level := 0; level < len(levelMap); level++ {
-		if _, ok := levelMap[level]; !ok {
-			continue
-		}
-
-		if level == 0 {
-			// skip the first level
-			continue
-		}
-
-		if _, ok := newLevelMap[level-1]; !ok {
-			newLevelMap[level-1] = []string{}
-		}
-		newLevelMap[level-1] = append(newLevelMap[level-1], levelMap[level]...)
-	}
-
-	return newLevelMap
-}
-
 func getCdxDep(input *[]cdx.Dependency, refToName map[string]string) map[string][]string {
 	dependency := make(map[string][]string)
 
