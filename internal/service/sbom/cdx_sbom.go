@@ -10,7 +10,6 @@ import (
 	"ex-sbom/util/file"
 	"fmt"
 	"log/slog"
-	"slices"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -128,15 +127,28 @@ func getCdxBomRefToName(input *[]cdx.Component) map[string]string {
 }
 
 func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName map[string]string) map[int][]string {
+	// Create dependency graph and track in-degrees
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
 
-	if sbom.Dependencies != nil && len(*sbom.Dependencies) != 0 {
+	// Initialize all components as potential nodes
+	for _, ref := range allComponents {
+		allNodes[ref] = true
+
+		inDegree[ref] = 0
+	}
+
+	// Build the dependency graph
+	if sbom.Dependencies != nil && len(*sbom.Dependencies) > 0 {
 		for _, d := range *sbom.Dependencies {
-			if d.Dependencies != nil && len(*d.Dependencies) > 0 {
+			if d.Ref != "" {
 				allNodes[d.Ref] = true
+			}
+
+			if d.Dependencies != nil && len(*d.Dependencies) > 0 {
 				for _, dep := range *d.Dependencies {
+					// Add edge: d.Ref -> dep
 					graph[d.Ref] = append(graph[d.Ref], dep)
 					inDegree[dep]++
 					allNodes[dep] = true
@@ -145,6 +157,7 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 		}
 	}
 
+	// Find all root nodes (in-degree = 0)
 	var roots []string
 	for node := range allNodes {
 		if inDegree[node] == 0 {
@@ -152,84 +165,83 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 		}
 	}
 
-	depthMap := make(map[string]int)
+	// BFS to determine level of each node
+	levelMap := make(map[string]int)
+	visited := make(map[string]bool)
+	queue := make([]struct {
+		node  string
+		level int
+	}, 0)
 
-	// perform DFS to calculate the depth of each node
-	var dfs func(node string, depth int)
-	dfs = func(node string, depth int) {
-		if depth > depthMap[node] {
-			depthMap[node] = depth
-		}
-		for _, neighbor := range graph[node] {
-			dfs(neighbor, depth+1)
-		}
-	}
-
+	// Add all roots to initial queue at level 0
 	for _, root := range roots {
-		dfs(root, 0)
+		queue = append(queue, struct {
+			node  string
+			level int
+		}{root, 0})
+		visited[root] = true
 	}
 
+	// Process the queue
+	for len(queue) > 0 {
+		// Dequeue
+		current := queue[0]
+		queue = queue[1:]
+
+		// Set the level for this node
+		levelMap[current.node] = current.level
+
+		// Process all neighbors
+		for _, neighbor := range graph[current.node] {
+			if !visited[neighbor] {
+				visited[neighbor] = true
+				queue = append(queue, struct {
+					node  string
+					level int
+				}{neighbor, current.level + 1})
+			}
+		}
+	}
+
+	// Convert from ref-based level map to name-based result
 	result := make(map[int][]string)
-	for node, depth := range depthMap {
-		result[depth] = append(result[depth], node)
-	}
 
-	// considering with negative list way, if it's with depth that is not 0, that means it's not root
-	roots = getRootComponents(allComponents, result)
-
-	if len(result[0]) != 0 {
-		// move components from current level to the next level
-		for level := 0; level < len(result); level++ {
-			if _, ok := result[level]; !ok {
-				continue
-			}
-
-			for _, component := range result[level] {
-				if _, ok := refToName[component]; !ok {
-					slog.Error("failed to get ref name", "ref", component)
-					continue
-				}
-
-				// if the component is not root, move it to the next level
-				if !slices.Contains(roots, component) {
-					result[level+1] = append(result[level+1], component)
-				}
-			}
-
-			// clear the current level
-			result[level] = nil
+	// Process each node by its level
+	for node, level := range levelMap {
+		name, ok := refToName[node]
+		if !ok {
+			slog.Error("failed to get name for reference", "ref", node)
+			continue
 		}
+
+		// Add component name to the appropriate level
+		result[level] = append(result[level], name)
 	}
 
-	// add the root components to level 0
-	result[0] = append(result[0], roots...)
-
-	// convert the ref to name
-	converted := make(map[int][]string)
-
-	for level, components := range result {
-		for _, component := range components {
-			name, ok := refToName[component]
+	// Handle isolated nodes (not visited in BFS) - place at level 0
+	for ref := range allNodes {
+		if !visited[ref] {
+			name, ok := refToName[ref]
 			if !ok {
-				slog.Error("failed to get ref name", "ref", component)
+				slog.Error("failed to get name for isolated reference", "ref", ref)
 				continue
 			}
-
-			if level == 0 {
-				continue
-			}
-
-			converted[level] = append(converted[level], name)
+			result[0] = append(result[0], name)
 		}
 	}
 
-	final := make(map[int][]string)
+	// Remove empty levels and ensure continuous numbering
+	finalResult := make(map[int][]string)
+	nextLevel := 0
 
-	if checkIfSkippinpFirstLevel(converted) {
-		final = shiftLevelForward(converted)
+	for level := 0; level < len(result)+1; level++ {
+		if components, ok := result[level]; ok && len(components) > 0 {
+			finalResult[nextLevel] = components
+			nextLevel++
+		}
 	}
 
-	return final
+	return finalResult
 }
 
 func checkIfSkippinpFirstLevel(levelMap map[int][]string) bool {
