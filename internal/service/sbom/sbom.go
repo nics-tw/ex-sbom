@@ -60,6 +60,9 @@ type (
 		SuggestFixVersion string `json:"suggest_fix_version"`
 		OtherFixVersions  string `json:"other_fix_versions"`
 
+		EPSS string `json:"epss,omitempty"`
+		LEV  string `json:"lev,omitempty"`
+
 		FixVersions []string `json:"-"`
 	}
 

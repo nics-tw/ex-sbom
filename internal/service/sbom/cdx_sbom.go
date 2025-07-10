@@ -6,6 +6,7 @@ package ssbom
 
 import (
 	"errors"
+	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
 	"ex-sbom/util/file"
 	"fmt"
@@ -302,6 +303,40 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 				VulnNumber: getVulnNumber(c.Name, vulnPkgs),
 				Vulns:      getVulns(c.Name, c.Version, vulnPkgs),
 			}
+		}
+	}
+
+	var cves []string
+
+	for _, c := range componentInfo {
+		for _, v := range c.Vulns {
+			if v.ID != "" {
+				cves = append(cves, v.ID)
+			}
+		}
+	}
+
+	firstInfos, err := lev.GetByChunk(cves)
+	if err != nil {
+		slog.Error("failed to get lev info", "error", err)
+	}
+
+	if len(firstInfos) == 0 {
+		slog.Info("no lev info found for the components", "name", filename)
+	}
+
+	for name, info := range componentInfo {
+		updated := false
+		for i, v := range info.Vulns {
+			if data, found := firstInfos[v.ID]; found {
+				slog.Info("found lev info", "cve", v.ID, "lev", data.LEV, "epss", data.EPSS)
+				info.Vulns[i].EPSS = data.EPSS
+				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
+				updated = true
+			}
+		}
+		if updated {
+			componentInfo[name] = info
 		}
 	}
 

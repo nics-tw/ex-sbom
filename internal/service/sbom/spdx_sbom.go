@@ -6,6 +6,7 @@ package ssbom
 
 import (
 	"errors"
+	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
 	"ex-sbom/util/file"
 	"fmt"
@@ -272,6 +273,40 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 				VulnNumber: getVulnNumber(p.PackageName, vulnPkgs),
 				Vulns:      getVulns(p.PackageName, p.PackageVersion, vulnPkgs),
 			}
+		}
+	}
+
+	var cves []string
+
+	for _, c := range result {
+		for _, v := range c.Vulns {
+			if v.ID != "" {
+				cves = append(cves, v.ID)
+			}
+		}
+	}
+
+	firstInfos, err := lev.GetByChunk(cves)
+	if err != nil {
+		slog.Error("failed to get lev info", "error", err)
+	}
+
+	if len(firstInfos) == 0 {
+		slog.Info("no lev info found for the components", "name", filename)
+	}
+
+	for name, info := range result {
+		updated := false
+		for i, v := range info.Vulns {
+			if data, found := firstInfos[v.ID]; found {
+				slog.Info("found lev info", "cve", v.ID, "lev", data.LEV, "epss", data.EPSS)
+				info.Vulns[i].EPSS = data.EPSS
+				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
+				updated = true
+			}
+		}
+		if updated {
+			result[name] = info
 		}
 	}
 

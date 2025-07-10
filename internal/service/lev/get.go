@@ -25,7 +25,7 @@ const (
 	workerCount = 10
 )
 
-func GetByChunk(cves []string) ([]first.EPSS, error) {
+func GetByChunk(cves []string) (map[string]first.EPSS, error) {
 	if len(cves) == 0 {
 		return nil, fmt.Errorf("no CVEs provided")
 	}
@@ -105,5 +105,11 @@ func GetByChunk(cves []string) ([]first.EPSS, error) {
 		return nil, fmt.Errorf("no EPSS data found for the provided CVEs")
 	}
 
-	return allResults, nil
+	var resultMap = make(map[string]first.EPSS)
+
+	for _, epss := range allResults {
+		resultMap[epss.CVE] = epss
+	}
+
+	return resultMap, nil
 }
