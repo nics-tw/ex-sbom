@@ -33,7 +33,8 @@ type (
 		Date       string       `json:"date"`
 		TimeSeries []TimeSeries `json:"time-series"`
 
-		LEV float64
+		LEV     float64 `json:"-"`
+		EPSSNum float64 `json:"-"`
 	}
 
 	TimeSeries struct {

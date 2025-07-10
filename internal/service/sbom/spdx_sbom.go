@@ -300,7 +300,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		for i, v := range info.Vulns {
 			if data, found := firstInfos[v.ID]; found {
 				slog.Info("found lev info", "cve", v.ID, "lev", data.LEV, "epss", data.EPSS)
-				info.Vulns[i].EPSS = data.EPSS
+				info.Vulns[i].EPSS = fmt.Sprintf("%.6f", data.EPSSNum)
 				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
 				updated = true
 			}
