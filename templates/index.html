@@ -175,6 +175,21 @@
       const uploadedFiles = new Set();
       let activeTab = null;
 
+      // Download PDF Report function
+      async function downloadPdfReport(fileName) {
+        try {
+          const response = await fetch(`/sbom/report/${encodeURIComponent(fileName)}`);
+          if (response.ok) {
+            alert('PDF report has been generated and saved successfully!');
+          } else {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(errorData.error || 'Failed to generate PDF report');
+          }
+        } catch (err) {
+          alert('Failed to generate PDF report: ' + (err.message || err));
+        }
+      }
+
       // Language translations
       const translations = {
         en: {
@@ -228,7 +243,8 @@
           vulnerablePath: "Vulnerability Path {0}",
           vulnerableComponent: "(Vulnerable)",
           suggestUpgradeTo: "Suggest upgrade to version {0}",
-          breakingChangeWarning: "Warning: Updating to version {0} includes breaking changes that may require code modifications.",
+          breakingChangeWarning:
+            "Warning: Updating to version {0} includes breaking changes that may require code modifications.",
           severeVulnWarning:
             "This component contains security vulnerabilities with a CVSS score of 7.0 or higher. The suggested fix version is based on these vulnerabilities.",
         },
@@ -283,8 +299,10 @@
           vulnerablePath: "漏洞路徑 {0}",
           vulnerableComponent: "(有漏洞)",
           suggestUpgradeTo: "建議升級到版本 {0}",
-          breakingChangeWarning: "警告：升級到版本 {0} 包含破壞性改動，請依個別情況判斷是否需調整相關程式碼。",
-          severeVulnWarning: "此元件內包含 CVSS 評分為 7.0 或以上之資安漏洞，建議修正版本為基於此漏洞計算而來",
+          breakingChangeWarning:
+            "警告：升級到版本 {0} 包含破壞性改動，請依個別情況判斷是否需調整相關程式碼。",
+          severeVulnWarning:
+            "此元件內包含 CVSS 評分為 7.0 或以上之資安漏洞，建議修正版本為基於此漏洞計算而來",
         },
       };
 
@@ -633,15 +651,26 @@
         tabContent.innerHTML = `
     <div class="flex items-center justify-between mb-4">
       <div class="text-lg font-medium">${fileName}</div>
-      <button 
-        class="delete-btn bg-[#E46058] hover:bg-red-600 text-white py-1 px-3 rounded text-sm flex items-center"
-        onclick="deleteFile('${fileName}')"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-        </svg>
-        ${t("delete")}
-      </button>
+      <div class="flex gap-2">
+        <button 
+          class="bg-[#009999] hover:bg-[#19a3a3] text-white py-1 px-3 rounded text-sm flex items-center"
+          onclick="downloadPdfReport('${fileName}')"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm8 8V5a1 1 0 10-2 0v6H7a1 1 0 000 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2z" clip-rule="evenodd" />
+          </svg>
+          <span>Download PDF Report</span>
+        </button>
+        <button 
+          class="delete-btn bg-[#E46058] hover:bg-red-600 text-white py-1 px-3 rounded text-sm flex items-center"
+          onclick="deleteFile('${fileName}')"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+          </svg>
+          ${t("delete")}
+        </button>
+      </div>
     </div>
     <div class="mt-4 text-gray-600 flex items-center">
       <svg xmlns="http://www.w3.org/2000/svg" class="animate-spin h-5 w-5 mr-3 text-[#009999]" viewBox="0 0 24 24" fill="none">
@@ -1058,7 +1087,10 @@
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-1" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd" />
               </svg>
-              <span class="text-[#009999] font-medium">${t("suggestUpgradeTo", suggested_fix_version)}</span>
+              <span class="text-[#009999] font-medium">${t(
+                "suggestUpgradeTo",
+                suggested_fix_version
+              )}</span>
             </div>`
               : ""
           }
@@ -1184,13 +1216,15 @@
                         ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${vuln.cvss_score}</span>`
                         : ""
                     }
-                    ${vuln.epss
-                      ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${vuln.epss}</span>`
-                      : ""
+                    ${
+                      vuln.epss
+                        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${vuln.epss}</span>`
+                        : ""
                     }
-                    ${vuln.lev
-                      ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${vuln.lev}</span>`
-                      : ""
+                    ${
+                      vuln.lev
+                        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${vuln.lev}</span>`
+                        : ""
                     }
 
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${severityClass}">${severityLevel}</span>
