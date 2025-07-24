@@ -159,6 +159,7 @@ func TestSetupRouterGroup_RouteRegistration(t *testing.T) {
 		{"GET", "/topology/relations"},
 		{"GET", "/topology/component"},
 		{"GET", "/topology/get_component_vuln_dep"},
+		{"GET", "/sbom/report/:name"},
 	}
 
 	for _, expected := range expectedRoutes {
@@ -195,6 +196,6 @@ func TestSetupRouterGroup_GroupPrefixes(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 2, sbomRoutes, "Should have 2 routes under /sbom prefix")
+	assert.Equal(t, 3, sbomRoutes, "Should have 3 routes under /sbom prefix")
 	assert.Equal(t, 4, topologyRoutes, "Should have 4 routes under /topology prefix")
 }

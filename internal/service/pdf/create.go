@@ -1,6 +1,8 @@
 package pdf
 
 import (
+	ssbom "ex-sbom/internal/service/sbom"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -94,38 +96,111 @@ var (
 	}
 )
 
-func GetMaroto(infos []ComponentInfo, vulns []VulnInfos) core.Maroto {
-	result := ReportData{
-		OverviewInfo: OverviewInfo{
-			Total:                       100,
-			Direct:                      60,
-			DirectWithVulnerabilities:   30,
-			DWVNames:                    []string{"component1", "component2", "component3"},
-			Indirect:                    40,
-			IndirectWithVulnerabilities: 20,
-			IDWVNames:                   []string{"component4", "component5", "component6"},
-		},
-		TotalVulnerabilities: 74,
-		CVSSLevels: CVSSLevels{
-			Low:      10,
-			Medium:   20,
-			High:     30,
-			Critical: 14,
-		},
-		EPSSLevels: EPSSLevels{
-			MoreThan10Percent: 40,
-			MoreThan50Percent: 20,
-			MoreThan90Percent: 4,
-		},
-		LEVLevels: LEVLevels{
-			MoreThan10Percent: 30,
-			MoreThan50Percent: 10,
-			MoreThan90Percent: 4,
-		},
-		ComponentInfos: infos,
-		VulnInfos:      vulns,
+func GetFileName(bomName string) string {
+	now := time.Now()
+	return fmt.Sprintf("%s_report_%s.pdf", bomName, now.Format("20060102_150405"))
+}
+
+func GetReportData(bom ssbom.FormattedSBOM) ReportData {
+	var result ReportData
+
+	// Overview
+	result.OverviewInfo.Total = len(bom.Components)
+	result.OverviewInfo.Direct = 0
+	result.OverviewInfo.DirectWithVulnerabilities = 0
+	result.OverviewInfo.DWVNames = []string{}
+	result.OverviewInfo.Indirect = 0
+	result.OverviewInfo.IndirectWithVulnerabilities = 0
+	result.OverviewInfo.IDWVNames = []string{}
+
+	// Vulnerability and component info
+	result.TotalVulnerabilities = 0
+	result.CVSSLevels = CVSSLevels{}
+	result.EPSSLevels = EPSSLevels{}
+	result.LEVLevels = LEVLevels{}
+	result.ComponentInfos = []ComponentInfo{}
+	result.VulnInfos = []VulnInfos{}
+
+	for name, comp := range bom.ComponentInfo {
+		cInfo := ComponentInfo{
+			Name:     comp.Name,
+			Low:      0,
+			Medium:   0,
+			High:     0,
+			Critical: 0,
+		}
+
+		if level, ok := bom.ComponentToLevel[name]; ok && level == 0 {
+			result.OverviewInfo.Direct++
+			if comp.VulnNumber > 0 {
+				result.OverviewInfo.DirectWithVulnerabilities++
+				result.OverviewInfo.DWVNames = append(result.OverviewInfo.DWVNames, comp.Name)
+			}
+		} else {
+			result.OverviewInfo.Indirect++
+			if comp.VulnNumber > 0 {
+				result.OverviewInfo.IndirectWithVulnerabilities++
+				result.OverviewInfo.IDWVNames = append(result.OverviewInfo.IDWVNames, comp.Name)
+			}
+		}
+
+		for _, v := range comp.Vulns {
+			result.TotalVulnerabilities++
+			// Parse CVSS score
+			cvss, _ := strconv.ParseFloat(v.CVSSScore, 64)
+			switch {
+			case cvss >= 9.0:
+				cInfo.Critical++
+				result.CVSSLevels.Critical++
+			case cvss >= 7.0:
+				cInfo.High++
+				result.CVSSLevels.High++
+			case cvss >= 4.0:
+				cInfo.Medium++
+				result.CVSSLevels.Medium++
+			case cvss > 0.0:
+				cInfo.Low++
+				result.CVSSLevels.Low++
+			}
+
+			// Parse EPSS and LEV (as float, if present)
+			epss, _ := strconv.ParseFloat(v.EPSS, 64)
+			lev, _ := strconv.ParseFloat(v.LEV, 64)
+			if epss >= 0.9 {
+				result.EPSSLevels.MoreThan90Percent++
+			} else if epss >= 0.5 {
+				result.EPSSLevels.MoreThan50Percent++
+			} else if epss >= 0.1 {
+				result.EPSSLevels.MoreThan10Percent++
+			}
+			if lev >= 0.9 {
+				result.LEVLevels.MoreThan90Percent++
+			} else if lev >= 0.5 {
+				result.LEVLevels.MoreThan50Percent++
+			} else if lev >= 0.1 {
+				result.LEVLevels.MoreThan10Percent++
+			}
+
+			// Add to VulnInfos
+			result.VulnInfos = append(result.VulnInfos, VulnInfos{
+				ID:                v.ID,
+				Summary:           v.Summary,
+				CVSS:              v.CVSSScore,
+				EPSS:              v.EPSS,
+				LEV:               v.LEV,
+				SuggestFixVersion: v.SuggestFixVersion,
+				OtherFixVersions:  v.OtherFixVersions,
+				Details:           v.Details,
+			})
+		}
+
+		result.ComponentInfos = append(result.ComponentInfos, cInfo)
 	}
 
+	return result
+}
+
+func GetMaroto(result ReportData) core.Maroto {
 	cfg := config.NewBuilder().
 		WithPageNumber(props.PageNumber{Place: "right_top"}).
 		WithDebug(false).
