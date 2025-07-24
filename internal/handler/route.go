@@ -16,6 +16,7 @@ func SetupRouterGroup(r *gin.Engine) {
 	{
 		sbomGroup.POST("/upload", sbom.CreateSBOM)
 		sbomGroup.DELETE("/delete", sbom.DeleteSBOM)
+		sbomGroup.GET("/report/:name", sbom.CreateReportPDF)
 	}
 
 	topologyGroup := r.Group("/topology")
