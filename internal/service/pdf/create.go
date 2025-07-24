@@ -702,15 +702,16 @@ func GetMaroto(result ReportData) core.Maroto {
 				),
 				row.New(6).Add(
 					text.NewCol(
-						2,
+						1,
 						"",
 					),
 					text.NewCol(
-						15,
+						8,
 						vuln.Summary,
 						contentL,
 					),
 				),
+				row.New(6).Add(),
 				row.New(6).Add(
 					text.NewCol(
 						1,
@@ -809,7 +810,7 @@ func GetMaroto(result ReportData) core.Maroto {
 						"",
 					),
 					text.NewCol(
-						15,
+						10,
 						vuln.Details,
 						contentL,
 					),
