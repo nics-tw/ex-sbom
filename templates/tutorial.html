@@ -137,6 +137,14 @@
           <p class="text-gray-700" data-i18n="Step5Additional2"></p>
           <p class="text-gray-700" data-i18n="Step5Additional3"></p>
         </div>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold mb-4">CVSS</h2>
+        <p class="text-gray-700 preserve-whitespace" data-i18n="CVSSExplain"></p>
+        <h2 class="text-xl font-semibold mb-4 mt-6">EPSS</h2>
+        <p class="text-gray-700 preserve-whitespace" data-i18n="EPSSExplain"></p>
+        <h2 class="text-xl font-semibold mb-4 mt-6">LEV</h2>
+        <p class="text-gray-700 preserve-whitespace" data-i18n="LEVExplain"></p>
+      </div>
       </div>
     </div>
 
@@ -164,6 +172,14 @@
           Step5Additional1: "Additionally, if a component is displayed in the default gray-white color, it means that the component has no vulnerabilities and does not use any components with known vulnerabilities.",
           Step5Additional2: "If a component is displayed in red, it means that the component itself has vulnerabilities.",
           Step5Additional3: "If a component is displayed in yellow, it means that the component itself does not have vulnerabilities, but it uses another component that has vulnerabilities.",
+          CVSSExplain: "CVSS (Common Vulnerability Scoring System) is a standardized framework for assessing the severity of information security vulnerabilities." +
+            " It provides a numerical range (from 0 to 10) to represent the severity of a vulnerability, considering multiple factors including exploitability, impact, and potential effects on systems." +
+            " CVSS scores help organizations prioritize vulnerability remediation efforts and develop effective security strategies.",
+          EPSSExplain: "EPSS (Exploit Prediction Scoring System) is a scoring system used to predict the likelihood of information security vulnerabilities being exploited." +
+            " It evaluates the probability of a specific vulnerability being exploited in the future based on historical data and machine learning models." +
+            " EPSS scores help organizations identify high-risk vulnerabilities, prioritize remediation efforts, and strengthen defense measures.",
+          LEVExplain: "LEV (Likelihood of Exploitability Value) is an indicator used to assess the recent likelihood of information security vulnerabilities being exploited." +
+            " It is based on exploitation data from the past 30 days and provides a score range from 0 to 1.",
         },
         zh: {
           appTitle: "ex-sbom",
@@ -186,6 +202,14 @@
           Step5Additional1: "另外值得注意的是，當元件為預設灰白配色時，代表其元件不存在漏洞，也沒有使用到任何已知存在漏洞的元件。",
           Step5Additional2: "若元件為紅色，則代表其元件本身存在漏洞",
           Step5Additional3: "若元件為黃色，則代表其元件本身並沒有漏洞，但是有使用到的某個元件存在漏洞",
+          CVSSExplain: "CVSS (Common Vulnerability Scoring System) 是一個用於評估資訊安全漏洞嚴重性的標準化框架。" +
+            "它提供了一個數值範圍（從 0 到 10），用於表示漏洞的嚴重程度，並且考慮了多個因素，包括漏洞的可利用性、影響範圍以及對系統的潛在影響。" +
+            "CVSS 分數有助於組織優先處理漏洞修復工作，並制定有效的安全策略。",
+          EPSSExplain: "EPSS (Exploit Prediction Scoring System) 是一個用於預測資訊安全漏洞被利用可能性的評分系統。" +
+            "它基於歷史數據和機器學習模型，評估特定漏洞在未來被攻擊者利用的概率。" +
+            "EPSS 分數有助於組織識別高風險漏洞，從而優先考慮修復工作並加強防禦措施。",
+          LEVExplain: "LEV (Likelihood of Exploitability Value) 是一個用於評估資訊安全漏洞近期被利用可能性的指標。" +
+            "它基於過往 30 天內的漏洞利用數據，提供了一個從 0 到 1 的分數範圍。",
         },
       };
 
