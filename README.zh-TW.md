@@ -7,7 +7,12 @@ ex-sbom, 簡稱 Explorer of SBOM，是一個實驗性的 SBOM 分析可視化工
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-sbom.svg)](https://pkg.go.dev/github.com/nics-tw/ex-sbom)
 
-## 使用方法
+## 我該怎麼使用它
+
+1. 下載 Release 中的執行檔(推薦)，或是自行編譯此專案
+2. 執行它，就可以開始使用了。
+
+## 用途
 
 - 工具的首頁提供將 SBOM 檔案進行視覺化的介面
 - 透過依賴關係圖，您可以查看不同元件之間的關係

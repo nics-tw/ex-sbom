@@ -8,6 +8,10 @@ Disclaimer: This tool is still in the early stages of development and may not be
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-sbom.svg)](https://pkg.go.dev/github.com/nics-tw/ex-sbom)
 
+## How to use it
+1. Download the executable from the Release page (recommended), or build the project yourself.
+2. Run it, and you can start using it.
+
 ## Usage
 
 - The main page of the tool is a graph visualization of the SBOM.
