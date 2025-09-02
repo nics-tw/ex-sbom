@@ -295,13 +295,15 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		slog.Error("failed to get scan result", "error", err)
 	}
 
+	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
+
 	if input != nil && len(*input) > 0 {
 		for _, c := range *input {
 			componentInfo[c.Name] = Component{
 				Name:       c.Name,
 				Version:    c.Version,
-				VulnNumber: getVulnNumber(c.Name, vulnPkgs),
-				Vulns:      getVulns(c.Name, c.Version, vulnPkgs),
+				VulnNumber: getVulnNumber(c.Name, trimmedVulnPkgs),
+				Vulns:      getVulns(c.Name, c.Version, trimmedVulnPkgs),
 			}
 		}
 	}

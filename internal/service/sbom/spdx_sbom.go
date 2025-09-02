@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
@@ -265,13 +266,15 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		slog.Error("failed to get scan result", "error", err)
 	}
 
+	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
+
 	for _, p := range input.Packages {
 		if p.PackageSPDXIdentifier != "" {
 			result[string(p.PackageSPDXIdentifier)] = Component{
 				Name:       p.PackageName,
 				Version:    p.PackageVersion,
-				VulnNumber: getVulnNumber(p.PackageName, vulnPkgs),
-				Vulns:      getVulns(p.PackageName, p.PackageVersion, vulnPkgs),
+				VulnNumber: getVulnNumber(p.PackageName, trimmedVulnPkgs),
+				Vulns:      getVulns(p.PackageName, p.PackageVersion, trimmedVulnPkgs),
 			}
 		}
 	}
@@ -351,4 +354,24 @@ func trimSPDXPrefix(input string) string {
 // for better understanding and preventing confusion, we will ignore it as default
 func isGeneratedRoot(input string) bool {
 	return input == documentID || strings.HasPrefix(input, documentRootPrefix) || strings.HasPrefix(input, filePrefix)
+}
+
+// some document will have publication naming as prefix for the component name containing vulnerability
+// for example, `maven:guava`
+// but the vulnerability database will only contain the component name without the prefix
+// so we need to trim the prefix for better matching
+func trimPublicationPrefix(pkgMap map[string]models.PackageVulns) map[string]models.PackageVulns {
+	var result = make(map[string]models.PackageVulns)
+
+	for k, v := range pkgMap {
+		if strings.Contains(k, ":") {
+			parts := strings.SplitN(k, ":", 2)
+
+			result[parts[1]] = v
+		}
+
+		result[k] = v
+	}
+
+	return result
 }
