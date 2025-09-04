@@ -1073,17 +1073,24 @@
 
         // Start with component metadata
         let html = `
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 pb-6 border-b border-gray-200">
-      <div>
-        <h3 class="text-sm font-medium text-gray-500">${t("componentName")}</h3>
-        <p class="mt-2 text-lg">${name || "—"}</p>
+    <div class="mb-6 pb-6 border-b border-gray-200">
+      <!-- First row: Component Name and License -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
+        <div>
+          <h3 class="text-sm font-medium text-gray-500">${t("componentName")}</h3>
+          <p class="mt-2 text-lg">${name || "—"}</p>
+        </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500">${t("componentLicense")}</h3>
+          <p class="mt-2 text-lg">${licences || "—"}</p>
+        </div>
       </div>
+      
+      <!-- Second row: Version and related information (full width) -->
       <div>
-        <h3 class="text-sm font-medium text-gray-500">${t(
-          "componentVersion"
-        )}</h3>
-        <div class="mt-2 flex items-center">
-          <span>${version || "—"}</span>
+        <h3 class="text-sm font-medium text-gray-500">${t("componentVersion")}</h3>
+        <div class="mt-2 flex items-center flex-wrap">
+          <span class="text-lg">${version || "—"}</span>
           ${
             suggested_fix_version
               ? `<div class="ml-3 flex items-center">
@@ -1121,10 +1128,6 @@
           </div>`
             : ""
         }
-      </div>
-      <div>
-        <h3 class="text-sm font-medium text-gray-500">${t("componentLicense")}</h3>
-        <p class="mt-2 text-lg">${licences || "—"}</p>
       </div>
     </div>
   `;
