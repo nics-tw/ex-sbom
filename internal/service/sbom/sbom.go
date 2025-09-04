@@ -39,6 +39,7 @@ type (
 		VulnNumber      int    `json:"vuln_number"`
 		Vulns           []Vuln `json:"vulns"`
 		ContainsVulnDep bool   `json:"contains_vuln_dep"`
+		Licences        string `json:"licences"`
 	}
 
 	VlunDepPath struct {

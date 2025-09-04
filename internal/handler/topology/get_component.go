@@ -35,6 +35,7 @@ func toComponentResp(c ssbom.Component) map[string]any {
 		"suggested_fix_version": suggest,
 		"is_breaking_change":    ssbom.IsBreakingChange(c.Version, suggest),
 		"has_severe_vuln":       HasSevereVuln,
+		"licences":              c.Licences,
 	}
 }
 

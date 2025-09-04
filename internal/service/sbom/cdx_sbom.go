@@ -11,6 +11,7 @@ import (
 	"ex-sbom/util/file"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -304,6 +305,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 				Version:    c.Version,
 				VulnNumber: getVulnNumber(c.Name, trimmedVulnPkgs),
 				Vulns:      getVulns(c.Name, c.Version, trimmedVulnPkgs),
+				Licences:   getCdxLicences(c.Licenses),
 			}
 		}
 	}
@@ -345,4 +347,26 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 	file.Delete(path)
 
 	return componentInfo
+}
+
+func getCdxLicences(input *cdx.Licenses) string {
+	var licences strings.Builder
+
+	if input != nil && len(*input) > 0 {
+		for _, l := range *input {
+			if l.License != nil {
+				if licences.Len() > 0 {
+					licences.WriteString(", ")
+				}
+
+				if l.License.ID != "" {
+					licences.WriteString(l.License.ID)
+				} else if l.License.Name != "" {
+					licences.WriteString(l.License.Name)
+				}
+			}
+		}
+	}
+
+	return licences.String()
 }

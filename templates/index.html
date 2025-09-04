@@ -226,6 +226,7 @@
           componentDetails: "Component Details",
           componentName: "Component Name",
           componentVersion: "Version",
+          componentLicense: "License",
           vulnerabilityCount: "Vulnerabilities of this component",
           noVulnerabilitiesFound: "No vulnerabilities found for this component",
           vulnerabilityId: "Vulnerability ID",
@@ -282,6 +283,7 @@
           componentDetails: "元件詳細資訊",
           componentName: "元件名稱",
           componentVersion: "版本",
+          componentLicense: "授權條款",
           vulnerabilityCount: "此元件漏洞數量",
           noVulnerabilitiesFound: "此元件無已知漏洞",
           vulnerabilityId: "漏洞 ID",
@@ -1066,11 +1068,12 @@
           suggested_fix_version,
           is_breaking_change,
           has_severe_vuln,
+          licences,
         } = component;
 
         // Start with component metadata
         let html = `
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b border-gray-200">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 pb-6 border-b border-gray-200">
       <div>
         <h3 class="text-sm font-medium text-gray-500">${t("componentName")}</h3>
         <p class="mt-2 text-lg">${name || "—"}</p>
@@ -1118,6 +1121,10 @@
           </div>`
             : ""
         }
+      </div>
+      <div>
+        <h3 class="text-sm font-medium text-gray-500">${t("componentLicense")}</h3>
+        <p class="mt-2 text-lg">${licences || "—"}</p>
       </div>
     </div>
   `;

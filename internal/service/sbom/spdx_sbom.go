@@ -21,8 +21,6 @@ import (
 )
 
 const (
-	spdxPrefix         = "SPDXRef-"
-	documentRefPrefix  = "DocumentRef-"
 	documentID         = "DOCUMENT"
 	documentRootPrefix = "DocumentRoot-"
 	filePrefix         = "File-"
@@ -275,6 +273,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 				Version:    p.PackageVersion,
 				VulnNumber: getVulnNumber(p.PackageName, trimmedVulnPkgs),
 				Vulns:      getVulns(p.PackageName, p.PackageVersion, trimmedVulnPkgs),
+				Licences:   getSpdxLicences(p.PackageLicenseDeclared),
 			}
 		}
 	}
@@ -374,4 +373,12 @@ func trimPublicationPrefix(pkgMap map[string]models.PackageVulns) map[string]mod
 	}
 
 	return result
+}
+
+func getSpdxLicences(licenceInfo string) string {
+	if len(licenceInfo) == 0 || licenceInfo == "NOASSERTION" {
+		return licenceInfo
+	}
+
+	return licenceInfo
 }
