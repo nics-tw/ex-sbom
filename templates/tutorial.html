@@ -145,6 +145,9 @@
         <h2 class="text-xl font-semibold mb-4 mt-6">LEV</h2>
         <p class="text-gray-700 preserve-whitespace" data-i18n="LEVExplain"></p>
       </div>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold mb-4" data-i18n="ThingsYouNeedToKnow"></h2>
+        <p class="text-gray-700 preserve-whitespace" data-i18n="SBOMEffectiveness"></p>
       </div>
     </div>
 
@@ -180,6 +183,12 @@
             " EPSS scores help organizations identify high-risk vulnerabilities, prioritize remediation efforts, and strengthen defense measures.",
           LEVExplain: "LEV (Likelihood of Exploitability Value) is an indicator used to assess the recent likelihood of information security vulnerabilities being exploited." +
             " It is based on exploitation data from the past 30 days and provides a score range from 0 to 1.",
+          ThingsYouNeedToKnow: "Some things you might need to know",
+          SBOMEffectiveness: "The effectiveness of an SBOM depends on its timeliness, completeness of supply chain information, and its correspondence to the actual software version." +
+            " An outdated or incomplete SBOM may not accurately reflect the true state of the software, thereby affecting its utility in vulnerability management and compliance." +
+            " Therefore, regularly updating and maintaining the SBOM is key to ensuring its effectiveness."+
+            " Additionally, it is important to ensure that the components you use disclose the components they depend on, otherwise it may lead to concerns about broken supply chain information."+
+            " For shared components that cannot be made public within an organization, we sincerely recommend conducting independent scans for such components to ensure their security.",
         },
         zh: {
           appTitle: "ex-sbom",
@@ -210,6 +219,12 @@
             "EPSS 分數有助於組織識別高風險漏洞，從而優先考慮修復工作並加強防禦措施。",
           LEVExplain: "LEV (Likelihood of Exploitability Value) 是一個用於評估資訊安全漏洞近期被利用可能性的指標。" +
             "它基於過往 30 天內的漏洞利用數據，提供了一個從 0 到 1 的分數範圍。",
+          ThingsYouNeedToKnow: "一些你可能需要知道的資訊",
+          SBOMEffectiveness: "SBOM 的有效性取決於其時效性、供應鏈資訊完整性，以及與實際軟體版本的對應關係。" +
+            "過時或不完整的 SBOM 可能無法準確反映軟體的真實狀態，從而影響其在漏洞管理和合規性方面的效用。" +
+            "因此，定期更新和維護 SBOM 是確保其有效性的關鍵。"+
+            "此外，需要確保你使用的元件是否有揭露其使用到的元件，否則可能會造成元件供應鏈資訊斷鏈的疑慮。"+
+            "針對單位內部無法公開之共用元件，我們誠摯建議針對該類型元件獨立進行掃描，以確保其安全性。",
         },
       };
 
