@@ -2,9 +2,7 @@
 
 正體中文說明請參考 [README.zh-TW.md](README.zh-TW.md)
 
-ex-sbom, abbreviation for Explorer of SBOM, is currently an experimental visualization tool for SBOM analysis.
-
-Disclaimer: This tool is still in the early stages of development and may not be fully functional.(We considering the current state is in pre-alpha status) We welcome any feedback or suggestions for improvement.
+ex-sbom, abbreviation for Explorer of SBOM, is visualization tool for SBOM analysis.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/nics-tw/ex-sbom.svg)](https://pkg.go.dev/github.com/nics-tw/ex-sbom)
 

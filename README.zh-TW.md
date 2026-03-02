@@ -1,7 +1,6 @@
 # ex-sbom
 
-ex-sbom, 簡稱 Explorer of SBOM，是一個實驗性的 SBOM 分析可視化工具。
-目前仍處於開發的早期階段，有部分功能並沒有相當穩定。（我們認為目前的狀態處於 pre-alpha 階段）歡迎任何建議與改善方向。
+ex-sbom, 簡稱 Explorer of SBOM，是一個 SBOM 分析可視化工具。
 
 ![GitHub license](https://img.shields.io/github/license/nics-tw/ex-sbom)
 
