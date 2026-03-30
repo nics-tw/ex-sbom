@@ -76,6 +76,7 @@ func (s *Service) ProcessCDX(workspaceID domain.WorkspaceID, name domain.Filenam
 		bomTimestamp, _ = time.Parse(time.RFC3339, bom.Metadata.Timestamp)
 	}
 
+	sortFormattedSBOM(&final)
 	md5Hash := hashSBOM(final)
 	if err := s.repo.Save(workspaceID, name, final, bomTimestamp, md5Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)

@@ -80,6 +80,7 @@ func (s *Service) ProcessSPDX(workspaceID domain.WorkspaceID, name domain.Filena
 
 	final, _ := s.cache.Get(workspaceID, name)
 
+	sortFormattedSBOM(&final)
 	md5Hash := hashSBOM(final)
 	if err := s.repo.Save(workspaceID, name, final, time.Time{}, md5Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)

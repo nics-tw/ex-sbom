@@ -92,6 +92,25 @@ func (bom FormattedSBOM) GetVulnComponents() []string {
 	return vulnComponents
 }
 
+// sortFormattedSBOM sorts all slices inside FormattedSBOM so that the result is
+// deterministic regardless of map iteration order during construction.
+// Must be called before hashSBOM and repo.Save.
+func sortFormattedSBOM(sbom *FormattedSBOM) {
+	sort.Strings(sbom.Components)
+
+	for level := range sbom.DependencyLevel {
+		sort.Strings(sbom.DependencyLevel[level])
+	}
+
+	for name := range sbom.Dependency {
+		sort.Strings(sbom.Dependency[name])
+	}
+
+	for name := range sbom.ReverseDependency {
+		sort.Strings(sbom.ReverseDependency[name])
+	}
+}
+
 // hashSBOM returns the MD5 hex string of the JSON-serialized FormattedSBOM.
 // encoding/json sorts map keys deterministically, so the hash is stable for the same content.
 func hashSBOM(sbom FormattedSBOM) string {
