@@ -21,8 +21,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -44,20 +44,31 @@ var image2 embed.FS
 //go:embed static/js
 var staticJS embed.FS
 
-var DBPath string = "./duck_db/sbom.duckdb"
+const (
+	appName    = "ex-sbom"
+	dbFileName = "data.duckdb"
+)
+
+// defaultDBPath returns the platform-native path for the database file:
+//   - macOS：~/Library/Application Support/ex-sbom/data.duckdb
+//   - Linux：~/.config/ex-sbom/data.duckdb
+//   - Windows：%AppData%\ex-sbom\data.duckdb
+func defaultDBPath() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		slog.Warn("UserConfigDir unavailable, falling back to current directory", "error", err)
+		return filepath.Join(".", appName, dbFileName)
+	}
+	return filepath.Join(configDir, appName, dbFileName)
+}
 
 func main() {
 	config := getConfig()
 
-	// TODO: This is a temporary directory for local DuckDB storage.
-	// Currently only supports mac/linux (uses Unix-style path separator).
-	// Should be moved to a proper user data directory (e.g. os.UserDataDir) in the future.
 	dbDir := filepath.Dir(config.DBPath)
-	if _, err := os.Stat(dbDir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dbDir, 0755); err != nil {
-			slog.Error("Failed to create database directory", "path", dbDir, "error", err)
-			os.Exit(1)
-		}
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		slog.Error("Failed to create database directory", "path", dbDir, "error", err)
+		os.Exit(1)
 	}
 
 	if err := db.Init(config.DBPath); err != nil {
@@ -103,7 +114,7 @@ func getConfig() Config {
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = DBPath
+		dbPath = defaultDBPath()
 	}
 
 	return Config{
