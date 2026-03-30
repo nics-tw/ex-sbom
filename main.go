@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"os/exec"
 	"runtime"
 	"time"
@@ -47,6 +48,17 @@ var DBPath string = "./duck_db/sbom.duckdb"
 
 func main() {
 	config := getConfig()
+
+	// TODO: This is a temporary directory for local DuckDB storage.
+	// Currently only supports mac/linux (uses Unix-style path separator).
+	// Should be moved to a proper user data directory (e.g. os.UserDataDir) in the future.
+	dbDir := filepath.Dir(config.DBPath)
+	if _, err := os.Stat(dbDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			slog.Error("Failed to create database directory", "path", dbDir, "error", err)
+			os.Exit(1)
+		}
+	}
 
 	if err := db.Init(config.DBPath); err != nil {
 		slog.Error("Failed to initialize database", "error", err)
