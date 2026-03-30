@@ -31,7 +31,7 @@ func (s *Service) Get(workspaceID domain.WorkspaceID, name domain.Filename) (For
 }
 
 // List returns the filenames of all SBOMs currently loaded for a workspace.
-func (s *Service) List(workspaceID domain.WorkspaceID) []string {
+func (s *Service) List(workspaceID domain.WorkspaceID) []domain.Filename {
 	return s.cache.Keys(workspaceID)
 }
 

@@ -59,6 +59,7 @@ func defaultDBPath() string {
 		slog.Warn("UserConfigDir unavailable, falling back to current directory", "error", err)
 		return filepath.Join(".", appName, dbFileName)
 	}
+
 	return filepath.Join(configDir, appName, dbFileName)
 }
 
@@ -66,7 +67,7 @@ func main() {
 	config := getConfig()
 
 	dbDir := filepath.Dir(config.DBPath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
 		slog.Error("Failed to create database directory", "path", dbDir, "error", err)
 		os.Exit(1)
 	}

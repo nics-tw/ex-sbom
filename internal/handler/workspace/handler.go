@@ -8,6 +8,7 @@ import (
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/handler/middleware"
 	wsvc "ex-sbom/internal/service/workspace"
+	"ex-sbom/util/msg"
 	"log/slog"
 	"net/http"
 
@@ -30,11 +31,11 @@ func (h *Handler) List(c *gin.Context) {
 	workspaces, err := h.svc.List()
 	if err != nil {
 		slog.Error("ListWorkspaces failed", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{
 		"workspaces": workspaces,
 	}})
 }
@@ -46,25 +47,33 @@ func (h *Handler) Create(c *gin.Context) {
 		Name string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name required"})
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: "name required"})
 		return
 	}
 
 	workspaceID, err := h.svc.Create(body.Name)
 	if err != nil {
 		slog.Error("Failed to create workspace", "name", body.Name, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"data": h.load(c, workspaceID)})
+	payload, ok := h.load(c, workspaceID)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{msg.RespData: payload})
 }
 
 // Get loads the SBOMs of an existing workspace.
 // GET /workspaces/:id
 func (h *Handler) Get(c *gin.Context) {
 	workspaceID := middleware.GetWorkspaceID(c)
-	c.JSON(http.StatusOK, gin.H{"data": h.load(c, workspaceID)})
+	payload, ok := h.load(c, workspaceID)
+	if !ok {
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{msg.RespData: payload})
 }
 
 // Update renames a workspace.
@@ -76,17 +85,17 @@ func (h *Handler) Update(c *gin.Context) {
 		Name string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name required"})
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: "name required"})
 		return
 	}
 
 	if err := h.svc.Update(workspaceID, body.Name); err != nil {
 		slog.Error("Failed to update workspace", "id", workspaceID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"workspace_id": workspaceID, "name": body.Name}})
+	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{"workspace_id": workspaceID, "name": body.Name}})
 }
 
 // Delete soft-deletes a workspace and all its sbom_records.
@@ -96,24 +105,25 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	if err := h.svc.Delete(workspaceID); err != nil {
 		slog.Error("Failed to delete workspace", "id", workspaceID, "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
 	slog.Info("Workspace deleted", "id", workspaceID)
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"workspace_id": workspaceID}})
+	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{"workspace_id": workspaceID}})
 }
 
-// load is a helper that reloads SBOMs from DB for the given workspace and returns the response payload.
-func (h *Handler) load(c *gin.Context, workspaceID domain.WorkspaceID) gin.H {
+// load reloads SBOMs from DB for the given workspace and returns the payload and success flag.
+// On error it writes the error response and returns false — callers must return immediately.
+func (h *Handler) load(c *gin.Context, workspaceID domain.WorkspaceID) (gin.H, bool) {
 	names, err := h.svc.Load(workspaceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return nil
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
+		return nil, false
 	}
 
 	return gin.H{
 		"workspace_id": workspaceID,
 		"sboms":        names,
-	}
+	}, true
 }

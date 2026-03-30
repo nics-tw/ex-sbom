@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"ex-sbom/internal/domain"
 	"ex-sbom/internal/handler/middleware"
 	ssbom "ex-sbom/internal/service/sbom"
 	wsvc "ex-sbom/internal/service/workspace"
@@ -39,7 +40,7 @@ func (h *Handler) List(c *gin.Context) {
 	workspaceID := middleware.GetWorkspaceID(c)
 	names := h.sbomSvc.List(workspaceID)
 	if names == nil {
-		names = []string{}
+		names = []domain.Filename{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{msg.RespData: names})
@@ -91,17 +92,17 @@ func (h *Handler) Diff(c *gin.Context) {
 	nameA := c.Query("a")
 	nameB := c.Query("b")
 	if nameA == "" || nameB == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "both 'a' and 'b' query parameters are required"})
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: "both 'a' and 'b' query parameters are required"})
 		return
 	}
 
 	result, err := h.sbomSvc.Diff(workspaceID, nameA, nameB)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	c.JSON(http.StatusOK, gin.H{msg.RespData: result})
 }
 
 // Search handles GET /workspaces/:id/search?q=<query>
@@ -185,6 +186,8 @@ func (h *Handler) Create(c *gin.Context) {
 
 		if err := h.sbomSvc.ProcessSPDX(workspaceID, fileName, spdxDoc, sbomData); err != nil {
 			slog.Error("Failed to process SPDX SBOM", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
+			return
 		}
 
 		slog.Info("process spdx-formatted sbom into shared structs,", "name", fileName)
@@ -223,7 +226,7 @@ func (h *Handler) Create(c *gin.Context) {
 	c.JSON(http.StatusOK, toCreateResponse(workspaceID, names))
 }
 
-func toCreateResponse(workspaceID int64, names []string) gin.H {
+func toCreateResponse(workspaceID int64, names []domain.Filename) gin.H {
 	return gin.H{
 		msg.RespMsg: "ok",
 		msg.RespData: gin.H{

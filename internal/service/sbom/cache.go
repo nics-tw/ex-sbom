@@ -15,7 +15,7 @@ type Cache interface {
 	Set(workspaceID domain.WorkspaceID, name domain.Filename, sbom FormattedSBOM)
 	Delete(workspaceID domain.WorkspaceID, name domain.Filename)
 	DeleteWorkspace(workspaceID domain.WorkspaceID)
-	Keys(workspaceID domain.WorkspaceID) []string
+	Keys(workspaceID domain.WorkspaceID) []domain.Filename
 	All(workspaceID domain.WorkspaceID) map[domain.Filename]FormattedSBOM
 }
 
@@ -60,7 +60,7 @@ func (c *inMemoryCache) DeleteWorkspace(workspaceID domain.WorkspaceID) {
 	delete(c.data, workspaceID)
 }
 
-func (c *inMemoryCache) Keys(workspaceID domain.WorkspaceID) []string {
+func (c *inMemoryCache) Keys(workspaceID domain.WorkspaceID) []domain.Filename {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
