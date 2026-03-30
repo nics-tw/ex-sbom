@@ -6,7 +6,16 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
+	"ex-sbom/internal/db"
 	"ex-sbom/internal/handler"
+	reporthandler "ex-sbom/internal/handler/report"
+	sbomhandler "ex-sbom/internal/handler/sbom"
+	topohandler "ex-sbom/internal/handler/topology"
+	wshandler "ex-sbom/internal/handler/workspace"
+	"ex-sbom/internal/repository"
+	ssbom "ex-sbom/internal/service/sbom"
+	"ex-sbom/internal/service/workspace"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -31,9 +40,30 @@ var image embed.FS
 //go:embed static/img/apple-touch-icon-precomposed.png
 var image2 embed.FS
 
+//go:embed static/js
+var staticJS embed.FS
+
+var DBPath string = "./duck_db/sbom.duckdb"
+
 func main() {
 	config := getConfig()
-	server := createServer()
+
+	if err := db.Init(config.DBPath); err != nil {
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	slog.Info("LocalDB initialized")
+
+	// DI wiring
+	repo := repository.NewSBOMRepository(db.GormDB)
+	cache := ssbom.NewInMemoryCache()
+	workspaceSvc := workspace.New(repo, cache)
+	sbomSvc := ssbom.NewService(repo, cache)
+
+	loadInitialData(repo, cache)
+
+	server := createServer(workspaceSvc, sbomSvc)
 
 	if config.AutoOpenBrowser {
 		go func() {
@@ -50,6 +80,7 @@ func main() {
 type Config struct {
 	Port            string
 	AutoOpenBrowser bool
+	DBPath          string
 }
 
 func getConfig() Config {
@@ -58,9 +89,15 @@ func getConfig() Config {
 		port = "8080"
 	}
 
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = DBPath
+	}
+
 	return Config{
 		Port:            port,
 		AutoOpenBrowser: os.Getenv("AUTO_OPEN_BROWSER") != "false",
+		DBPath:          dbPath,
 	}
 }
 
@@ -68,10 +105,33 @@ func (c Config) URL() string {
 	return "http://localhost:" + c.Port
 }
 
-func createServer() *gin.Engine {
+func loadInitialData(repo repository.Repository, cache ssbom.Cache) {
+	workspaceID, records, err := repo.GetLatestAll()
+	if err != nil {
+		slog.Error("Failed to load SBOMs from DB", "error", err)
+		return
+	}
+	for _, rec := range records {
+		var formatted ssbom.FormattedSBOM
+		if err := json.Unmarshal(rec.BomResult, &formatted); err != nil {
+			slog.Error("Failed to unmarshal SBOM from DB", "filename", rec.Filename, "error", err)
+			continue
+		}
+		cache.Set(workspaceID, rec.Filename, formatted)
+		slog.Info("Loaded SBOM from DB", "filename", rec.Filename)
+	}
+}
+
+func createServer(workspaceSvc *workspace.Service, sbomSvc *ssbom.Service) *gin.Engine {
+	workspaceH := wshandler.New(workspaceSvc)
+	sbomH := sbomhandler.New(sbomSvc, workspaceSvc)
+	topoH := topohandler.New(sbomSvc)
+	reportH := reporthandler.New(sbomSvc)
+
 	r := gin.Default()
 	setupSSR(r)
-	handler.SetupRouterGroup(r)
+	handler.SetupRouterGroup(r, workspaceH, sbomH, topoH, reportH)
+
 	return r
 }
 
@@ -125,4 +185,7 @@ func setupSSR(r *gin.Engine) {
 	r.GET("/apple-touch-icon-precomposed.png", func(c *gin.Context) {
 		precomposedHandler.ServeHTTP(c.Writer, c.Request)
 	})
+
+	jsFS, _ := fs.Sub(staticJS, "static/js")
+	r.StaticFS("/static/js", http.FS(jsFS))
 }

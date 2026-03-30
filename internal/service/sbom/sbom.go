@@ -5,8 +5,11 @@
 package ssbom
 
 import (
+	"crypto/md5"
+	"encoding/json"
 	"ex-sbom/util"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sort"
 	"strconv"
@@ -74,8 +77,6 @@ type (
 )
 
 var (
-	SBOMs = map[string]FormattedSBOM{}
-
 	CVSSThreshold = float64(7)
 )
 
@@ -91,17 +92,16 @@ func (bom FormattedSBOM) GetVulnComponents() []string {
 	return vulnComponents
 }
 
-func GetSBOM(name string) (FormattedSBOM, error) {
-	sbom, ok := SBOMs[name]
-	if !ok {
-		return FormattedSBOM{}, fmt.Errorf("SBOM not found")
+// hashSBOM returns the MD5 hex string of the JSON-serialized FormattedSBOM.
+// encoding/json sorts map keys deterministically, so the hash is stable for the same content.
+func hashSBOM(sbom FormattedSBOM) string {
+	b, err := json.Marshal(sbom)
+	if err != nil {
+		slog.Error("HashSBOM: unreachable marshal failure", "error", err)
+		return ""
 	}
 
-	return sbom, nil
-}
-
-func DeleteSBOM(name string) {
-	delete(SBOMs, name)
+	return fmt.Sprintf("%x", md5.Sum(b))
 }
 
 func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]string) []VlunDepPath {

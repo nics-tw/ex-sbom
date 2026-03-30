@@ -13,6 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	ssbom "ex-sbom/internal/service/sbom"
+	"ex-sbom/internal/service/workspace"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -201,8 +204,8 @@ func TestSetupSSR_RouteCount(t *testing.T) {
 	// Get final route count
 	finalRoutes := len(router.Routes())
 
-	// Should have added 5 routes (2 HTML + 3 static files)
-	expectedNewRoutes := 5
+	// Should have added 7 routes (2 HTML + 3 static img files + 2 for StaticFS /static/js)
+	expectedNewRoutes := 7
 	actualNewRoutes := finalRoutes - initialRoutes
 
 	assert.Equal(t, expectedNewRoutes, actualNewRoutes,
@@ -307,7 +310,11 @@ func TestGetConfig(t *testing.T) {
 func TestCreateServer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	server := createServer()
+	cache := ssbom.NewInMemoryCache()
+	workspaceSvc := workspace.New(nil, cache)
+	sbomSvc := ssbom.NewService(nil, cache)
+
+	server := createServer(workspaceSvc, sbomSvc)
 
 	assert.NotNil(t, server)
 

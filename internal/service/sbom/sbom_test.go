@@ -976,24 +976,21 @@ func TestGetCVSS(t *testing.T) {
 }
 
 func TestGetSBOM(t *testing.T) {
-	// Save original value to restore later
-	originalSBOMs := SBOMs
-	defer func() {
-		SBOMs = originalSBOMs
-	}()
+	const workspaceID int64 = 1
+
+	cache := NewInMemoryCache()
+	svc := NewService(nil, cache)
 
 	// Setup test data
-	SBOMs = map[string]FormattedSBOM{
-		"existing": {
-			Components: []string{"comp1", "comp2"},
-			Dependency: map[string][]string{
-				"comp1": {"comp2"},
-			},
-			ComponentInfo: map[string]Component{
-				"comp1": {Name: "comp1", Version: "1.0"},
-			},
+	cache.Set(workspaceID, "existing", FormattedSBOM{
+		Components: []string{"comp1", "comp2"},
+		Dependency: map[string][]string{
+			"comp1": {"comp2"},
 		},
-	}
+		ComponentInfo: map[string]Component{
+			"comp1": {Name: "comp1", Version: "1.0"},
+		},
+	})
 
 	tests := []struct {
 		name          string
@@ -1019,7 +1016,7 @@ func TestGetSBOM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := GetSBOM(tt.sbomName)
+			result, err := svc.Get(workspaceID, tt.sbomName)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -1177,20 +1174,13 @@ func TestGetVulnComponents(t *testing.T) {
 }
 
 func TestDeleteSBOM(t *testing.T) {
-	// Save original value to restore later
-	originalSBOMs := SBOMs
-	defer func() {
-		SBOMs = originalSBOMs
-	}()
+	const workspaceID int64 = 1
 
-	// Setup test data
-	SBOMs = map[string]FormattedSBOM{
-		"sbom1": {
-			Components: []string{"comp1", "comp2"},
-		},
-		"sbom2": {
-			Components: []string{"comp3", "comp4"},
-		},
+	setupCache := func() Cache {
+		c := NewInMemoryCache()
+		c.Set(workspaceID, "sbom1", FormattedSBOM{Components: []string{"comp1", "comp2"}})
+		c.Set(workspaceID, "sbom2", FormattedSBOM{Components: []string{"comp3", "comp4"}})
+		return c
 	}
 
 	tests := []struct {
@@ -1215,25 +1205,15 @@ func TestDeleteSBOM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Call the function we're testing
-			DeleteSBOM(tt.sbomToDelete)
+			cache := setupCache()
 
-			// Check if the SBOM was deleted
-			_, exists := SBOMs[tt.checkExisting]
+			cache.Delete(workspaceID, tt.sbomToDelete)
+
+			_, exists := cache.Get(workspaceID, tt.checkExisting)
 			assert.Equal(t, tt.shouldExist, exists,
 				"After deletion, SBOM '%s' existence = %v, want %v",
 				tt.checkExisting, exists, tt.shouldExist)
 		})
-
-		// Reset test data between tests
-		SBOMs = map[string]FormattedSBOM{
-			"sbom1": {
-				Components: []string{"comp1", "comp2"},
-			},
-			"sbom2": {
-				Components: []string{"comp3", "comp4"},
-			},
-		}
 	}
 }
 

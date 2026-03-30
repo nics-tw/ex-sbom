@@ -652,7 +652,11 @@ func TestToCreateResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := toCreateResponse(tt.input)
+			names := []string{}
+			if tt.input != "" {
+				names = []string{tt.input}
+			}
+			result := toCreateResponse(int64(1), names)
 
 			// Verify the result is of type gin.H
 			assert.IsType(t, gin.H{}, result, "Result should be of type gin.H")

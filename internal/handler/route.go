@@ -5,25 +5,44 @@
 package handler
 
 import (
-	"ex-sbom/internal/handler/sbom"
-	"ex-sbom/internal/handler/topology"
+	"ex-sbom/internal/handler/middleware"
+	reporthandler "ex-sbom/internal/handler/report"
+	sbomhandler "ex-sbom/internal/handler/sbom"
+	topohandler "ex-sbom/internal/handler/topology"
+	wshandler "ex-sbom/internal/handler/workspace"
 
 	"github.com/gin-gonic/gin"
 )
 
-func SetupRouterGroup(r *gin.Engine) {
-	sbomGroup := r.Group("/sbom")
-	{
-		sbomGroup.POST("/upload", sbom.CreateSBOM)
-		sbomGroup.DELETE("/delete", sbom.DeleteSBOM)
-		sbomGroup.GET("/report/:name", sbom.CreateReportPDF)
-	}
+func SetupRouterGroup(r *gin.Engine,
+	workspaceH *wshandler.Handler,
+	sbomH *sbomhandler.Handler,
+	topoH *topohandler.Handler,
+	reportH *reporthandler.Handler,
+) {
+	workspaces := r.Group("/workspaces")
+	workspaces.GET("", workspaceH.List)
+	workspaces.POST("", workspaceH.Create)
 
-	topologyGroup := r.Group("/topology")
-	{
-		topologyGroup.GET("/get_list_by_level", topology.GetComponentListByLevel)
-		topologyGroup.GET("/relations", topology.GetRelations)
-		topologyGroup.GET("/component", topology.GetComponent)
-		topologyGroup.GET("/get_component_vuln_dep", topology.GetComponentVulnDep)
-	}
+	ws := workspaces.Group("/:id")
+	ws.Use(middleware.WorkspaceID())
+	ws.GET("", workspaceH.Get)
+	ws.PUT("", workspaceH.Update)
+	ws.DELETE("", workspaceH.Delete)
+	ws.GET("/diff", sbomH.Diff)
+	ws.GET("/search", sbomH.Search)
+
+	sboms := ws.Group("/sboms")
+	sboms.GET("", sbomH.List)
+	sboms.POST("", sbomH.Create)
+
+	namedSBOM := sboms.Group("/:name")
+	namedSBOM.DELETE("", sbomH.Delete)
+	namedSBOM.GET("/report", reportH.CreatePDF)
+
+	topo := namedSBOM.Group("/topology")
+	topo.GET("", topoH.ListComponents)
+	topo.GET("/relations", topoH.GetRelations)
+	topo.GET("/component", topoH.GetComponent)
+	topo.GET("/component/vuln-dep", topoH.GetComponentVulnDep)
 }

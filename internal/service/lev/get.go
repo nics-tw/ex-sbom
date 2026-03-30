@@ -26,6 +26,10 @@ const (
 	workerCount = 10
 )
 
+// GetByChunk
+// Get epss from https://api.first.org/data/v1/epss
+// and count lev
+// todo should move to client
 func GetByChunk(cves []string) (map[string]first.EPSS, error) {
 	if len(cves) == 0 {
 		return nil, fmt.Errorf("no CVEs provided")

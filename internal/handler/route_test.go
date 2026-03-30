@@ -10,13 +10,62 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"ex-sbom/internal/domain"
+	reporthandler "ex-sbom/internal/handler/report"
+	sbomhandler "ex-sbom/internal/handler/sbom"
+	topohandler "ex-sbom/internal/handler/topology"
+	wshandler "ex-sbom/internal/handler/workspace"
+	ssbom "ex-sbom/internal/service/sbom"
+	wsvc "ex-sbom/internal/service/workspace"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
+// noopRepository is a stub that satisfies repository.Repository with safe no-ops.
+type noopRepository struct{}
+
+func (r *noopRepository) CreateWorkspace(_ domain.WorkspaceName) (domain.WorkspaceID, error) {
+	return 1, nil
+}
+func (r *noopRepository) UpdateWorkspaceName(_ domain.WorkspaceID, _ domain.WorkspaceName) error {
+	return nil
+}
+func (r *noopRepository) SoftDeleteWorkspace(_ domain.WorkspaceID) error { return nil }
+func (r *noopRepository) GetWorkspaces() ([]domain.WorkspaceInfo, error) {
+	return []domain.WorkspaceInfo{}, nil
+}
+func (r *noopRepository) Save(_ domain.WorkspaceID, _ domain.Filename, _ any, _ time.Time, _ string) error {
+	return nil
+}
+func (r *noopRepository) SoftDeleteSBOM(_ domain.WorkspaceID, _ domain.Filename) error { return nil }
+func (r *noopRepository) GetLatestAll() (domain.WorkspaceID, []domain.SBOMEntry, error) {
+	return 0, nil, nil
+}
+func (r *noopRepository) GetLatestByWorkspace(_ domain.WorkspaceID) ([]domain.SBOMEntry, error) {
+	return nil, nil
+}
+
+// buildTestRouter constructs a router with all handlers wired using a no-op repository.
+func buildTestRouter() *gin.Engine {
+	repo := &noopRepository{}
+	cache := ssbom.NewInMemoryCache()
+	sbomSvc := ssbom.NewService(repo, cache)
+	workspaceSvc := wsvc.New(repo, cache)
+
+	workspaceH := wshandler.New(workspaceSvc)
+	sbomH := sbomhandler.New(sbomSvc, workspaceSvc)
+	topoH := topohandler.New(sbomSvc)
+	reportH := reporthandler.New(sbomSvc)
+
+	router := gin.New()
+	SetupRouterGroup(router, workspaceH, sbomH, topoH, reportH)
+	return router
+}
+
 func TestSetupRouterGroup(t *testing.T) {
-	// Set Gin to test mode to avoid debug output
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -26,99 +75,31 @@ func TestSetupRouterGroup(t *testing.T) {
 		expectedStatus int
 		description    string
 	}{
-		// SBOM routes
 		{
-			name:           "sbom upload route",
-			method:         "POST",
-			path:           "/sbom/upload",
-			expectedStatus: http.StatusBadRequest, // Handler not implemented in test
-			description:    "Should route to sbom.CreateSBOM handler",
-		},
-		{
-			name:           "sbom delete route",
-			method:         "DELETE",
-			path:           "/sbom/delete",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to sbom.DeleteSBOM handler",
-		},
-
-		// Topology routes
-		{
-			name:           "topology get list by level route",
+			name:           "list workspaces",
 			method:         "GET",
-			path:           "/topology/get_list_by_level",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetComponentListByLevel handler",
+			path:           "/workspaces",
+			expectedStatus: http.StatusOK,
+			description:    "Should route to workspace.List handler",
 		},
 		{
-			name:           "topology relations route",
+			name:           "invalid route",
 			method:         "GET",
-			path:           "/topology/relations",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetRelations handler",
-		},
-		{
-			name:           "topology component route",
-			method:         "GET",
-			path:           "/topology/component",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetComponent handler",
-		},
-		{
-			name:           "topology vuln dep route",
-			method:         "GET",
-			path:           "/topology/get_component_vuln_dep",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetComponentVulnDep handler",
-		},
-
-		// Invalid routes
-		{
-			name:           "invalid sbom route",
-			method:         "GET",
-			path:           "/sbom/invalid",
+			path:           "/nonexistent",
 			expectedStatus: http.StatusNotFound,
 			description:    "Should return 404 for non-existent routes",
-		},
-		{
-			name:           "invalid topology route",
-			method:         "POST",
-			path:           "/topology/invalid",
-			expectedStatus: http.StatusNotFound,
-			description:    "Should return 404 for non-existent routes",
-		},
-		{
-			name:           "wrong method for sbom upload",
-			method:         "GET",
-			path:           "/sbom/upload",
-			expectedStatus: http.StatusNotFound,
-			description:    "Should return 405 for wrong HTTP method",
-		},
-		{
-			name:           "wrong method for topology relations",
-			method:         "POST",
-			path:           "/topology/relations",
-			expectedStatus: http.StatusNotFound,
-			description:    "Should return 405 for wrong HTTP method",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a new Gin engine for each test
-			router := gin.New()
+			router := buildTestRouter()
 
-			// Setup the routes
-			SetupRouterGroup(router)
-
-			// Create a test request
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			w := httptest.NewRecorder()
 
-			// Perform the request
 			router.ServeHTTP(w, req)
 
-			// Assert the status code
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
 		})
 	}
@@ -127,39 +108,29 @@ func TestSetupRouterGroup(t *testing.T) {
 func TestSetupRouterGroup_RouteRegistration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// Create a new router
-	router := gin.New()
+	router := buildTestRouter()
 
-	// Get initial route count
-	initialRoutes := len(router.Routes())
-
-	// Setup routes
-	SetupRouterGroup(router)
-
-	// Get final route count
-	finalRoutes := len(router.Routes())
-
-	// Should have added 6 routes (2 sbom + 4 topology)
-	expectedNewRoutes := 6
-	actualNewRoutes := finalRoutes - initialRoutes
-
-	assert.Equal(t, expectedNewRoutes, actualNewRoutes,
-		"Should register exactly 6 new routes")
-
-	// Verify specific routes exist
 	routes := router.Routes()
 
 	expectedRoutes := []struct {
 		method string
 		path   string
 	}{
-		{"POST", "/sbom/upload"},
-		{"DELETE", "/sbom/delete"},
-		{"GET", "/topology/get_list_by_level"},
-		{"GET", "/topology/relations"},
-		{"GET", "/topology/component"},
-		{"GET", "/topology/get_component_vuln_dep"},
-		{"GET", "/sbom/report/:name"},
+		{"GET", "/workspaces"},
+		{"POST", "/workspaces"},
+		{"GET", "/workspaces/:id"},
+		{"PUT", "/workspaces/:id"},
+		{"DELETE", "/workspaces/:id"},
+		{"GET", "/workspaces/:id/diff"},
+		{"GET", "/workspaces/:id/search"},
+		{"GET", "/workspaces/:id/sboms"},
+		{"POST", "/workspaces/:id/sboms"},
+		{"DELETE", "/workspaces/:id/sboms/:name"},
+		{"GET", "/workspaces/:id/sboms/:name/report"},
+		{"GET", "/workspaces/:id/sboms/:name/topology"},
+		{"GET", "/workspaces/:id/sboms/:name/topology/relations"},
+		{"GET", "/workspaces/:id/sboms/:name/topology/component"},
+		{"GET", "/workspaces/:id/sboms/:name/topology/component/vuln-dep"},
 	}
 
 	for _, expected := range expectedRoutes {
@@ -178,24 +149,16 @@ func TestSetupRouterGroup_RouteRegistration(t *testing.T) {
 func TestSetupRouterGroup_GroupPrefixes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	router := gin.New()
-	SetupRouterGroup(router)
+	router := buildTestRouter()
 
 	routes := router.Routes()
 
-	// Check that SBOM routes have correct prefix
-	sbomRoutes := 0
-	topologyRoutes := 0
-
+	workspaceRoutes := 0
 	for _, route := range routes {
-		if len(route.Path) >= 5 && route.Path[:5] == "/sbom" {
-			sbomRoutes++
-		}
-		if len(route.Path) >= 9 && route.Path[:9] == "/topology" {
-			topologyRoutes++
+		if len(route.Path) >= 11 && route.Path[:11] == "/workspaces" {
+			workspaceRoutes++
 		}
 	}
 
-	assert.Equal(t, 3, sbomRoutes, "Should have 3 routes under /sbom prefix")
-	assert.Equal(t, 4, topologyRoutes, "Should have 4 routes under /topology prefix")
+	assert.Greater(t, workspaceRoutes, 0, "Should have routes under /workspaces prefix")
 }

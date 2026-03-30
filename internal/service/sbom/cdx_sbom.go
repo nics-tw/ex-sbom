@@ -6,55 +6,50 @@ package ssbom
 
 import (
 	"errors"
+	"ex-sbom/internal/domain"
 	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
 	"ex-sbom/util/file"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 )
 
-func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
+func (s *Service) ProcessCDX(workspaceID domain.WorkspaceID, name domain.Filename, bom cdx.BOM, rawData []byte) error {
 	if bom.BOMFormat != cdx.BOMFormat {
 		return fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
 	}
 
-	if _, ok := SBOMs[name]; ok {
-		// reset the sbom
-		SBOMs[name] = FormattedSBOM{}
-	}
-
 	c := getCdxComponents(bom.Components)
 	refToName := getCdxBomRefToName(bom.Components)
-
 	dependency := getCdxDep(bom.Dependencies, refToName)
 	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName)
 
-	SBOMs[name] = FormattedSBOM{
+	s.cache.Set(workspaceID, name, FormattedSBOM{
 		Components:        c,
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getCdxComponentInfo(bom.Components, file, name),
-	}
+		ComponentInfo:     getCdxComponentInfo(bom.Components, rawData, name),
+	})
+
+	cached, _ := s.cache.Get(workspaceID, name)
 
 	withVuln := []string{}
-
-	for compName, info := range SBOMs[name].ComponentInfo {
+	for compName, info := range cached.ComponentInfo {
 		if info.VulnNumber > 0 {
 			withVuln = append(withVuln, compName)
 		}
 	}
 
 	affecteds := []string{}
-
 	for _, compName := range withVuln {
-		affected := getAffecteds(compName, SBOMs[name].ReverseDependency)
-
+		affected := getAffecteds(compName, cached.ReverseDependency)
 		if len(affected) > 0 {
 			affecteds = append(affecteds, affected...)
 		}
@@ -63,26 +58,34 @@ func ProcessCDX(name string, bom cdx.BOM, file []byte) error {
 	distinct := util.StringSlice(affecteds)
 
 	for _, compName := range distinct {
-		if _, ok := SBOMs[name]; !ok {
+		current, ok := s.cache.Get(workspaceID, name)
+		if !ok {
 			slog.Error("failed to get name from refA", "refA", name)
-
 			continue
 		}
-
-		componentInfo := SBOMs[name].ComponentInfo[compName]
+		componentInfo := current.ComponentInfo[compName]
 		componentInfo.ContainsVulnDep = true
-		// componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
-		SBOMs[name].ComponentInfo[compName] = componentInfo
+		current.ComponentInfo[compName] = componentInfo
+		s.cache.Set(workspaceID, name, current)
+	}
+
+	final, _ := s.cache.Get(workspaceID, name)
+
+	var bomTimestamp time.Time
+	if bom.Metadata != nil && bom.Metadata.Timestamp != "" {
+		bomTimestamp, _ = time.Parse(time.RFC3339, bom.Metadata.Timestamp)
+	}
+
+	md5Hash := hashSBOM(final)
+	if err := s.repo.Save(workspaceID, name, final, bomTimestamp, md5Hash); err != nil {
+		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
 
 	slog.Info(
 		"Process CycloneDX-formatted SBOM successfully",
-		"name",
-		name,
-		"numbers of components",
-		len(c),
-		"total levels",
-		fmt.Sprintf("%d", len(SBOMs[name].DependencyLevel)),
+		"name", name,
+		"numbers of components", len(c),
+		"total levels", fmt.Sprintf("%d", len(final.DependencyLevel)),
 	)
 
 	return nil
@@ -290,6 +293,12 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 
 		return nil
 	}
+	
+	defer func() {
+		if err := file.Delete(path); err != nil {
+			slog.Error("failed to delete file", "error", err, "filename", filename, "path", path)
+		}
+	}()
 
 	vulnPkgs, err := file.GetScanResult(path)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
@@ -320,6 +329,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		}
 	}
 
+	// will call api for get epss and lev
 	firstInfos, err := lev.GetByChunk(cves)
 	if err != nil {
 		slog.Error("failed to get lev info", "error", err)
@@ -343,8 +353,6 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 			componentInfo[name] = info
 		}
 	}
-
-	file.Delete(path)
 
 	return componentInfo
 }

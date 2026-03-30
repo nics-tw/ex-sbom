@@ -6,6 +6,7 @@ package ssbom
 
 import (
 	"errors"
+	"ex-sbom/internal/domain"
 	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
 	"ex-sbom/util/file"
@@ -13,6 +14,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -26,14 +28,9 @@ const (
 	filePrefix         = "File-"
 )
 
-func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
+func (s *Service) ProcessSPDX(workspaceID domain.WorkspaceID, name domain.Filename, document *spdx.Document, rawData []byte) error {
 	if document == nil {
 		return nil
-	}
-
-	if _, ok := SBOMs[name]; ok {
-		// reset the sbom
-		SBOMs[name] = FormattedSBOM{}
 	}
 
 	c := getSpdxComponents(*document)
@@ -41,28 +38,27 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 	dependency := getSpdxDep(*document, refToName)
 	dependencyLevel := getSpdxDependencyDepthMap(*document, c, refToName)
 
-	SBOMs[name] = FormattedSBOM{
+	s.cache.Set(workspaceID, name, FormattedSBOM{
 		Components:        c,
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getSpdxComponentInfo(*document, file, name),
-	}
+		ComponentInfo:     getSpdxComponentInfo(*document, rawData, name),
+	})
+
+	cached, _ := s.cache.Get(workspaceID, name)
 
 	compWithVuln := []string{}
-
-	for compName, info := range SBOMs[name].ComponentInfo {
+	for compName, info := range cached.ComponentInfo {
 		if info.VulnNumber > 0 {
 			compWithVuln = append(compWithVuln, compName)
 		}
 	}
 
 	affecteds := []string{}
-
 	for _, compName := range compWithVuln {
-		affected := getAffecteds(compName, SBOMs[name].ReverseDependency)
-
+		affected := getAffecteds(compName, cached.ReverseDependency)
 		if len(affected) > 0 {
 			affecteds = append(affecteds, affected...)
 		}
@@ -71,27 +67,29 @@ func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
 	distinct := util.StringSlice(affecteds)
 
 	for _, compName := range distinct {
-		if _, ok := SBOMs[name]; !ok {
+		current, ok := s.cache.Get(workspaceID, name)
+		if !ok {
 			slog.Error("failed to get name from refA", "refA", name)
-
 			continue
 		}
-
-		componentInfo := SBOMs[name].ComponentInfo[compName]
+		componentInfo := current.ComponentInfo[compName]
 		componentInfo.ContainsVulnDep = true
+		current.ComponentInfo[compName] = componentInfo
+		s.cache.Set(workspaceID, name, current)
+	}
 
-		// componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
-		SBOMs[name].ComponentInfo[compName] = componentInfo
+	final, _ := s.cache.Get(workspaceID, name)
+
+	md5Hash := hashSBOM(final)
+	if err := s.repo.Save(workspaceID, name, final, time.Time{}, md5Hash); err != nil {
+		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
 
 	slog.Info(
 		"Process SPDX-formatted SBOM successfully",
-		"name",
-		name,
-		"numbers of components",
-		len(c),
-		"total levels",
-		fmt.Sprintf("%d", len(SBOMs[name].DependencyLevel)),
+		"name", name,
+		"numbers of components", len(c),
+		"total levels", fmt.Sprintf("%d", len(final.DependencyLevel)),
 	)
 
 	return nil
@@ -259,6 +257,12 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		return nil
 	}
 
+	defer func() {
+		if err := file.Delete(path); err != nil {
+			slog.Error("failed to delete file", "error", err, "filename", filename, "path", path)
+		}
+	}()
+
 	vulnPkgs, err := file.GetScanResult(path)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
 		slog.Error("failed to get scan result", "error", err)
@@ -279,7 +283,6 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 	}
 
 	var cves []string
-
 	for _, c := range result {
 		for _, v := range c.Vulns {
 			if v.ID != "" {
@@ -288,6 +291,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		}
 	}
 
+	// will call api for get epss and lev
 	firstInfos, err := lev.GetByChunk(cves)
 	if err != nil {
 		slog.Error("failed to get lev info", "error", err)
@@ -311,8 +315,6 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 			result[name] = info
 		}
 	}
-
-	file.Delete(path)
 
 	return result
 }
