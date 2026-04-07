@@ -815,8 +815,9 @@
       },
 
       _renderDetails(comp, vulnDepPaths = []) {
-        const { name, version, vuln_number = 0, vulns = [],
+        const { name, version, vuln_number = 0, vulns: _vulns = [],
                 suggested_fix_version, is_breaking_change, has_severe_vuln, licences } = comp;
+        const vulns = _vulns ?? [];
 
         const warnIcon = (color) => _warnSVG(color, "", "h-5 w-5 mr-1 flex-shrink-0 mt-0.5");
 
