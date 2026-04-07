@@ -6,10 +6,11 @@ package psvc
 
 import (
 	"encoding/json"
+	"log/slog"
+
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
-	"log/slog"
 )
 
 // Service provides project business logic using injected repository and cache.

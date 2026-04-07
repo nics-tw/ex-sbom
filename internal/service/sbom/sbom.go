@@ -7,13 +7,14 @@ package ssbom
 import (
 	"crypto/md5"
 	"encoding/json"
-	"ex-sbom/util"
 	"fmt"
 	"log/slog"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+
+	"ex-sbom/util"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"

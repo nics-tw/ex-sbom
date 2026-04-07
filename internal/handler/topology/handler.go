@@ -5,13 +5,14 @@
 package topology
 
 import (
-	"ex-sbom/internal/handler/middleware"
-	ssbom "ex-sbom/internal/service/sbom"
-	"ex-sbom/util/msg"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
+
+	"ex-sbom/internal/handler/middleware"
+	ssbom "ex-sbom/internal/service/sbom"
+	"ex-sbom/util/msg"
 
 	"github.com/gin-gonic/gin"
 )

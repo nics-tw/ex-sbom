@@ -7,15 +7,6 @@ package main
 import (
 	"embed"
 	"encoding/json"
-	"ex-sbom/internal/db"
-	"ex-sbom/internal/handler"
-	reporthandler "ex-sbom/internal/handler/report"
-	sbomhandler "ex-sbom/internal/handler/sbom"
-	topohandler "ex-sbom/internal/handler/topology"
-	projecthandler "ex-sbom/internal/handler/workspace"
-	"ex-sbom/internal/repository"
-	ssbom "ex-sbom/internal/service/sbom"
-	psvc "ex-sbom/internal/service/workspace"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -25,6 +16,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"ex-sbom/internal/db"
+	"ex-sbom/internal/handler"
+	reporthandler "ex-sbom/internal/handler/report"
+	sbomhandler "ex-sbom/internal/handler/sbom"
+	topohandler "ex-sbom/internal/handler/topology"
+	projecthandler "ex-sbom/internal/handler/workspace"
+	"ex-sbom/internal/repository"
+	ssbom "ex-sbom/internal/service/sbom"
+	psvc "ex-sbom/internal/service/workspace"
 
 	"github.com/gin-gonic/gin"
 )

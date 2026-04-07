@@ -6,15 +6,16 @@ package ssbom
 
 import (
 	"errors"
-	"ex-sbom/internal/domain"
-	"ex-sbom/internal/service/lev"
-	"ex-sbom/util"
-	"ex-sbom/util/file"
 	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
 	"time"
+
+	"ex-sbom/internal/domain"
+	"ex-sbom/internal/service/lev"
+	"ex-sbom/util"
+	"ex-sbom/util/file"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"

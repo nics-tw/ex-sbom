@@ -6,12 +6,13 @@ package lev
 
 import (
 	"context"
-	"ex-sbom/client/first"
-	"ex-sbom/util"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"sync"
+
+	"ex-sbom/client/first"
+	"ex-sbom/util"
 )
 
 type (

@@ -7,8 +7,9 @@
 package sbom
 
 import (
-	"ex-sbom/util/msg"
 	"testing"
+
+	"ex-sbom/util/msg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"

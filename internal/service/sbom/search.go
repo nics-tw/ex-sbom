@@ -5,8 +5,9 @@
 package ssbom
 
 import (
-	"ex-sbom/internal/domain"
 	"strings"
+
+	"ex-sbom/internal/domain"
 )
 
 // SearchResult represents a single search hit.

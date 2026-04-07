@@ -7,8 +7,9 @@
 package ssbom
 
 import (
-	"ex-sbom/internal/domain"
 	"testing"
+
+	"ex-sbom/internal/domain"
 
 	"github.com/stretchr/testify/assert"
 )
