@@ -5,81 +5,84 @@
 package ssbom
 
 import (
-	"ex-sbom/internal/domain"
 	"sync"
+
+	"ex-sbom/internal/domain"
 )
 
-// Cache is a thread-safe in-memory store for FormattedSBOM objects, keyed by workspace and filename.
+// Cache is a thread-safe in-memory store for FormattedSBOM objects, keyed by project and filename.
 type Cache interface {
-	Get(workspaceID domain.WorkspaceID, name domain.Filename) (FormattedSBOM, bool)
-	Set(workspaceID domain.WorkspaceID, name domain.Filename, sbom FormattedSBOM)
-	Delete(workspaceID domain.WorkspaceID, name domain.Filename)
-	DeleteWorkspace(workspaceID domain.WorkspaceID)
-	Keys(workspaceID domain.WorkspaceID) []domain.Filename
-	All(workspaceID domain.WorkspaceID) map[domain.Filename]FormattedSBOM
+	Get(projectID domain.ProjectID, name domain.Version) (FormattedSBOM, bool)
+	Set(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM)
+	Delete(projectID domain.ProjectID, name domain.Version)
+	DeleteProject(projectID domain.ProjectID)
+	Keys(projectID domain.ProjectID) []domain.Version
+	All(projectID domain.ProjectID) map[domain.Version]FormattedSBOM
 }
 
 type inMemoryCache struct {
 	mu   sync.RWMutex
-	data map[domain.WorkspaceID]map[domain.Filename]FormattedSBOM
+	data map[domain.ProjectID]map[domain.Version]FormattedSBOM
 }
 
 // NewInMemoryCache returns a new in-memory Cache implementation.
 func NewInMemoryCache() Cache {
-	return &inMemoryCache{data: make(map[domain.WorkspaceID]map[domain.Filename]FormattedSBOM)}
+	return &inMemoryCache{
+		data: make(map[domain.ProjectID]map[domain.Version]FormattedSBOM),
+	}
 }
 
-func (c *inMemoryCache) Get(workspaceID domain.WorkspaceID, name domain.Filename) (FormattedSBOM, bool) {
+func (c *inMemoryCache) Get(projectID domain.ProjectID, name domain.Version) (FormattedSBOM, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	sbom, ok := c.data[workspaceID][name]
+	sbom, ok := c.data[projectID][name]
 	return sbom, ok
 }
 
-func (c *inMemoryCache) Set(workspaceID domain.WorkspaceID, name domain.Filename, sbom FormattedSBOM) {
+func (c *inMemoryCache) Set(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.data[workspaceID] == nil {
-		c.data[workspaceID] = make(map[domain.Filename]FormattedSBOM)
+	if c.data[projectID] == nil {
+		c.data[projectID] = make(map[domain.Version]FormattedSBOM)
 	}
 
-	c.data[workspaceID][name] = sbom
+	c.data[projectID][name] = sbom
 }
 
-func (c *inMemoryCache) Delete(workspaceID domain.WorkspaceID, name domain.Filename) {
+func (c *inMemoryCache) Delete(projectID domain.ProjectID, name domain.Version) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.data[workspaceID], name)
+	delete(c.data[projectID], name)
 }
 
-func (c *inMemoryCache) DeleteWorkspace(workspaceID domain.WorkspaceID) {
+func (c *inMemoryCache) DeleteProject(projectID domain.ProjectID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.data, workspaceID)
+	delete(c.data, projectID)
 }
 
-func (c *inMemoryCache) Keys(workspaceID domain.WorkspaceID) []domain.Filename {
+func (c *inMemoryCache) Keys(projectID domain.ProjectID) []domain.Version {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	ws := c.data[workspaceID]
-	keys := make([]domain.Filename, 0, len(ws))
-	for k := range ws {
+	proj := c.data[projectID]
+	keys := make([]domain.Version, 0, len(proj))
+	for k := range proj {
 		keys = append(keys, k)
 	}
 
 	return keys
 }
 
-func (c *inMemoryCache) All(workspaceID domain.WorkspaceID) map[domain.Filename]FormattedSBOM {
+func (c *inMemoryCache) All(projectID domain.ProjectID) map[domain.Version]FormattedSBOM {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	ws := c.data[workspaceID]
-	result := make(map[domain.Filename]FormattedSBOM, len(ws))
-	for k, v := range ws {
+	proj := c.data[projectID]
+	result := make(map[domain.Version]FormattedSBOM, len(proj))
+	for k, v := range proj {
 		result[k] = v
 	}
 

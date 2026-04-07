@@ -16,9 +16,9 @@ import (
 	reporthandler "ex-sbom/internal/handler/report"
 	sbomhandler "ex-sbom/internal/handler/sbom"
 	topohandler "ex-sbom/internal/handler/topology"
-	wshandler "ex-sbom/internal/handler/workspace"
+	projecthandler "ex-sbom/internal/handler/workspace"
 	ssbom "ex-sbom/internal/service/sbom"
-	wsvc "ex-sbom/internal/service/workspace"
+	psvc "ex-sbom/internal/service/workspace"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -27,25 +27,31 @@ import (
 // noopRepository is a stub that satisfies repository.Repository with safe no-ops.
 type noopRepository struct{}
 
-func (r *noopRepository) CreateWorkspace(_ domain.WorkspaceName) (domain.WorkspaceID, error) {
+func (r *noopRepository) CreateProject(_ domain.ProjectName) (domain.ProjectID, error) {
 	return 1, nil
 }
-func (r *noopRepository) UpdateWorkspaceName(_ domain.WorkspaceID, _ domain.WorkspaceName) error {
+func (r *noopRepository) UpdateProjectName(_ domain.ProjectID, _ domain.ProjectName) error {
 	return nil
 }
-func (r *noopRepository) SoftDeleteWorkspace(_ domain.WorkspaceID) error { return nil }
-func (r *noopRepository) GetWorkspaces() ([]domain.WorkspaceInfo, error) {
-	return []domain.WorkspaceInfo{}, nil
+func (r *noopRepository) SoftDeleteProject(_ domain.ProjectID) error { return nil }
+func (r *noopRepository) GetProjects() ([]domain.ProjectInfo, error) {
+	return []domain.ProjectInfo{}, nil
 }
-func (r *noopRepository) Save(_ domain.WorkspaceID, _ domain.Filename, _ any, _ time.Time, _ string) error {
+func (r *noopRepository) CreateSBOM(_ domain.ProjectID, _ domain.Version, _ any, _ time.Time, _ string) error {
 	return nil
 }
-func (r *noopRepository) SoftDeleteSBOM(_ domain.WorkspaceID, _ domain.Filename) error { return nil }
-func (r *noopRepository) GetLatestAll() (domain.WorkspaceID, []domain.SBOMEntry, error) {
+func (r *noopRepository) SoftDeleteSBOM(_ domain.ProjectID, _ domain.Version) error { return nil }
+func (r *noopRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) {
 	return 0, nil, nil
 }
-func (r *noopRepository) GetLatestByWorkspace(_ domain.WorkspaceID) ([]domain.SBOMEntry, error) {
+func (r *noopRepository) GetLatestByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
 	return nil, nil
+}
+func (r *noopRepository) GetAllVersions(_ domain.ProjectID) ([]domain.VersionInfo, error) {
+	return nil, nil
+}
+func (r *noopRepository) RenameVersion(_ domain.ProjectID, _, _ domain.Version) error {
+	return nil
 }
 
 // buildTestRouter constructs a router with all handlers wired using a no-op repository.
@@ -53,15 +59,15 @@ func buildTestRouter() *gin.Engine {
 	repo := &noopRepository{}
 	cache := ssbom.NewInMemoryCache()
 	sbomSvc := ssbom.NewService(repo, cache)
-	workspaceSvc := wsvc.New(repo, cache)
+	projectSvc := psvc.New(repo, cache)
 
-	workspaceH := wshandler.New(workspaceSvc)
-	sbomH := sbomhandler.New(sbomSvc, workspaceSvc)
+	projectH := projecthandler.New(projectSvc)
+	sbomH := sbomhandler.New(sbomSvc, projectSvc)
 	topoH := topohandler.New(sbomSvc)
 	reportH := reporthandler.New(sbomSvc)
 
 	router := gin.New()
-	SetupRouterGroup(router, workspaceH, sbomH, topoH, reportH)
+	SetupRouterGroup(router, projectH, sbomH, topoH, reportH)
 	return router
 }
 
@@ -76,11 +82,11 @@ func TestSetupRouterGroup(t *testing.T) {
 		description    string
 	}{
 		{
-			name:           "list workspaces",
+			name:           "list projects",
 			method:         "GET",
-			path:           "/workspaces",
+			path:           "/projects",
 			expectedStatus: http.StatusOK,
-			description:    "Should route to workspace.List handler",
+			description:    "Should route to project.List handler",
 		},
 		{
 			name:           "invalid route",
@@ -116,21 +122,24 @@ func TestSetupRouterGroup_RouteRegistration(t *testing.T) {
 		method string
 		path   string
 	}{
-		{"GET", "/workspaces"},
-		{"POST", "/workspaces"},
-		{"GET", "/workspaces/:id"},
-		{"PUT", "/workspaces/:id"},
-		{"DELETE", "/workspaces/:id"},
-		{"GET", "/workspaces/:id/diff"},
-		{"GET", "/workspaces/:id/search"},
-		{"GET", "/workspaces/:id/sboms"},
-		{"POST", "/workspaces/:id/sboms"},
-		{"DELETE", "/workspaces/:id/sboms/:name"},
-		{"GET", "/workspaces/:id/sboms/:name/report"},
-		{"GET", "/workspaces/:id/sboms/:name/topology"},
-		{"GET", "/workspaces/:id/sboms/:name/topology/relations"},
-		{"GET", "/workspaces/:id/sboms/:name/topology/component"},
-		{"GET", "/workspaces/:id/sboms/:name/topology/component/vuln-dep"},
+		{"GET", "/projects"},
+		{"POST", "/projects"},
+		{"GET", "/projects/:id"},
+		{"PUT", "/projects/:id"},
+		{"DELETE", "/projects/:id"},
+		{"GET", "/projects/:id/diff"},
+		{"GET", "/projects/:id/search"},
+		{"GET", "/projects/:id/sboms"},
+		{"POST", "/projects/:id/sboms"},
+		{"POST", "/projects/:id/sboms/preview"},
+		{"DELETE", "/projects/:id/sboms/:name"},
+		{"PUT", "/projects/:id/sboms/:name"},
+		{"GET", "/projects/:id/sboms/:name/report"},
+		{"GET", "/projects/:id/versions"},
+		{"GET", "/projects/:id/sboms/:name/topology"},
+		{"GET", "/projects/:id/sboms/:name/topology/relations"},
+		{"GET", "/projects/:id/sboms/:name/topology/component"},
+		{"GET", "/projects/:id/sboms/:name/topology/component/vuln-dep"},
 	}
 
 	for _, expected := range expectedRoutes {
@@ -153,12 +162,12 @@ func TestSetupRouterGroup_GroupPrefixes(t *testing.T) {
 
 	routes := router.Routes()
 
-	workspaceRoutes := 0
+	projectRoutes := 0
 	for _, route := range routes {
-		if len(route.Path) >= 11 && route.Path[:11] == "/workspaces" {
-			workspaceRoutes++
+		if len(route.Path) >= 9 && route.Path[:9] == "/projects" {
+			projectRoutes++
 		}
 	}
 
-	assert.Greater(t, workspaceRoutes, 0, "Should have routes under /workspaces prefix")
+	assert.Greater(t, projectRoutes, 0, "Should have routes under /projects prefix")
 }

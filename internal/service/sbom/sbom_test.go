@@ -10,6 +10,8 @@ import (
 	"sort"
 	"testing"
 
+	"ex-sbom/internal/domain"
+
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
 	"github.com/stretchr/testify/assert"
@@ -976,7 +978,7 @@ func TestGetCVSS(t *testing.T) {
 }
 
 func TestGetSBOM(t *testing.T) {
-	const workspaceID int64 = 1
+	const workspaceID domain.ProjectID = 1
 
 	cache := NewInMemoryCache()
 	svc := NewService(nil, cache)
@@ -1174,7 +1176,7 @@ func TestGetVulnComponents(t *testing.T) {
 }
 
 func TestDeleteSBOM(t *testing.T) {
-	const workspaceID int64 = 1
+	const workspaceID domain.ProjectID = 1
 
 	setupCache := func() Cache {
 		c := NewInMemoryCache()

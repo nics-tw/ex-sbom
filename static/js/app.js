@@ -2,7 +2,7 @@
     // STATE — single source of truth for mutable app state
     // ═══════════════════════════════════════════════════════════════════════════
     const State = {
-      workspaceID: null,
+      projectID: null,
       uploadedFiles: new Set(),
       activeTab: null,
       language: "en",
@@ -18,7 +18,7 @@
           appDescription: "SBOM Explorer, designed by NICS-ra",
           selectFiles: "Select SBOM Files",
           selectedFiles: "Selected files:",
-          uploadedFiles: "Processed SBOM Files",
+          uploadedFiles: "Selected SBOM Versions",
           noFilesUploaded: "No files selected yet",
           uploading: "Processing {0}...",
           uploadedSuccessfully: "{0} processed successfully",
@@ -65,13 +65,13 @@
           suggestUpgradeTo: "Suggest upgrade to version {0}",
           breakingChangeWarning: "Warning: Updating to version {0} includes breaking changes that may require code modifications.",
           severeVulnWarning: "This component contains security vulnerabilities with a CVSS score of 7.0 or higher. The suggested fix version is based on these vulnerabilities.",
-          workspace: "Workspace",
-          newWorkspace: "New workspace name",
-          workspaceSwitch: "Switch",
-          workspaceRename: "Rename",
-          workspaceDelete: "Delete",
-          workspaceRenamePrompt: "Enter new workspace name:",
-          workspaceDeleteConfirm: "Delete this workspace and all its SBOMs? This cannot be undone.",
+          project: "Project",
+          newProject: "New project name",
+          projectSwitch: "Switch",
+          projectRename: "Rename",
+          projectDelete: "Delete",
+          projectRenamePrompt: "Enter new project name:",
+          projectDeleteConfirm: "Delete this project and all its SBOMs? This cannot be undone.",
           diffFiles: "Diff Files",
           diffSbomTitle: "Compare SBOMs",
           diffSbomA: "SBOM A (before)",
@@ -91,13 +91,15 @@
           diffSevere: "Severe",
           diffNoChanges: "No differences found",
           diffSelectBoth: "Please select two different SBOMs",
+          diffSummary: "Showing {0} additions, {1} removals, {2} changes",
+          diffVulns: "Vulns",
         },
         zh: {
           appTitle: "ex-sbom",
           appDescription: "SBOM explorer，由 NICS-ra 設計",
           selectFiles: "選擇 SBOM 檔案",
           selectedFiles: "已選擇的檔案：",
-          uploadedFiles: "已選擇的 SBOM 檔案",
+          uploadedFiles: "選擇的 SBOM 版本",
           noFilesUploaded: "尚未上傳檔案",
           uploading: "正在處理 {0}...",
           uploadedSuccessfully: "{0} 的資料彙整完畢",
@@ -144,13 +146,13 @@
           suggestUpgradeTo: "建議升級到版本 {0}",
           breakingChangeWarning: "警告：升級到版本 {0} 包含破壞性改動，請依個別情況判斷是否需調整相關程式碼。",
           severeVulnWarning: "此元件內包含 CVSS 評分為 7.0 或以上之資安漏洞，建議修正版本為基於此漏洞計算而來",
-          workspace: "工作區",
-          newWorkspace: "輸入新工作區名稱",
-          workspaceSwitch: "切換",
-          workspaceRename: "重新命名",
-          workspaceDelete: "刪除",
-          workspaceRenamePrompt: "輸入新的工作區名稱：",
-          workspaceDeleteConfirm: "確定刪除此工作區及所有 SBOM？此操作無法復原。",
+          project: "專案",
+          newProject: "輸入新專案名稱",
+          projectSwitch: "切換",
+          projectRename: "重新命名",
+          projectDelete: "刪除",
+          projectRenamePrompt: "輸入新的專案名稱：",
+          projectDeleteConfirm: "確定刪除此專案及所有 SBOM？此操作無法復原。",
           diffFiles: "Diff 檔案",
           diffSbomTitle: "比較 SBOM",
           diffSbomA: "SBOM A（舊版）",
@@ -170,6 +172,8 @@
           diffSevere: "嚴重",
           diffNoChanges: "無差異",
           diffSelectBoth: "請選擇兩個不同的 SBOM",
+          diffSummary: "共 {0} 項新增、{1} 項移除、{2} 項變更",
+          diffVulns: "漏洞",
         },
       },
 
@@ -193,7 +197,7 @@
         document.getElementById("lang-en").classList.toggle("active-language", lang === "en");
         document.getElementById("lang-zh").classList.toggle("active-language", lang === "zh");
         this.apply();
-        if (State.activeTab) Sbom.fetchTopology(State.activeTab.dataset.fileName);
+        if (State.activeTab) Sbom.fetchTopology(State.activeTab.dataset.version);
       },
     };
 
@@ -211,77 +215,90 @@
         return json;
       },
 
-      getWorkspaces()      { return this._json("/workspaces"); },
-      getWorkspace(id)     { return this._json(`/workspaces/${encodeURIComponent(id)}`); },
-      createWorkspace(name) {
-        return this._json("/workspaces", {
+      getProjects()      { return this._json("/projects"); },
+      getProject(id)     { return this._json(`/projects/${encodeURIComponent(id)}`); },
+      createProject(name) {
+        return this._json("/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
         });
       },
-      renameWorkspace(id, name) {
-        return this._json(`/workspaces/${encodeURIComponent(id)}`, {
+      renameProject(id, name) {
+        return this._json(`/projects/${encodeURIComponent(id)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name }),
         });
       },
-      deleteWorkspace(id)  { return this._json(`/workspaces/${encodeURIComponent(id)}`, { method: "DELETE" }); },
+      deleteProject(id)  { return this._json(`/projects/${encodeURIComponent(id)}`, { method: "DELETE" }); },
 
-      uploadSBOM(workspaceID, file) {
-        const fd = new FormData();
-        fd.append("name", file.name);
-        fd.append("file", file);
-        return fetch(`/workspaces/${workspaceID}/sboms`, { method: "POST", body: fd });
-      },
-      deleteSBOM(workspaceID, name) {
-        return this._json(`/workspaces/${workspaceID}/sboms/${encodeURIComponent(name)}`, { method: "DELETE" });
+      previewSBOM(projectID, file) {
+        const form = new FormData();
+        form.append("file", file);
+        return fetch(`/projects/${projectID}/sboms/preview`, { method: "POST", body: form });
       },
 
-      getTopology(workspaceID, name) {
-        return this._json(`/workspaces/${workspaceID}/sboms/${encodeURIComponent(name)}/topology`);
+      commitSBOM(projectID, version, bomResult, md5, bomTimestamp) {
+        return fetch(`/projects/${projectID}/sboms`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version, bom_result: bomResult, md5, bom_timestamp: bomTimestamp }),
+        });
       },
-      getComponent(workspaceID, sbom, comp) {
-        return this._json(`/workspaces/${workspaceID}/sboms/${encodeURIComponent(sbom)}/topology/component?component=${encodeURIComponent(comp)}`);
+      listVersions(projectID) {
+        return this._json(`/projects/${projectID}/versions`);
       },
-      getVulnDep(workspaceID, sbom, comp) {
-        return this._json(`/workspaces/${workspaceID}/sboms/${encodeURIComponent(sbom)}/topology/component/vuln-dep?component=${encodeURIComponent(comp)}`);
+      renameSBOM(projectID, name, newName) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: newName }),
+        });
       },
-      search(workspaceID, q) {
-        return this._json(`/workspaces/${workspaceID}/search?q=${encodeURIComponent(q)}`);
+      deleteSBOM(projectID, name) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}`, { method: "DELETE" });
       },
-      diff(workspaceID, a, b) {
-        return this._json(`/workspaces/${workspaceID}/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+
+      getTopology(projectID, name) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}/topology`);
+      },
+      getComponent(projectID, sbom, comp) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component?component=${encodeURIComponent(comp)}`);
+      },
+      getVulnDep(projectID, sbom, comp) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component/vuln-dep?component=${encodeURIComponent(comp)}`);
+      },
+      search(projectID, q) {
+        return this._json(`/projects/${projectID}/search?q=${encodeURIComponent(q)}`);
+      },
+      diff(projectID, a, b) {
+        return this._json(`/projects/${projectID}/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
       },
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // WORKSPACE — workspace CRUD + UI state sync
+    // PROJECT — project CRUD + UI state sync
     // ═══════════════════════════════════════════════════════════════════════════
-    const Workspace = {
+    const Project = {
       async load(autoLoad = true) {
         try {
-          const json = await Api.getWorkspaces();
-          const { workspaces, current } = json.data;
-          const sel = document.getElementById("workspace-select");
-          sel.innerHTML = (workspaces || [])
+          const json = await Api.getProjects();
+          const { projects, current } = json.data;
+          const sel = document.getElementById("project-select");
+          sel.innerHTML = (projects || [])
             .map(w => `<option value="${w.ID}"${w.Name === current ? " selected" : ""}>${w.Name}</option>`)
             .join("");
-          document.getElementById("workspace-current").textContent = current ? `(${current})` : "";
+          document.getElementById("project-current").textContent = current ? `(${current})` : "";
           if (autoLoad && sel.value) await this.get(sel.value);
         } catch (e) {
-          console.error("Failed to load workspaces:", e);
+          console.error("Failed to load projects:", e);
         }
       },
 
       _apply(json) {
-        State.workspaceID = json.data?.workspace_id ?? null;
+        State.projectID = json.data?.project_id ?? null;
         document.getElementById("upload-status").innerHTML = "";
-        document.getElementById("selected-files").innerHTML = "";
-        const selectBtn = document.getElementById("select-sbom-btn");
-        selectBtn.disabled = false;
-        selectBtn.classList.remove("opacity-50", "cursor-not-allowed");
 
         document.getElementById("file-tabs").innerHTML = "";
         document.getElementById("tab-content").innerHTML =
@@ -289,53 +306,47 @@
         State.uploadedFiles.clear();
         State.activeTab = null;
 
-        // Create all tabs without triggering a topology fetch per tab,
-        // then select only the first one (avoids N wasted network requests).
-        const sboms = json.data.sboms || [];
-        sboms.forEach(name => Sbom.addTab(name, false));
-        if (sboms.length > 0) {
-          const firstTab = document.getElementById("file-tabs").querySelector("div");
-          if (firstTab) Sbom.selectTab(firstTab);
-        }
+        // Default to SBOM 分析 tab on project load
+        MainTab.show("analysis");
 
-        const sel = document.getElementById("workspace-select");
+        const sel = document.getElementById("project-select");
         const opt = sel.options[sel.selectedIndex];
-        document.getElementById("workspace-current").textContent = opt ? `(${opt.text})` : "";
+        document.getElementById("project-current").textContent = opt ? `(${opt.text})` : "";
       },
 
       async get(id) {
-        try { this._apply(await Api.getWorkspace(id)); }
-        catch (e) { console.error("Failed to get workspace:", e); }
+        try { this._apply(await Api.getProject(id)); }
+        catch (e) { console.error("Failed to get project:", e); }
       },
 
       async create(name) {
         try {
-          const json = await Api.createWorkspace(name);
+          const json = await Api.createProject(name);
           this._apply(json);
           await this.load(false);
-          document.getElementById("workspace-select").value = json.data.workspace_id;
-        } catch (e) { console.error("Failed to create workspace:", e); }
+          document.getElementById("project-select").value = json.data.project_id;
+        } catch (e) { console.error("Failed to create project:", e); }
       },
 
       async rename(id, name) {
         try {
-          await Api.renameWorkspace(id, name);
+          await Api.renameProject(id, name);
           await this.load(false);
-          document.getElementById("workspace-select").value = id;
+          document.getElementById("project-select").value = id;
         } catch (e) {
-          console.error("Failed to rename workspace:", e);
-          alert(e.message || "Failed to rename workspace");
+          console.error("Failed to rename project:", e);
+          alert(e.message || "Failed to rename project");
         }
       },
 
       async delete(id) {
         try {
-          await Api.deleteWorkspace(id);
-          State.workspaceID = null;
+          await Api.deleteProject(id);
+          State.projectID = null;
           await this.load(true);
         } catch (e) {
-          console.error("Failed to delete workspace:", e);
-          alert(e.message || "Failed to delete workspace");
+          console.error("Failed to delete project:", e);
+          alert(e.message || "Failed to delete project");
         }
       },
     };
@@ -344,106 +355,108 @@
     // SBOM — file upload, tabs, topology rendering, delete, report download
     // ═══════════════════════════════════════════════════════════════════════════
     const Sbom = {
-      async upload(files) {
-        const statusContainer = document.getElementById("upload-status");
-        const selectedContainer = document.getElementById("selected-files");
-        statusContainer.innerHTML = "";
-        selectedContainer.innerHTML = "";
-        if (!files.length) return;
-
-        const heading = document.createElement("div");
-        heading.className = "font-medium mb-2";
-        heading.textContent = t("selectedFiles");
-        selectedContainer.appendChild(heading);
-
-        const fileList = document.createElement("ul");
-        fileList.className = "space-y-1";
-        Array.from(files).forEach(file => {
-          const li = document.createElement("li");
-          li.className = "flex items-center";
-          li.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-1" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-          </svg><span>${file.name}</span>`;
-          fileList.appendChild(li);
-        });
-        selectedContainer.appendChild(fileList);
-
-        const statusList = document.createElement("ul");
-        statusList.className = "space-y-2 mt-4";
-        statusContainer.appendChild(statusList);
-
-        const selectBtn = document.getElementById("select-sbom-btn");
-        selectBtn.disabled = true;
-        selectBtn.classList.add("opacity-50", "cursor-not-allowed");
-
-        for (const file of files) {
-          const item = document.createElement("li");
-          item.className = "flex items-center";
-          item.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-          </svg><span>${t("uploading", file.name)}</span>`;
-          statusList.appendChild(item);
-
-          if (State.uploadedFiles.has(file.name)) {
-            const warning = document.createElement("li");
-            warning.className = "flex items-center bg-yellow-50 px-4 py-2 rounded-md border border-yellow-200 mt-2";
-            warning.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-            </svg><span class="text-yellow-800">${t("warningOverwrite", file.name)}</span>`;
-            statusList.appendChild(warning);
-            setTimeout(() => {
-              warning.classList.add("transition-opacity", "duration-500", "opacity-0");
-              setTimeout(() => warning.remove(), 500);
-            }, 15000);
-          }
-
-          try {
-            const resp = await Api.uploadSBOM(State.workspaceID, file);
-            if (resp.ok) {
-              const data = await resp.json();
-              const fileName = data.data?.name || file.name;
-              item.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-              </svg><span class="text-green-600">${t("uploadedSuccessfully", file.name)}</span>`;
-              this.addTab(fileName);
-              setTimeout(() => item.remove(), 3000);
-            } else {
-              const err = await resp.json().catch(() => ({}));
-              item.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-              </svg><span class="text-red-600">${t("uploadFailed", file.name, err.error || "Upload failed")}</span>`;
-            }
-          } catch (e) {
-            item.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-            </svg><span class="text-red-600">${t("uploadFailed", file.name, e.message || t("errorReadingFile"))}</span>`;
-          }
-        }
-
-        selectBtn.disabled = false;
-        selectBtn.classList.remove("opacity-50", "cursor-not-allowed");
-      },
-
       // autoSelect=true: also select+fetch the tab (default for user-uploaded files).
-      // autoSelect=false: only create the tab element (used on workspace load to avoid N fetches).
+      // autoSelect=false: only create the tab element (used on project load to avoid N fetches).
       addTab(fileName, autoSelect = true) {
         const tabsContainer = document.getElementById("file-tabs");
         const noMsg = document.getElementById("no-tabs-message");
         if (noMsg) noMsg.style.display = "none";
 
         if (State.uploadedFiles.has(fileName)) {
-          const existing = Array.from(tabsContainer.children).find(el => el.dataset.fileName === fileName);
+          const existing = Array.from(tabsContainer.children).find(el => el.dataset.version === fileName);
           if (existing) this.selectTab(existing);
           return;
         }
 
         State.uploadedFiles.add(fileName);
         const tab = document.createElement("div");
-        tab.className = "px-4 py-2 border border-gray-300 rounded-t-md mr-2 mb-2 cursor-pointer hover:bg-gray-50 flex items-center";
-        tab.dataset.fileName = fileName;
-        tab.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-2" viewBox="0 0 20 20" fill="currentColor">
+        tab.className = "px-4 py-2 border border-gray-300 rounded-t-md mr-2 mb-2 cursor-pointer hover:bg-gray-50 flex items-center gap-2";
+        tab.dataset.version = fileName;
+
+        const fileIcon = document.createElement("span");
+        fileIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999]" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
-        </svg><span>${fileName}</span>`;
+        </svg>`;
+
+        const label = document.createElement("span");
+        label.textContent = fileName;
+
+        const editBtn = document.createElement("span");
+        editBtn.className = "text-gray-400 hover:text-[#009999] leading-none";
+        editBtn.title = "重新命名";
+        editBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+        </svg>`;
+        editBtn.addEventListener("click", e => {
+          e.stopPropagation();
+          const input = document.createElement("input");
+          input.type = "text";
+          input.value = fileName;
+          input.className = "border border-[#009999] rounded px-1 text-sm w-40 focus:outline-none";
+          label.replaceWith(input);
+          input.focus();
+          input.select();
+
+          const errTip = document.createElement("span");
+          errTip.className = "text-red-500 text-xs ml-1 hidden";
+          input.after(errTip);
+
+          const doRename = async () => {
+            const currentName = tab.dataset.version;
+            const newName = input.value.trim();
+            if (!newName || newName === currentName) { input.replaceWith(label); errTip.remove(); return; }
+            try {
+              const json = await Api.renameSBOM(State.projectID, currentName, newName);
+              if (json?.data?.version) {
+                label.textContent = newName;
+                tab.dataset.version = newName;
+                if (State.uploadedFiles.has(currentName)) {
+                  State.uploadedFiles.delete(currentName);
+                  State.uploadedFiles.add(newName);
+                }
+                VersionHistory.load();
+              }
+              input.replaceWith(label);
+              errTip.remove();
+            } catch (err) {
+              errTip.textContent = err.message || "更新失敗";
+              errTip.classList.remove("hidden");
+              input.focus();
+            }
+          };
+          input.addEventListener("keydown", e => {
+            if (e.key === "Enter") doRename();
+            if (e.key === "Escape") { input.replaceWith(label); errTip.remove(); }
+          });
+          input.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== input) doRename(); }, 150));
+        });
+
+        const closeBtn = document.createElement("span");
+        closeBtn.className = "ml-1 text-gray-400 hover:text-gray-700 leading-none";
+        closeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+        </svg>`;
+        closeBtn.addEventListener("click", e => {
+          e.stopPropagation();
+          State.uploadedFiles.delete(fileName);
+          const wasActive = tab.classList.contains("tab-active");
+          tab.remove();
+          if (wasActive) {
+            const next = tabsContainer.querySelector("div");
+            if (next) {
+              this.selectTab(next);
+            } else {
+              document.getElementById("tab-content").innerHTML =
+                `<div id="no-tabs-message" class="text-gray-500 italic">${t("noFilesUploaded")}</div>`;
+              State.activeTab = null;
+            }
+          }
+        });
+
+        tab.appendChild(fileIcon);
+        tab.appendChild(label);
+        tab.appendChild(editBtn);
+        tab.appendChild(closeBtn);
         tab.addEventListener("click", () => this.selectTab(tab));
         tabsContainer.appendChild(tab);
         if (autoSelect) this.selectTab(tab);
@@ -454,7 +467,7 @@
         tabEl.classList.add("tab-active");
         State.activeTab = tabEl;
 
-        const fileName = tabEl.dataset.fileName;
+        const fileName = tabEl.dataset.version;
         const content = document.getElementById("tab-content");
 
         // Build header with buttons programmatically (no inline onclick)
@@ -475,15 +488,7 @@
         </svg><span>Download PDF Report</span>`;
         downloadBtn.addEventListener("click", () => this.downloadReport(fileName));
 
-        const deleteBtn = document.createElement("button");
-        deleteBtn.className = "delete-btn bg-[#E46058] hover:bg-red-600 text-white py-1 px-3 rounded text-sm flex items-center";
-        deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-        </svg>${t("delete")}`;
-        deleteBtn.addEventListener("click", () => this.delete(fileName));
-
         btnGroup.appendChild(downloadBtn);
-        btnGroup.appendChild(deleteBtn);
         header.appendChild(title);
         header.appendChild(btnGroup);
 
@@ -503,14 +508,14 @@
 
       downloadReport(fileName) {
         // Server sends Content-Disposition: attachment — window.open triggers browser download
-        window.open(`/workspaces/${State.workspaceID}/sboms/${encodeURIComponent(fileName)}/report`);
+        window.open(`/projects/${State.projectID}/sboms/${encodeURIComponent(fileName)}/report`);
       },
 
       async fetchTopology(fileName) {
         const content = document.getElementById("tab-content");
         const header = content.querySelector("div:first-child");
         try {
-          const json = await Api.getTopology(State.workspaceID, fileName);
+          const json = await Api.getTopology(State.projectID, fileName);
           if (!json.data) throw new Error("No topology data");
           this._renderTopology(json.data, fileName, header);
         } catch (e) {
@@ -656,9 +661,9 @@
 
       async delete(fileName) {
         try {
-          await Api.deleteSBOM(State.workspaceID, fileName);
+          await Api.deleteSBOM(State.projectID, fileName);
           const tabsContainer = document.getElementById("file-tabs");
-          const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.fileName === fileName);
+          const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.version === fileName);
           State.uploadedFiles.delete(fileName); // always sync state, even if tab element is missing
           if (tabEl) {
             tabsContainer.removeChild(tabEl);
@@ -688,6 +693,26 @@
         } catch (e) {
           console.error("Delete error:", e);
           alert(t("errorDeleting", e.message || t("unknownError")));
+        }
+      },
+
+      // Remove a tab by version name without calling the API (used after 版本歷史 delete).
+      removeTab(version) {
+        const tabsContainer = document.getElementById("file-tabs");
+        const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.version === version);
+        if (!tabEl) return;
+        State.uploadedFiles.delete(version);
+        const wasActive = State.activeTab === tabEl;
+        tabsContainer.removeChild(tabEl);
+        if (wasActive) {
+          const next = tabsContainer.querySelector("div");
+          if (next) {
+            this.selectTab(next);
+          } else {
+            document.getElementById("tab-content").innerHTML =
+              `<div id="no-tabs-message" class="text-gray-500 italic">${t("noFilesUploaded")}</div>`;
+            State.activeTab = null;
+          }
         }
       },
     };
@@ -747,8 +772,8 @@
 
         try {
           const [compRes, vulnDepRes] = await Promise.all([
-            Api.getComponent(State.workspaceID, sbomName, component).catch(() => null),
-            Api.getVulnDep(State.workspaceID, sbomName, component).catch(() => null),
+            Api.getComponent(State.projectID, sbomName, component).catch(() => null),
+            Api.getVulnDep(State.projectID, sbomName, component).catch(() => null),
           ]);
           if (!compRes?.data) throw new Error("No component data");
           this._renderDetails(compRes.data, vulnDepRes?.data || []);
@@ -759,6 +784,34 @@
               <p class="mt-2">${e.message || "Unknown error"}</p>
             </div>`;
         }
+      },
+
+      showFromLocal(compKey, compInfo, bomResult) {
+        this._ensureModal();
+        document.getElementById("component-modal-title").textContent = compInfo.name || compKey;
+        document.getElementById("component-modal").classList.remove("hidden");
+
+        // Compute suggested_fix_version from first vuln that has one
+        const vulns = compInfo.vulns || [];
+        const suggestedFix = vulns.find(v => v.suggest_fix_version)?.suggest_fix_version || "";
+        const hasSevere = vulns.some(v => parseFloat(v.cvss_score) >= 7);
+
+        // Compute vuln dep paths from local dependency map
+        const vulnComps = Object.entries(bomResult.ComponentInfo || {})
+          .filter(([, info]) => (info.vuln_number || 0) > 0)
+          .map(([k]) => k);
+        const paths = _getVulnDepPaths(compKey, vulnComps, bomResult.Dependency || {});
+
+        this._renderDetails({
+          name: compInfo.name || compKey,
+          version: compInfo.version,
+          vuln_number: compInfo.vuln_number || 0,
+          vulns,
+          licences: compInfo.licences,
+          suggested_fix_version: suggestedFix,
+          is_breaking_change: false,
+          has_severe_vuln: hasSevere,
+        }, paths);
       },
 
       _renderDetails(comp, vulnDepPaths = []) {
@@ -872,9 +925,9 @@
     // ═══════════════════════════════════════════════════════════════════════════
     const Search = {
       async run(q) {
-        if (!State.workspaceID) return;
+        if (!State.projectID) return;
         try {
-          const json = await Api.search(State.workspaceID, q);
+          const json = await Api.search(State.projectID, q);
           this._renderResults(json.data);
         } catch (e) {
           console.error("Search error:", e);
@@ -947,7 +1000,7 @@
           modal.id = "diff-modal";
           modal.className = "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden";
           modal.innerHTML = `
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
               <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h2 class="text-xl font-medium text-gray-800" id="diff-modal-title"></h2>
                 <button id="diff-modal-close" class="text-gray-500 hover:text-gray-700">
@@ -1014,7 +1067,7 @@
           </svg></div>`;
 
         try {
-          const json = await Api.diff(State.workspaceID, a, b);
+          const json = await Api.diff(State.projectID, a, b);
           this._renderResult(json.data, a, b);
         } catch (e) {
           resultEl.innerHTML = `<p class="text-red-500">${e.message}</p>`;
@@ -1022,81 +1075,555 @@
       },
 
       _versionCell(ver, sbomName, compName) {
-        if (!ver || !sbomName) return `<td class="px-3 py-2 text-gray-400 align-top">-</td>`;
+        if (!ver || !sbomName) return "";
         const safeSbom = sbomName.replace(/"/g, "&quot;");
         const safeComp = compName.replace(/"/g, "&quot;");
-        return `<td class="px-3 py-2 align-top">
-          <span class="cursor-pointer hover:underline text-[#009999] font-mono text-xs"
-                data-action="show-component" data-sbom="${safeSbom}" data-component="${safeComp}">${ver}</span>
-        </td>`;
+        return `<span class="cursor-pointer hover:underline text-[#009999] font-mono text-xs"
+                      data-action="show-component" data-sbom="${safeSbom}" data-component="${safeComp}">${ver}</span>`;
       },
 
-      _section(rows, label, color, vA, vB, sbomA, sbomB) {
-        if (!rows?.length) return "";
-        return `
-          <div class="mb-4">
-            <h4 class="text-sm font-semibold text-${color}-700 mb-1">${label} (${rows.length})</h4>
-            <table class="w-full text-sm border border-gray-200 rounded overflow-hidden">
-              <thead class="bg-gray-50"><tr>
-                <th class="text-left px-3 py-2 font-medium text-gray-600">${t("diffComponent")}</th>
-                ${vA ? `<th class="text-left px-3 py-2 font-medium text-gray-600">${t("diffVersionA")}</th><th class="text-left px-3 py-2 font-medium text-gray-600 w-12">${t("diffVulnsA")}</th>` : ""}
-                ${vB ? `<th class="text-left px-3 py-2 font-medium text-gray-600">${t("diffVersionB")}</th><th class="text-left px-3 py-2 font-medium text-gray-600 w-12">${t("diffVulnsB")}</th>` : ""}
-              </tr></thead>
-              <tbody>
-                ${rows.map((r, i) => `
-                  <tr class="${i % 2 === 0 ? "bg-white" : "bg-gray-50"}">
-                    <td class="px-3 py-2 align-top">
-                      <div class="flex items-center gap-1 font-mono text-xs">
-                        <span>${r.name}</span>
-                        ${r.has_vuln     ? _warnSVG("red",    "alert")   : ""}
-                        ${r.has_vuln_dep ? _warnSVG("yellow", "warning") : ""}
-                      </div>
-                    </td>
-                    ${vA ? `${this._versionCell(r.version_a, sbomA, r.name)}<td class="px-3 py-2 align-top text-center">${r.vulns_a ?? 0}</td>` : ""}
-                    ${vB ? `${this._versionCell(r.version_b, sbomB, r.name)}<td class="px-3 py-2 align-top text-center">${r.vulns_b ?? 0}</td>` : ""}
-                  </tr>`).join("")}
-              </tbody>
-            </table>
-          </div>`;
+      _diffRow(r, type, sbomA, sbomB) {
+        const icons = `${r.has_vuln ? _warnSVG("red", "alert") : ""}${r.has_vuln_dep ? _warnSVG("yellow", "warning") : ""}`;
+        const name = `<span class="font-mono text-xs">${r.name}</span>`;
+
+        if (type === "added") {
+          return `<tr>
+            <td class="px-3 py-1.5 border-r border-gray-200 bg-white"></td>
+            <td class="px-3 py-1.5 bg-green-50">
+              <div class="flex items-center gap-2">
+                <span class="text-green-600 font-bold w-4 text-center flex-shrink-0">+</span>
+                <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  ${this._versionCell(r.version_b, sbomB, r.name)}
+                  <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_b ?? 0}</span>
+                </div>
+              </div>
+            </td>
+          </tr>`;
+        }
+
+        if (type === "removed") {
+          return `<tr>
+            <td class="px-3 py-1.5 border-r border-gray-200 bg-red-50">
+              <div class="flex items-center gap-2">
+                <span class="text-red-600 font-bold w-4 text-center flex-shrink-0">−</span>
+                <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  ${this._versionCell(r.version_a, sbomA, r.name)}
+                  <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_a ?? 0}</span>
+                </div>
+              </div>
+            </td>
+            <td class="px-3 py-1.5 bg-white"></td>
+          </tr>`;
+        }
+
+        // changed
+        return `<tr>
+          <td class="px-3 py-1.5 border-r border-amber-200 bg-amber-50">
+            <div class="flex items-center gap-2">
+              <span class="text-amber-600 font-bold w-4 text-center flex-shrink-0">~</span>
+              <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                ${this._versionCell(r.version_a, sbomA, r.name)}
+                <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_a ?? 0}</span>
+              </div>
+            </div>
+          </td>
+          <td class="px-3 py-1.5 bg-amber-50">
+            <div class="flex items-center gap-2">
+              <span class="text-amber-600 font-bold w-4 text-center flex-shrink-0">~</span>
+              <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                ${this._versionCell(r.version_b, sbomB, r.name)}
+                <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_b ?? 0}</span>
+              </div>
+            </div>
+          </td>
+        </tr>`;
+      },
+
+      async openInPanel() {
+        const panel = document.getElementById("panel-diff");
+
+        if (!panel.querySelector("#diff-select-a")) {
+          panel.innerHTML = `
+            <div class="flex items-end space-x-4 mb-6">
+              <div class="flex-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-a"></label>
+                <select id="diff-select-a" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
+              </div>
+              <div class="flex-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-b"></label>
+                <select id="diff-select-b" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
+              </div>
+              <button id="diff-compare-btn" class="bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow"></button>
+            </div>
+            <div id="diff-result"></div>`;
+
+          document.getElementById("diff-compare-btn").addEventListener("click", () => this._run());
+          document.getElementById("diff-result").addEventListener("click", e => {
+            const el = e.target.closest("[data-action='show-component']");
+            if (!el) return;
+            ComponentModal.show(el.dataset.sbom, el.dataset.component);
+          });
+        }
+
+        document.getElementById("diff-label-a").textContent     = t("diffSbomA");
+        document.getElementById("diff-label-b").textContent     = t("diffSbomB");
+        document.getElementById("diff-compare-btn").textContent = t("diffCompare");
+        document.getElementById("diff-result").innerHTML        = "";
+
+        try {
+          const json = await Api.listVersions(State.projectID);
+          const versions = (json.data ?? []).map(v => v.version);
+          ["diff-select-a", "diff-select-b"].forEach((id, i) => {
+            const sel = document.getElementById(id);
+            sel.innerHTML = versions.map(n => `<option value="${n}">${n}</option>`).join("");
+            if (versions[i]) sel.value = versions[i];
+          });
+        } catch (e) {
+          console.error("Failed to load versions for diff:", e);
+        }
       },
 
       _renderResult(data, sbomA, sbomB) {
         const resultEl = document.getElementById("diff-result");
         const byLevel  = data.by_level || {};
         const levels   = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
-        let html = "";
-        let anyChanges = false;
+
+        let totalAdded = 0, totalRemoved = 0, totalChanged = 0;
+        for (const level of levels) {
+          const ld = byLevel[level];
+          totalAdded   += ld.added?.length   || 0;
+          totalRemoved += ld.removed?.length || 0;
+          totalChanged += ld.changed?.length || 0;
+        }
+        const anyChanges = totalAdded + totalRemoved + totalChanged > 0;
+
+        if (!anyChanges) {
+          resultEl.innerHTML = `<p class="text-gray-500 text-center py-8">${t("diffNoChanges")}</p>`;
+          return;
+        }
+
+        // Summary bar
+        let html = `<div class="flex items-center gap-4 mb-6 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+          <span class="font-medium text-gray-700">${t("diffSummary", totalAdded, totalRemoved, totalChanged)}</span>
+          <span class="flex items-center gap-3 ml-auto">
+            ${totalAdded   ? `<span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-green-200 border border-green-400"></span><span class="text-green-700 font-medium">+${totalAdded}</span></span>` : ""}
+            ${totalRemoved ? `<span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-400"></span><span class="text-red-700 font-medium">−${totalRemoved}</span></span>` : ""}
+            ${totalChanged ? `<span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-yellow-200 border border-yellow-400"></span><span class="text-yellow-700 font-medium">~${totalChanged}</span></span>` : ""}
+          </span>
+        </div>`;
 
         for (const level of levels) {
           const ld = byLevel[level];
-          const total = (ld.added?.length || 0) + (ld.removed?.length || 0) + (ld.changed?.length || 0);
+          const nA = ld.added?.length || 0, nR = ld.removed?.length || 0, nC = ld.changed?.length || 0;
+          const total = nA + nR + nC;
           if (!total) continue;
-          anyChanges = true;
+
           const va = ld.total_vulns_a ?? 0, vb = ld.total_vulns_b ?? 0;
-          const color = vb > va ? "text-red-600" : vb < va ? "text-green-600" : "text-gray-500";
+          const vulnColor = vb > va ? "text-red-600" : vb < va ? "text-green-600" : "text-gray-500";
+          const levelId = `diff-level-${level}`;
+
+          // Merge all rows into a unified list: removed first, then changed, then added
+          let rows = "";
+          (ld.removed || []).forEach(r => { rows += this._diffRow(r, "removed", sbomA, sbomB); });
+          (ld.changed || []).forEach(r => { rows += this._diffRow(r, "changed", sbomA, sbomB); });
+          (ld.added   || []).forEach(r => { rows += this._diffRow(r, "added",   sbomA, sbomB); });
+
+          // Badge counts
+          const badges = [
+            nA ? `<span class="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">+${nA}</span>` : "",
+            nR ? `<span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">−${nR}</span>` : "",
+            nC ? `<span class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-0.5 rounded">~${nC}</span>` : "",
+          ].filter(Boolean).join(" ");
+
           html += `
-            <div class="mb-8 border border-gray-200 rounded-lg overflow-hidden">
-              <div class="flex items-center justify-between bg-gray-100 px-4 py-2">
-                <span class="font-semibold text-gray-700">${t("diffLevel")} ${level}</span>
-                <span class="text-xs font-medium ${color}">Vulns: <span class="line-through text-gray-400">${va}</span> → ${vb}</span>
+            <div class="mb-4 border border-gray-200 rounded-lg overflow-hidden">
+              <div class="flex items-center justify-between bg-gray-100 px-4 py-2 cursor-pointer select-none hover:bg-gray-200 transition-colors" onclick="(function(el){var b=document.getElementById('${levelId}');b.classList.toggle('hidden');el.querySelector('[data-chevron]').classList.toggle('rotate-90');})(this)">
+                <div class="flex items-center gap-3">
+                  <svg data-chevron class="h-4 w-4 text-gray-500 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="font-semibold text-gray-700">${t("diffLevel")} ${level}</span>
+                  ${badges}
+                </div>
+                <span class="text-xs font-medium ${vulnColor}">${t("diffVulns")}: <span class="line-through text-gray-400">${va}</span> → ${vb}</span>
               </div>
-              <div class="p-4">
-                ${this._section(ld.added,   t("diffAdded"),   "green",  false, true,  "",     sbomB)}
-                ${this._section(ld.removed, t("diffRemoved"), "red",    true,  false, sbomA, "")}
-                ${this._section(ld.changed, t("diffChanged"), "yellow", true,  true,  sbomA, sbomB)}
+              <div id="${levelId}">
+                <table class="w-full text-sm border-collapse">
+                  <thead>
+                    <tr class="bg-gray-50 border-b border-gray-200">
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2 border-r border-gray-200">${sbomA}</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2">${sbomB}</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">${rows}</tbody>
+                </table>
               </div>
             </div>`;
         }
 
-        resultEl.innerHTML = anyChanges
-          ? html
-          : `<p class="text-gray-500 text-center py-8">${t("diffNoChanges")}</p>`;
+        resultEl.innerHTML = html;
+      },
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MAIN TABS — SBOM 分析 / Diff 比對
+    // ═══════════════════════════════════════════════════════════════════════════
+    const MainTab = {
+      _tabs: ["analysis", "diff"],
+
+      show(tab) {
+        this._tabs.forEach(id => {
+          document.getElementById(`panel-${id}`).classList.toggle("hidden", id !== tab);
+          const btn = document.getElementById(`main-tab-${id}`);
+          btn.classList.toggle("text-[#009999]", id === tab);
+          btn.classList.toggle("border-[#009999]", id === tab);
+          btn.classList.toggle("text-gray-500", id !== tab);
+          btn.classList.toggle("border-transparent", id !== tab);
+        });
+        if (tab === "analysis") VersionHistory.load();
+        if (tab === "diff")     Diff.openInPanel();
+      },
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VERSION HISTORY — list all stored versions for current project
+    // ═══════════════════════════════════════════════════════════════════════════
+    const VersionHistory = {
+      _page: 0,
+      _versions: [],
+      PAGE_SIZE: 10,
+
+      async load() {
+        const container = document.getElementById("version-history-list");
+        if (!State.projectID) {
+          container.innerHTML = `<p class="text-gray-400 italic text-sm">尚未選擇專案</p>`;
+          return;
+        }
+
+        try {
+          const json = await Api.listVersions(State.projectID);
+          this._versions = json.data ?? [];
+          this._page = 0;
+          this._render(container);
+        } catch (e) {
+          container.innerHTML = `<p class="text-red-500 text-sm">載入失敗：${e.message}</p>`;
+        }
+      },
+
+      _render(container) {
+        const versions = this._versions;
+        if (versions.length === 0) {
+          container.innerHTML = `<p class="text-gray-400 italic text-sm">尚無版本記錄，請至「SBOM 分析」上傳檔案。</p>`;
+          return;
+        }
+
+        const totalPages = Math.ceil(versions.length / this.PAGE_SIZE);
+        const page = Math.min(this._page, totalPages - 1);
+        const pageVersions = versions.slice(page * this.PAGE_SIZE, (page + 1) * this.PAGE_SIZE);
+
+        const rows = pageVersions.map(v => {
+          const _d = new Date(v.created_at);
+          const pad = n => String(n).padStart(2, "0");
+          const date = `${_d.getFullYear()}/${pad(_d.getMonth()+1)}/${pad(_d.getDate())} ${pad(_d.getHours())}:${pad(_d.getMinutes())}:${pad(_d.getSeconds())}`;
+          return `<tr class="hover:bg-gray-50">
+            <td class="px-4 py-3 text-sm font-medium text-gray-800">${v.version}</td>
+            <td class="px-4 py-3 text-sm text-gray-500">${date}</td>
+            <td class="px-4 py-3 text-sm">
+              <button class="text-[#009999] hover:underline text-xs mr-3 version-load-btn" data-version="${v.version}">載入分析</button>
+              <button class="text-red-400 hover:underline text-xs version-delete-btn" data-version="${v.version}">刪除</button>
+            </td>
+          </tr>`;
+        }).join("");
+
+        const pager = totalPages > 1 ? `
+          <div class="flex items-center justify-end gap-2 mt-2 text-sm text-gray-600">
+            <button class="px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed pager-prev" ${page === 0 ? "disabled" : ""}>‹</button>
+            <span>${page + 1} / ${totalPages}</span>
+            <button class="px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed pager-next" ${page >= totalPages - 1 ? "disabled" : ""}>›</button>
+          </div>` : "";
+
+        container.innerHTML = `
+          <table class="w-full border border-gray-200 rounded-lg overflow-hidden text-left">
+            <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+              <tr>
+                <th class="px-4 py-3">版本名稱</th>
+                <th class="px-4 py-3">建立時間</th>
+                <th class="px-4 py-3">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">${rows}</tbody>
+          </table>${pager}`;
+
+        container.querySelectorAll(".version-load-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const version = btn.dataset.version;
+            MainTab.show("analysis");
+            Sbom.addTab(version, true);
+          });
+        });
+
+        container.querySelectorAll(".version-delete-btn").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const version = btn.dataset.version;
+            if (!confirm(`確定要刪除版本「${version}」？`)) return;
+            try {
+              await Api.deleteSBOM(State.projectID, version);
+              // Remove from in-memory list and re-render without a network round-trip
+              this._versions = this._versions.filter(v => v.version !== version);
+              if (this._page >= Math.ceil(this._versions.length / this.PAGE_SIZE)) {
+                this._page = Math.max(0, this._page - 1);
+              }
+              this._render(container);
+              // Also remove the tab from 選擇 SBOM 版本 if it is open
+              Sbom.removeTab(version);
+            } catch (e) {
+              alert(`刪除失敗：${e.message}`);
+            }
+          });
+        });
+
+        container.querySelector(".pager-prev")?.addEventListener("click", () => {
+          this._page--;
+          this._render(container);
+        });
+        container.querySelector(".pager-next")?.addEventListener("click", () => {
+          this._page++;
+          this._render(container);
+        });
+      },
+    };
+
+    // SBOM MODAL — two-step: pick file → preview → create version
+    // ═══════════════════════════════════════════════════════════════════════════
+    const SbomModal = {
+      _bomResult: null,
+      _md5: null,
+      _bomTimestamp: null,
+
+      open() {
+        this._bomResult = null;
+        this._md5 = null;
+        this._bomTimestamp = null;
+        document.getElementById("sbom-file-input").value = "";
+        document.getElementById("sbom-filename-display").textContent = "尚未選擇檔案";
+        document.getElementById("sbom-modal-step1-error").classList.add("hidden");
+        document.getElementById("sbom-modal-step1").classList.remove("hidden");
+        document.getElementById("sbom-modal-step2").classList.add("hidden");
+        document.getElementById("sbom-modal").classList.remove("hidden");
+      },
+
+      close() {
+        document.getElementById("sbom-modal").classList.add("hidden");
+        document.getElementById("sbom-file-input").value = "";
+        this._bomResult = null;
+      },
+
+      _onFileSelected(files) {
+        if (files.length > 0) {
+          document.getElementById("sbom-filename-display").textContent = files[0].name;
+        }
+      },
+
+      async preview() {
+        const fileInput = document.getElementById("sbom-file-input");
+        const errEl = document.getElementById("sbom-modal-step1-error");
+        errEl.classList.add("hidden");
+
+        if (!fileInput.files.length) {
+          errEl.textContent = "請先選擇 SBOM 檔案";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
+        const previewBtn = document.getElementById("sbom-modal-preview-btn");
+        previewBtn.disabled = true;
+        previewBtn.textContent = "解析中...";
+
+        try {
+          const resp = await Api.previewSBOM(State.projectID, fileInput.files[0]);
+          const json = await resp.json();
+          if (!resp.ok) {
+            errEl.textContent = json.error || "預覽失敗";
+            errEl.classList.remove("hidden");
+            return;
+          }
+
+          const data = json.data;
+          this._bomResult = data.bom_result;
+          this._md5 = data.md5;
+          this._bomTimestamp = data.bom_timestamp;
+
+          const summary = document.getElementById("sbom-preview-summary");
+          summary.innerHTML = `
+            <div class="flex gap-6 mb-3 text-sm">
+              <span class="text-gray-500">元件數量 <strong class="text-gray-800">${data.summary.component_count}</strong></span>
+              <span class="text-gray-500">漏洞數量 <strong class="${data.summary.vuln_count > 0 ? 'text-red-600' : 'text-green-600'}">${data.summary.vuln_count}</strong></span>
+            </div>`;
+          this._renderPreviewTopology(summary, data.bom_result);
+
+          const displayName = data.filename || fileInput.files[0]?.name || "";
+          document.getElementById("sbom-preview-title").innerHTML =
+            `預覽結果 <span class="text-gray-400 font-normal text-base">— ${displayName}</span>`;
+          document.getElementById("sbom-version-input").value = "";
+          document.getElementById("sbom-version-hint").textContent =
+            "建議命名方式：{filename}_{version} / {filename}_{date} / {prefix}_{version} / {prefix}_{date}";
+          document.getElementById("sbom-modal-step2-error").classList.add("hidden");
+          document.getElementById("sbom-modal-step1").classList.add("hidden");
+          document.getElementById("sbom-modal-step2").classList.remove("hidden");
+        } catch (e) {
+          errEl.textContent = e.message || "預覽失敗";
+          errEl.classList.remove("hidden");
+        } finally {
+          previewBtn.disabled = false;
+          previewBtn.textContent = "預覽";
+        }
+      },
+
+      async commit() {
+        const version = document.getElementById("sbom-version-input").value.trim();
+        const errEl = document.getElementById("sbom-modal-step2-error");
+        errEl.classList.add("hidden");
+
+        if (!version) {
+          errEl.textContent = "請輸入版本名稱";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
+        const commitBtn = document.getElementById("sbom-modal-commit-btn");
+        commitBtn.disabled = true;
+        commitBtn.textContent = "建立中...";
+
+        try {
+          const resp = await Api.commitSBOM(State.projectID, version, this._bomResult, this._md5, this._bomTimestamp);
+          const json = await resp.json();
+          if (resp.status === 409 || !resp.ok) {
+            errEl.textContent = json.error || "建立失敗";
+            errEl.classList.remove("hidden");
+            return;
+          }
+
+          this.close();
+          Sbom.addTab(version);
+          VersionHistory.load();
+        } catch (e) {
+          errEl.textContent = e.message || "建立失敗";
+          errEl.classList.remove("hidden");
+        } finally {
+          commitBtn.disabled = false;
+          commitBtn.textContent = "建立版本";
+        }
+      },
+
+      _renderPreviewTopology(container, bomResult) {
+        const depLevel = bomResult?.DependencyLevel || {};
+        const compInfo = bomResult?.ComponentInfo || {};
+        const levels = Object.entries(depLevel).map(([lvlStr, components]) => {
+          let totalVulns = 0;
+          const withVuln = [], withVulnDep = [];
+          components.forEach(comp => {
+            const info = compInfo[comp] || {};
+            totalVulns += info.vuln_number || 0;
+            if ((info.vuln_number || 0) > 0) withVuln.push(comp);
+            if (info.contains_vuln_dep && !(info.vuln_number > 0)) withVulnDep.push(comp);
+          });
+          return { level: parseInt(lvlStr), components, components_with_vuln: withVuln, components_with_vuln_dep: withVulnDep, total_vulns: totalVulns };
+        }).sort((a, b) => a.level - b.level);
+
+        const wrap = document.createElement("div");
+        wrap.className = "mt-2 overflow-y-auto max-h-[55vh]";
+        if (levels.length === 0) {
+          wrap.innerHTML = `<div class="text-gray-400 italic text-sm">無元件資料</div>`;
+        } else {
+          levels.forEach(lvl => wrap.appendChild(this._buildPreviewLevelPanel(lvl, compInfo, bomResult)));
+        }
+        container.appendChild(wrap);
+      },
+
+      _buildPreviewLevelPanel(level, compInfo, bomResult) {
+        const panel = document.createElement("div");
+        panel.className = "mb-4 border border-gray-200 rounded-md overflow-hidden";
+
+        const hdr = document.createElement("div");
+        hdr.className = "bg-gray-50 px-4 py-3 flex items-center justify-between";
+        const titleEl = document.createElement("div");
+        titleEl.className = "font-medium";
+        if (level.level === 0) {
+          titleEl.innerHTML = `${t("rootLevel")} <span class="text-sm font-normal text-gray-500">${t("topLevelDependencies")}</span>`;
+        } else {
+          titleEl.innerHTML = `${t("level", level.level)} <span class="text-sm font-normal text-gray-500">${t("componentsCount", level.components.length)}</span>`;
+        }
+        const badge = document.createElement("div");
+        if (level.total_vulns > 0) {
+          badge.className = "px-2 py-1 text-xs font-medium bg-[#D9936E] text-red-800 rounded-full";
+          badge.textContent = t("vulnerabilities", level.total_vulns);
+        } else {
+          badge.className = "px-2 py-1 text-xs font-medium bg-[#95D0C0] text-[#231815] rounded-full";
+          badge.textContent = t("noVulnerabilities");
+        }
+        hdr.appendChild(titleEl);
+        hdr.appendChild(badge);
+        panel.appendChild(hdr);
+
+        const body = document.createElement("div");
+        body.className = "px-4 py-3";
+        const grid = document.createElement("div");
+        grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2";
+
+        const WARN_SVG = (color) => `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-${color}-500 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`;
+        const FILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" /></svg>`;
+
+        level.components.forEach(comp => {
+          const hasVuln    = level.components_with_vuln.includes(comp);
+          const hasVulnDep = level.components_with_vuln_dep.includes(comp);
+          const item = document.createElement("div");
+          item.className = hasVuln
+            ? "px-3 py-2 border border-red-200 bg-red-50 rounded flex items-center cursor-pointer"
+            : hasVulnDep
+              ? "px-3 py-2 border border-yellow-200 bg-yellow-50 rounded flex items-center cursor-pointer"
+              : "px-3 py-2 border border-gray-200 bg-white rounded flex items-center cursor-pointer";
+          item.innerHTML = `${hasVuln ? WARN_SVG("red") : hasVulnDep ? WARN_SVG("yellow") : FILE_SVG}<span class="truncate">${comp}</span>`;
+          item.addEventListener("click", e => {
+            e.stopPropagation();
+            ComponentModal.showFromLocal(comp, compInfo[comp] || {}, bomResult);
+          });
+          grid.appendChild(item);
+        });
+
+        body.appendChild(grid);
+        panel.appendChild(body);
+        return panel;
       },
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
     // UTILITIES — pure helpers with no side effects
     // ═══════════════════════════════════════════════════════════════════════════
+    // JS port of Go's GetVulnDepPaths — BFS from start to each end node.
+    function _getVulnDepPaths(start, ends, depMap) {
+      const paths = [];
+      for (const end of ends) {
+        if (start === end) continue;
+        const visited = new Set();
+        const path = [];
+        function find(cur) {
+          if (visited.has(cur)) return false;
+          visited.add(cur);
+          if (cur === end) { path.push(cur); return true; }
+          for (const next of (depMap[cur] || [])) {
+            if (find(next)) { path.unshift(cur); return true; }
+          }
+          return false;
+        }
+        if (find(start)) paths.push({ start, end, path });
+      }
+      return paths;
+    }
     // Shared warning triangle SVG.
     // sizeClass controls display size/spacing; defaults to inline badge style used in lists.
     // Pass sizeClass="h-5 w-5 mr-1 flex-shrink-0 mt-0.5" for the larger modal inline variant.
@@ -1150,12 +1677,24 @@
       const lang = (navigator.language || "en").startsWith("zh") ? "zh" : "en";
       i18n.change(lang);
 
-      // File upload
-      document.getElementById("sbom-file-input").addEventListener("change", e => {
-        Sbom.upload(e.target.files);
+      // Main tab switching
+      document.getElementById("main-tab-analysis").addEventListener("click", () => MainTab.show("analysis"));
+      document.getElementById("main-tab-diff").addEventListener("click",     () => MainTab.show("diff"));
+
+      // SBOM modal
+      document.getElementById("select-sbom-btn").addEventListener("click", () => SbomModal.open());
+      document.getElementById("sbom-pick-file-btn").addEventListener("click", () => document.getElementById("sbom-file-input").click());
+      document.getElementById("sbom-file-input").addEventListener("change", e => SbomModal._onFileSelected(e.target.files));
+      document.getElementById("sbom-modal-cancel").addEventListener("click", () => SbomModal.close());
+      document.getElementById("sbom-modal-preview-btn").addEventListener("click", () => SbomModal.preview());
+      document.getElementById("sbom-modal-back-btn").addEventListener("click", () => {
+        document.getElementById("sbom-modal-step2").classList.add("hidden");
+        document.getElementById("sbom-modal-step1").classList.remove("hidden");
       });
-      document.getElementById("select-sbom-btn").addEventListener("click", () => {
-        document.getElementById("sbom-file-input").click();
+      document.getElementById("sbom-modal-commit-btn").addEventListener("click", () => SbomModal.commit());
+      document.getElementById("sbom-version-input").addEventListener("keydown", e => {
+        if (e.key === "Enter") SbomModal.commit();
+        if (e.key === "Escape") SbomModal.close();
       });
 
       // Language switcher
@@ -1186,31 +1725,29 @@
         if (row) ComponentModal.show(row.dataset.sbom, row.dataset.component);
       });
 
-      // Workspace controls
-      document.getElementById("workspace-select").addEventListener("change", e => Workspace.get(e.target.value));
-      document.getElementById("workspace-switch-btn").addEventListener("click", () => {
-        const name = document.getElementById("workspace-input").value.trim();
+      // Project controls
+      document.getElementById("project-select").addEventListener("change", e => Project.get(e.target.value));
+      document.getElementById("project-switch-btn").addEventListener("click", () => {
+        const name = document.getElementById("project-input").value.trim();
         if (!name) return;
-        document.getElementById("workspace-input").value = "";
-        Workspace.create(name);
+        document.getElementById("project-input").value = "";
+        Project.create(name);
       });
-      document.getElementById("workspace-rename-btn").addEventListener("click", () => {
-        if (!State.workspaceID) return;
-        const sel     = document.getElementById("workspace-select");
+      document.getElementById("project-rename-btn").addEventListener("click", () => {
+        if (!State.projectID) return;
+        const sel     = document.getElementById("project-select");
         const current = sel.options[sel.selectedIndex]?.text || "";
-        const name    = prompt(t("workspaceRenamePrompt"), current);
+        const name    = prompt(t("projectRenamePrompt"), current);
         if (!name?.trim() || name.trim() === current) return;
-        Workspace.rename(State.workspaceID, name.trim());
+        Project.rename(State.projectID, name.trim());
       });
-      document.getElementById("workspace-delete-btn").addEventListener("click", () => {
-        if (!State.workspaceID) return;
-        if (!confirm(t("workspaceDeleteConfirm"))) return;
-        Workspace.delete(State.workspaceID);
+      document.getElementById("project-delete-btn").addEventListener("click", () => {
+        if (!State.projectID) return;
+        if (!confirm(t("projectDeleteConfirm"))) return;
+        Project.delete(State.projectID);
       });
 
-      // Diff
-      document.getElementById("diff-sbom-btn").addEventListener("click", () => Diff.openModal());
 
       // Bootstrap
-      Workspace.load();
+      Project.load();
     });

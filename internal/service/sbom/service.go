@@ -5,9 +5,11 @@
 package ssbom
 
 import (
+	"fmt"
+	"time"
+
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/repository"
-	"fmt"
 )
 
 // Service provides SBOM business logic using injected repository and cache.
@@ -22,36 +24,52 @@ func NewService(repo repository.Repository, cache Cache) *Service {
 }
 
 // Get retrieves a FormattedSBOM from the cache.
-func (s *Service) Get(workspaceID domain.WorkspaceID, name domain.Filename) (FormattedSBOM, error) {
-	bom, ok := s.cache.Get(workspaceID, name)
+func (s *Service) Get(projectID domain.ProjectID, name domain.Version) (FormattedSBOM, error) {
+	bom, ok := s.cache.Get(projectID, name)
 	if !ok {
 		return FormattedSBOM{}, fmt.Errorf("SBOM not found: %s", name)
 	}
+
 	return bom, nil
 }
 
-// List returns the filenames of all SBOMs currently loaded for a workspace.
-func (s *Service) List(workspaceID domain.WorkspaceID) []domain.Filename {
-	return s.cache.Keys(workspaceID)
+// List returns the filenames of all SBOMs currently loaded for a project.
+func (s *Service) List(projectID domain.ProjectID) []domain.Version {
+	return s.cache.Keys(projectID)
 }
 
-// Delete soft-deletes the SBOM record from DB and removes it from the cache.
-func (s *Service) Delete(workspaceID domain.WorkspaceID, name domain.Filename) error {
-	if err := s.repo.SoftDeleteSBOM(workspaceID, name); err != nil {
+// Rename updates the version name in DB and cache.
+func (s *Service) Rename(projectID domain.ProjectID, oldVersion, newVersion domain.Version) error {
+	if err := s.repo.RenameVersion(projectID, oldVersion, newVersion); err != nil {
 		return err
 	}
-	s.cache.Delete(workspaceID, name)
+
+	if bom, ok := s.cache.Get(projectID, oldVersion); ok {
+		s.cache.Delete(projectID, oldVersion)
+		s.cache.Set(projectID, newVersion, bom)
+	}
+
 	return nil
 }
 
-// Diff compares two SBOMs in the same workspace and returns the diff.
-func (s *Service) Diff(workspaceID domain.WorkspaceID, nameA, nameB string) (DiffResult, error) {
-	sbomA, err := s.Get(workspaceID, nameA)
+// Delete soft-deletes the SBOM record from DB and removes it from the cache.
+func (s *Service) Delete(projectID domain.ProjectID, name domain.Version) error {
+	if err := s.repo.SoftDeleteSBOM(projectID, name); err != nil {
+		return err
+	}
+
+	s.cache.Delete(projectID, name)
+	return nil
+}
+
+// Diff compares two SBOMs in the same project and returns the diff.
+func (s *Service) Diff(projectID domain.ProjectID, nameA, nameB string) (DiffResult, error) {
+	sbomA, err := s.Get(projectID, nameA)
 	if err != nil {
 		return DiffResult{}, fmt.Errorf("SBOM not found: %s", nameA)
 	}
 
-	sbomB, err := s.Get(workspaceID, nameB)
+	sbomB, err := s.Get(projectID, nameB)
 	if err != nil {
 		return DiffResult{}, fmt.Errorf("SBOM not found: %s", nameB)
 	}
@@ -59,7 +77,24 @@ func (s *Service) Diff(workspaceID domain.WorkspaceID, nameA, nameB string) (Dif
 	return DiffSBOMs(sbomA, sbomB), nil
 }
 
-// Search returns results matching query across all SBOMs in the workspace.
-func (s *Service) Search(workspaceID domain.WorkspaceID, query string) []SearchResult {
-	return searchInCache(s.cache.All(workspaceID), query)
+// Search returns results matching query across all SBOMs in the project.
+func (s *Service) Search(projectID domain.ProjectID, query string) []SearchResult {
+	return searchInCache(s.cache.All(projectID), query)
+}
+
+// ListVersions returns all non-deleted SBOM versions for a project, newest first.
+func (s *Service) ListVersions(projectID domain.ProjectID) ([]domain.VersionInfo, error) {
+	return s.repo.GetAllVersions(projectID)
+}
+
+// SaveParsed stores a pre-parsed SBOM result into DB and cache without re-parsing the file.
+func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version, bom FormattedSBOM, md5Hash string, bomTimestamp time.Time) error {
+	sortFormattedSBOM(&bom)
+	if err := s.repo.CreateSBOM(projectID, version, bom, bomTimestamp, md5Hash); err != nil {
+		return err
+	}
+
+	s.cache.Set(projectID, version, bom)
+
+	return nil
 }

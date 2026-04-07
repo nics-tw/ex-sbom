@@ -8,27 +8,30 @@ import (
 	"net/http"
 	"strconv"
 
+	"ex-sbom/internal/domain"
+
 	"github.com/gin-gonic/gin"
 )
 
-const WorkspaceIDKey = "workspaceID"
+const ProjectIDKey = "projectID"
 
-// WorkspaceID is a Gin middleware that parses the :id path parameter into an int64
-// and stores it in the context under WorkspaceIDKey.
-func WorkspaceID() gin.HandlerFunc {
+// ProjectID is a Gin middleware that parses the :id path parameter into an int64
+// and stores it in the context under ProjectIDKey.
+func ProjectID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil || id == 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid workspace id"})
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
 			return
 		}
-		c.Set(WorkspaceIDKey, id)
+
+		c.Set(ProjectIDKey, id)
 		c.Next()
 	}
 }
 
-// GetWorkspaceID retrieves the workspace ID that was stored by the WorkspaceID middleware.
-func GetWorkspaceID(c *gin.Context) int64 {
-	id, _ := c.Get(WorkspaceIDKey)
+// GetProjectID retrieves the project ID that was stored by the ProjectID middleware.
+func GetProjectID(c *gin.Context) domain.ProjectID {
+	id, _ := c.Get(ProjectIDKey)
 	return id.(int64)
 }

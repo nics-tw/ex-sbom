@@ -6,42 +6,37 @@ package ssbom
 
 import (
 	"errors"
-	"ex-sbom/internal/domain"
-	"ex-sbom/internal/service/lev"
-	"ex-sbom/util"
-	"ex-sbom/util/file"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
+	"ex-sbom/internal/domain"
+	"ex-sbom/internal/service/lev"
+	"ex-sbom/util"
+	"ex-sbom/util/file"
+
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 )
 
-func (s *Service) ProcessCDX(workspaceID domain.WorkspaceID, name domain.Filename, bom cdx.BOM, rawData []byte) error {
-	if bom.BOMFormat != cdx.BOMFormat {
-		return fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
-	}
-
+func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, string, time.Time) {
 	c := getCdxComponents(bom.Components)
 	refToName := getCdxBomRefToName(bom.Components)
 	dependency := getCdxDep(bom.Dependencies, refToName)
 	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName)
 
-	s.cache.Set(workspaceID, name, FormattedSBOM{
+	result := FormattedSBOM{
 		Components:        c,
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
 		ComponentInfo:     getCdxComponentInfo(bom.Components, rawData, name),
-	})
-
-	cached, _ := s.cache.Get(workspaceID, name)
+	}
 
 	withVuln := []string{}
-	for compName, info := range cached.ComponentInfo {
+	for compName, info := range result.ComponentInfo {
 		if info.VulnNumber > 0 {
 			withVuln = append(withVuln, compName)
 		}
@@ -49,47 +44,58 @@ func (s *Service) ProcessCDX(workspaceID domain.WorkspaceID, name domain.Filenam
 
 	affecteds := []string{}
 	for _, compName := range withVuln {
-		affected := getAffecteds(compName, cached.ReverseDependency)
+		affected := getAffecteds(compName, result.ReverseDependency)
 		if len(affected) > 0 {
 			affecteds = append(affecteds, affected...)
 		}
 	}
 
 	distinct := util.StringSlice(affecteds)
-
 	for _, compName := range distinct {
-		current, ok := s.cache.Get(workspaceID, name)
-		if !ok {
-			slog.Error("failed to get name from refA", "refA", name)
-			continue
-		}
-		componentInfo := current.ComponentInfo[compName]
+		componentInfo := result.ComponentInfo[compName]
 		componentInfo.ContainsVulnDep = true
-		current.ComponentInfo[compName] = componentInfo
-		s.cache.Set(workspaceID, name, current)
+		result.ComponentInfo[compName] = componentInfo
 	}
-
-	final, _ := s.cache.Get(workspaceID, name)
 
 	var bomTimestamp time.Time
 	if bom.Metadata != nil && bom.Metadata.Timestamp != "" {
 		bomTimestamp, _ = time.Parse(time.RFC3339, bom.Metadata.Timestamp)
 	}
 
-	sortFormattedSBOM(&final)
-	md5Hash := hashSBOM(final)
-	if err := s.repo.Save(workspaceID, name, final, bomTimestamp, md5Hash); err != nil {
+	sortFormattedSBOM(&result)
+	md5Hash := hashSBOM(result)
+	return result, md5Hash, bomTimestamp
+}
+
+func (s *Service) ProcessCDX(projectID domain.ProjectID, name domain.Version, bom cdx.BOM, rawData []byte) error {
+	if bom.BOMFormat != cdx.BOMFormat {
+		return fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
+	}
+
+	final, md5Hash, bomTimestamp := buildCDXResult(bom, rawData, name)
+
+	s.cache.Set(projectID, name, final)
+	if err := s.repo.CreateSBOM(projectID, name, final, bomTimestamp, md5Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
 
 	slog.Info(
 		"Process CycloneDX-formatted SBOM successfully",
 		"name", name,
-		"numbers of components", len(c),
+		"numbers of components", len(final.Components),
 		"total levels", fmt.Sprintf("%d", len(final.DependencyLevel)),
 	)
 
 	return nil
+}
+
+func (s *Service) PreviewCDX(bom cdx.BOM, rawData []byte) (FormattedSBOM, string, time.Time, error) {
+	if bom.BOMFormat != cdx.BOMFormat {
+		return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
+	}
+
+	final, md5Hash, bomTimestamp := buildCDXResult(bom, rawData, "preview")
+	return final, md5Hash, bomTimestamp, nil
 }
 
 func getCdxComponents(input *[]cdx.Component) []string {
@@ -294,7 +300,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 
 		return nil
 	}
-	
+
 	defer func() {
 		if err := file.Delete(path); err != nil {
 			slog.Error("failed to delete file", "error", err, "filename", filename, "path", path)

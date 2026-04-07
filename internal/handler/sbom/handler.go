@@ -5,89 +5,138 @@
 package sbom
 
 import (
-	"bytes"
-	"encoding/json"
-	"encoding/xml"
-	"ex-sbom/internal/domain"
-	"ex-sbom/internal/handler/middleware"
-	ssbom "ex-sbom/internal/service/sbom"
-	wsvc "ex-sbom/internal/service/workspace"
-	"ex-sbom/util/msg"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
+	"time"
 
-	cdx "github.com/CycloneDX/cyclonedx-go"
+	"ex-sbom/internal/domain"
+	"ex-sbom/internal/handler/middleware"
+	"ex-sbom/internal/repository"
+	ssbom "ex-sbom/internal/service/sbom"
+	psvc "ex-sbom/internal/service/workspace"
+	"ex-sbom/util/msg"
+
 	"github.com/gin-gonic/gin"
-	sbomreader "github.com/spdx/tools-golang/json"
 )
 
 // Handler holds SBOM-related HTTP handlers.
 type Handler struct {
-	sbomSvc      *ssbom.Service
-	workspaceSvc *wsvc.Service
+	sbomSvc    *ssbom.Service
+	projectSvc *psvc.Service
 }
 
 // New creates a new SBOM Handler.
-func New(sbomSvc *ssbom.Service, workspaceSvc *wsvc.Service) *Handler {
-	return &Handler{sbomSvc: sbomSvc, workspaceSvc: workspaceSvc}
+func New(sbomSvc *ssbom.Service, projectSvc *psvc.Service) *Handler {
+	return &Handler{
+		sbomSvc:    sbomSvc,
+		projectSvc: projectSvc,
+	}
 }
 
-// List returns the names of all currently loaded SBOMs for a workspace.
-// GET /workspaces/:id/sboms
+// List returns the versions of all currently loaded SBOMs for a project.
+// GET /projects/:id/sboms
 func (h *Handler) List(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
-	names := h.sbomSvc.List(workspaceID)
-	if names == nil {
-		names = []domain.Filename{}
+	projectID := middleware.GetProjectID(c)
+	versions := h.sbomSvc.List(projectID)
+	if versions == nil {
+		versions = []domain.Version{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{msg.RespData: names})
+	c.JSON(http.StatusOK, gin.H{msg.RespData: versions})
 }
 
-// Delete soft-deletes an SBOM and reloads the workspace.
-// DELETE /workspaces/:id/sboms/:name
-func (h *Handler) Delete(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
+// ListVersions returns all stored SBOM versions for a project, newest first.
+// GET /projects/:id/versions
+func (h *Handler) ListVersions(c *gin.Context) {
+	projectID := middleware.GetProjectID(c)
 
-	name := c.Param("name")
-	if len(name) == 0 {
-		slog.Error("Missing SBOM name", "error", msg.ErrMissingParam)
+	versions, err := h.sbomSvc.ListVersions(projectID)
+	if err != nil {
+		slog.Error("Failed to list versions", "projectID", projectID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
+		return
+	}
+
+	if versions == nil {
+		versions = []domain.VersionInfo{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{msg.RespData: versions})
+}
+
+// Rename updates the version name for an existing SBOM.
+// PUT /projects/:id/sboms/:name
+func (h *Handler) Rename(c *gin.Context) {
+	projectID := middleware.GetProjectID(c)
+	oldVersion := c.Param("name")
+
+	var body struct {
+		Version domain.Version `json:"version"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Version == "" {
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "version")})
+		return
+	}
+
+	if err := h.sbomSvc.Rename(projectID, oldVersion, body.Version); err != nil {
+		if errors.Is(err, repository.ErrVersionExists) {
+			c.JSON(http.StatusConflict, gin.H{msg.RespErr: fmt.Sprintf("版本「%s」已存在", body.Version)})
+			return
+		}
+
+		slog.Error("Failed to rename SBOM version", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
+		return
+	}
+
+	slog.Info("SBOM version renamed", "from", oldVersion, "to", body.Version)
+	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: gin.H{"version": body.Version}})
+}
+
+// Delete soft-deletes an SBOM version and reloads the project.
+// DELETE /projects/:id/sboms/:name
+func (h *Handler) Delete(c *gin.Context) {
+	projectID := middleware.GetProjectID(c)
+
+	version := c.Param("name")
+	if len(version) == 0 {
+		slog.Error("Missing SBOM version", "error", msg.ErrMissingParam)
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "name")})
 		return
 	}
 
-	if _, err := h.sbomSvc.Get(workspaceID, name); err != nil {
-		slog.Error("SBOM not found", "name", name)
-		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
-		return
-	}
-
-	if err := h.sbomSvc.Delete(workspaceID, name); err != nil {
-		slog.Error("Failed to delete SBOM", "name", name, "error", err)
+	if err := h.sbomSvc.Delete(projectID, version); err != nil {
+		if errors.Is(err, repository.ErrVersionNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
+			return
+		}
+		slog.Error("Failed to delete SBOM", "version", version, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
-	names, err := h.workspaceSvc.Load(workspaceID)
+	versions, err := h.projectSvc.Load(projectID)
 	if err != nil {
-		slog.Error("Failed to reload workspace", "workspaceID", workspaceID, "error", err)
+		slog.Error("Failed to reload project", "projectID", projectID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
-	slog.Info("SBOM deleted successfully", "name", name)
+	slog.Info("SBOM deleted successfully", "version", version)
 	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: gin.H{
-		"workspace_id": workspaceID,
-		"sboms":        names,
+		"project_id": projectID,
+		"sboms":      versions,
 	}})
 }
 
 // Diff compares two uploaded SBOMs and returns added/removed/changed components.
-// GET /workspaces/:id/diff?a=<sbom name>&b=<sbom name>
+// GET /projects/:id/diff?a=<sbom name>&b=<sbom name>
 func (h *Handler) Diff(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
+	projectID := middleware.GetProjectID(c)
 
 	nameA := c.Query("a")
 	nameB := c.Query("b")
@@ -96,7 +145,7 @@ func (h *Handler) Diff(c *gin.Context) {
 		return
 	}
 
-	result, err := h.sbomSvc.Diff(workspaceID, nameA, nameB)
+	result, err := h.sbomSvc.Diff(projectID, nameA, nameB)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: err.Error()})
 		return
@@ -105,9 +154,9 @@ func (h *Handler) Diff(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{msg.RespData: result})
 }
 
-// Search handles GET /workspaces/:id/search?q=<query>
+// Search handles GET /projects/:id/search?q=<query>
 func (h *Handler) Search(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
+	projectID := middleware.GetProjectID(c)
 
 	query := c.Query("q")
 	if query == "" {
@@ -115,7 +164,7 @@ func (h *Handler) Search(c *gin.Context) {
 		return
 	}
 
-	results := h.sbomSvc.Search(workspaceID, query)
+	results := h.sbomSvc.Search(projectID, query)
 	if results == nil {
 		results = []ssbom.SearchResult{}
 	}
@@ -129,145 +178,114 @@ func (h *Handler) Search(c *gin.Context) {
 	})
 }
 
-// Create is the handler that:
-// 1. distinguishes between SPDX and CycloneDX SBOMs
-// 2. processes and stores the SBOM
-// POST /workspaces/:id/sboms
-func (h *Handler) Create(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
-
-	fileName := c.PostForm("name")
-	if len(fileName) == 0 {
-		slog.Error("Missing SBOM name", "error", msg.ErrMissingParam)
-		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "name")})
-		return
-	}
-
-	file, _, err := c.Request.FormFile("file")
+// Preview parses an uploaded SBOM file and returns the result without saving to DB.
+// POST /projects/:id/sboms/preview
+func (h *Handler) Preview(c *gin.Context) {
+	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
-		slog.Error("Failed to read file from form", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
 		return
 	}
 	defer file.Close()
 
+	baseName := fileHeader.Filename
+	if idx := strings.LastIndex(baseName, "."); idx > 0 {
+		baseName = baseName[:idx]
+	}
+
 	sbomData, err := io.ReadAll(file)
 	if err != nil {
-		slog.Error("Failed to read file content", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
 		return
 	}
 
-	switch detectFileType(sbomData) {
-	case JSON:
-		slog.Info("Detected JSON file type with valid content")
-	case XML:
-		slog.Info("Detected XML file type with valid content")
-		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrXMLNotSupport})
-		return
-	case Unknown:
-		fallthrough
-	default:
-		slog.Error("Invalid file type", "error", msg.ErrFileTypeNotSupport)
-		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrFileTypeNotSupport})
-		return
-	}
-
-	sbomType := detectSBOMFormat(sbomData)
-
-	switch sbomType {
-	case SBOMSPDX:
-		spdxDoc, err := sbomreader.Read(bytes.NewReader(sbomData))
-		if err != nil {
-			slog.Error("Failed to parse SPDX SBOM", "error", err)
-			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingSPDX})
-			return
-		}
-
-		if err := h.sbomSvc.ProcessSPDX(workspaceID, fileName, spdxDoc, sbomData); err != nil {
-			slog.Error("Failed to process SPDX SBOM", "error", err)
-			c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
-			return
-		}
-
-		slog.Info("process spdx-formatted sbom into shared structs,", "name", fileName)
-	case SBOMCycloneDX:
-		decoder := cdx.NewBOMDecoder(bytes.NewReader(sbomData), cdx.BOMFileFormatJSON)
-
-		bom := cdx.BOM{}
-		if err := decoder.Decode(&bom); err != nil {
-			slog.Error("Failed to parse CycloneDX SBOM", "error", err)
-			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingJson})
-			return
-		}
-
-		if err := h.sbomSvc.ProcessCDX(workspaceID, fileName, bom, sbomData); err != nil {
-			slog.Error("Failed to process CycloneDX SBOM", "error", err)
-			return
-		}
-
-		slog.Info("process cyclonedx-formatted sbom into shared structs,", "name", fileName)
-	case SBOMUnknown:
-		fallthrough
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
-		return
-	}
-
-	slog.Info("SBOM created", "name", fileName, "type", sbomType)
-
-	names, err := h.workspaceSvc.Load(workspaceID)
+	bomResult, md5Hash, bomTimestamp, err := h.sbomSvc.Preview(sbomData)
 	if err != nil {
-		slog.Error("Failed to reload workspace after create", "workspaceID", workspaceID, "error", err)
+		switch {
+		case errors.Is(err, ssbom.ErrXMLNotSupported):
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrXMLNotSupport})
+		case errors.Is(err, ssbom.ErrInvalidFileType):
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrFileTypeNotSupport})
+		case errors.Is(err, ssbom.ErrInvalidSBOMFormat):
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
+		case errors.Is(err, ssbom.ErrSPDXParseFailed):
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingSPDX})
+		case errors.Is(err, ssbom.ErrCycloneDXParseFailed):
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingJson})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
+		}
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{
+		"bom_result":    bomResult,
+		"md5":           md5Hash,
+		"bom_timestamp": bomTimestamp,
+		"filename":      baseName,
+		"summary": gin.H{
+			"component_count": len(bomResult.Components),
+			"vuln_count":      countVulns(bomResult),
+		},
+	}})
+}
+
+// Create saves a pre-parsed SBOM result to DB under the given version name.
+// POST /projects/:id/sboms
+func (h *Handler) Create(c *gin.Context) {
+	projectID := middleware.GetProjectID(c)
+
+	var body struct {
+		Version      domain.Version      `json:"version"`
+		BomResult    ssbom.FormattedSBOM `json:"bom_result"`
+		Md5          domain.Md5          `json:"md5"`
+		BomTimestamp time.Time           `json:"bom_timestamp"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
+		return
+	}
+	if body.Version == "" {
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "version")})
+		return
+	}
+
+	if err := h.sbomSvc.SaveParsed(projectID, body.Version, body.BomResult, body.Md5, body.BomTimestamp); err != nil {
+		if errors.Is(err, repository.ErrVersionExists) {
+			c.JSON(http.StatusConflict, gin.H{msg.RespErr: fmt.Sprintf("版本「%s」已存在", body.Version)})
+			return
+		}
+		slog.Error("Failed to save SBOM", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, toCreateResponse(workspaceID, names))
+	names, err := h.projectSvc.Load(projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
+		return
+	}
+
+	slog.Info("SBOM version created", "version", body.Version)
+	c.JSON(http.StatusOK, toCreateResponse(projectID, names))
 }
 
-func toCreateResponse(workspaceID int64, names []domain.Filename) gin.H {
+func countVulns(bom ssbom.FormattedSBOM) int {
+	count := 0
+	for _, info := range bom.ComponentInfo {
+		count += info.VulnNumber
+	}
+
+	return count
+}
+
+func toCreateResponse(projectID domain.ProjectID, versions []domain.Version) gin.H {
 	return gin.H{
 		msg.RespMsg: "ok",
 		msg.RespData: gin.H{
-			"workspace_id": workspaceID,
-			"sboms":        names,
+			"project_id": projectID,
+			"sboms":      versions,
 		},
 	}
-}
-
-func detectFileType(data []byte) FileType {
-	var js json.RawMessage
-	if json.Unmarshal(data, &js) == nil {
-		return JSON
-	}
-
-	decoder := xml.NewDecoder(bytes.NewReader(data))
-	if _, err := decoder.Token(); err == nil {
-		return XML
-	}
-
-	return Unknown
-}
-
-func detectSBOMFormat(data []byte) SBOMType {
-	var generic map[string]interface{}
-	if err := json.Unmarshal(data, &generic); err != nil {
-		fmt.Println(msg.ErrParsingJson, err)
-		return SBOMUnknown
-	}
-
-	if _, ok := generic[version]; ok {
-		if _, ok := generic[id]; ok {
-			return SBOMSPDX
-		}
-	}
-
-	if format, ok := generic[format]; ok {
-		if fmtStr, ok := format.(string); ok && fmtStr == cyclonedx {
-			return SBOMCycloneDX
-		}
-	}
-
-	return SBOMUnknown
 }

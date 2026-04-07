@@ -15,8 +15,8 @@ import (
 
 // helpers ─────────────────────────────────────────────────────────────────────
 
-func workspaceWithSBOM(filename domain.Filename, sbom FormattedSBOM) map[domain.Filename]FormattedSBOM {
-	return map[domain.Filename]FormattedSBOM{filename: sbom}
+func workspaceWithSBOM(filename domain.Version, sbom FormattedSBOM) map[domain.Version]FormattedSBOM {
+	return map[domain.Version]FormattedSBOM{filename: sbom}
 }
 
 func sbomWithComponent(compName string, comp Component, level int) FormattedSBOM {
@@ -54,7 +54,7 @@ func TestSearchInCache_WhitespaceOnlyQuery(t *testing.T) {
 
 func TestSearchInCache_EmptyWorkspace(t *testing.T) {
 	// Arrange
-	workspace := map[domain.Filename]FormattedSBOM{}
+	workspace := map[domain.Version]FormattedSBOM{}
 
 	// Act
 	results := searchInCache(workspace, "openssl")

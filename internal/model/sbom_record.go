@@ -4,19 +4,23 @@
 
 package model
 
-import "time"
+import (
+	"time"
+
+	"ex-sbom/internal/domain"
+)
 
 // SBOMRecordModel maps to the sbom_records table.
 type SBOMRecordModel struct {
-	ID            int64      `gorm:"column:id;primaryKey;autoIncrement"`
-	WorkspaceID   int64      `gorm:"column:workspace_id;not null;index"`
-	Filename      string     `gorm:"column:filename;not null"`
-	BomResultJSON string     `gorm:"column:bom_result_json;type:text"`
-	BomResultMd5  string     `gorm:"column:bom_result_md5"`
-	CreatedAt     time.Time  `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt     *time.Time `gorm:"column:updated_at;autoUpdateTime"`
-	DeletedAt     *time.Time `gorm:"column:deleted_at;index"`
-	BomTimestamp  *time.Time `gorm:"column:bom_timestamp"`
+	ID            domain.SBOMID        `gorm:"column:id;primaryKey;autoIncrement"`
+	ProjectID     domain.ProjectID     `gorm:"column:project_id;not null;index"`
+	Version       domain.Version       `gorm:"column:version;not null"`
+	BomResultJSON domain.BomResultJSON `gorm:"column:bom_result_json;type:text"`
+	BomResultMd5  domain.Md5           `gorm:"column:bom_result_md5"`
+	CreatedAt     time.Time            `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt     *time.Time           `gorm:"column:updated_at;autoUpdateTime"`
+	DeletedAt     *time.Time           `gorm:"column:deleted_at;index"`
+	BomTimestamp  *time.Time           `gorm:"column:bom_timestamp"`
 }
 
 func (SBOMRecordModel) TableName() string { return "sbom_records" }

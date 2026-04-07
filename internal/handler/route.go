@@ -9,35 +9,38 @@ import (
 	reporthandler "ex-sbom/internal/handler/report"
 	sbomhandler "ex-sbom/internal/handler/sbom"
 	topohandler "ex-sbom/internal/handler/topology"
-	wshandler "ex-sbom/internal/handler/workspace"
+	projecthandler "ex-sbom/internal/handler/workspace"
 
 	"github.com/gin-gonic/gin"
 )
 
 func SetupRouterGroup(r *gin.Engine,
-	workspaceH *wshandler.Handler,
+	projectH *projecthandler.Handler,
 	sbomH *sbomhandler.Handler,
 	topoH *topohandler.Handler,
 	reportH *reporthandler.Handler,
 ) {
-	workspaces := r.Group("/workspaces")
-	workspaces.GET("", workspaceH.List)
-	workspaces.POST("", workspaceH.Create)
+	projects := r.Group("/projects")
+	projects.GET("", projectH.List)
+	projects.POST("", projectH.Create)
 
-	ws := workspaces.Group("/:id")
-	ws.Use(middleware.WorkspaceID())
-	ws.GET("", workspaceH.Get)
-	ws.PUT("", workspaceH.Update)
-	ws.DELETE("", workspaceH.Delete)
-	ws.GET("/diff", sbomH.Diff)
-	ws.GET("/search", sbomH.Search)
+	proj := projects.Group("/:id")
+	proj.Use(middleware.ProjectID())
+	proj.GET("", projectH.Get)
+	proj.PUT("", projectH.Update)
+	proj.DELETE("", projectH.Delete)
+	proj.GET("/versions", sbomH.ListVersions)
+	proj.GET("/diff", sbomH.Diff)
+	proj.GET("/search", sbomH.Search)
 
-	sboms := ws.Group("/sboms")
+	sboms := proj.Group("/sboms")
 	sboms.GET("", sbomH.List)
 	sboms.POST("", sbomH.Create)
+	sboms.POST("/preview", sbomH.Preview)
 
 	namedSBOM := sboms.Group("/:name")
 	namedSBOM.DELETE("", sbomH.Delete)
+	namedSBOM.PUT("", sbomH.Rename)
 	namedSBOM.GET("/report", reportH.CreatePDF)
 
 	topo := namedSBOM.Group("/topology")

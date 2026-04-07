@@ -4,16 +4,20 @@
 
 package model
 
-import "time"
+import (
+	"time"
 
-// WorkspaceModel maps to the workspaces table.
-type WorkspaceModel struct {
-	ID            int64      `gorm:"column:id;primaryKey;autoIncrement"`
-	WorkspaceName string     `gorm:"column:workspace_name;uniqueIndex;not null"`
-	UUID          string     `gorm:"column:uuid;uniqueIndex"`
-	CreatedAt     time.Time  `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt     *time.Time `gorm:"column:updated_at;autoUpdateTime"`
-	DeletedAt     *time.Time `gorm:"column:deleted_at;index"`
+	"ex-sbom/internal/domain"
+)
+
+// ProjectModel maps to the projects table.
+type ProjectModel struct {
+	ID          domain.ProjectID   `gorm:"column:id;primaryKey;autoIncrement"`
+	ProjectName domain.ProjectName `gorm:"column:project_name;uniqueIndex;not null"`
+	UUID        domain.UUID        `gorm:"column:uuid;uniqueIndex"`
+	CreatedAt   time.Time          `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt   *time.Time         `gorm:"column:updated_at;autoUpdateTime"`
+	DeletedAt   *time.Time         `gorm:"column:deleted_at;index"`
 }
 
-func (WorkspaceModel) TableName() string { return "workspaces" }
+func (ProjectModel) TableName() string { return "projects" }

@@ -43,11 +43,11 @@ type relation struct {
 }
 
 // ListComponents returns components grouped by dependency depth.
-// GET /workspaces/:id/sboms/:name/topology
+// GET /projects/:id/sboms/:name/topology
 func (h *Handler) ListComponents(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
+	projectID := middleware.GetProjectID(c)
 
-	bom, err := h.svc.Get(workspaceID, c.Param("name"))
+	bom, err := h.svc.Get(projectID, c.Param("name"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
 		return
@@ -82,11 +82,11 @@ func (h *Handler) ListComponents(c *gin.Context) {
 }
 
 // GetRelations returns the dependency graph as a flat list of root→sub pairs.
-// GET /workspaces/:id/sboms/:name/topology/relations
+// GET /projects/:id/sboms/:name/topology/relations
 func (h *Handler) GetRelations(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
+	projectID := middleware.GetProjectID(c)
 
-	bom, err := h.svc.Get(workspaceID, c.Param("name"))
+	bom, err := h.svc.Get(projectID, c.Param("name"))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
 		return
@@ -122,9 +122,9 @@ func (h *Handler) GetRelations(c *gin.Context) {
 }
 
 // GetComponent returns detailed info for a single component.
-// GET /workspaces/:id/sboms/:name/topology/component?component=
+// GET /projects/:id/sboms/:name/topology/component?component=
 func (h *Handler) GetComponent(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
+	projectID := middleware.GetProjectID(c)
 
 	comp := c.Query("component")
 	if len(comp) == 0 {
@@ -133,7 +133,7 @@ func (h *Handler) GetComponent(c *gin.Context) {
 	}
 
 	name := c.Param("name")
-	bom, err := h.svc.Get(workspaceID, name)
+	bom, err := h.svc.Get(projectID, name)
 	if err != nil {
 		slog.Error("GetComponent: sbom not found", "name", name)
 		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
@@ -150,9 +150,9 @@ func (h *Handler) GetComponent(c *gin.Context) {
 }
 
 // GetComponentVulnDep returns vulnerability dependency paths for a component.
-// GET /workspaces/:id/sboms/:name/topology/component/vuln-dep?component=
+// GET /projects/:id/sboms/:name/topology/component/vuln-dep?component=
 func (h *Handler) GetComponentVulnDep(c *gin.Context) {
-	workspaceID := middleware.GetWorkspaceID(c)
+	projectID := middleware.GetProjectID(c)
 
 	name := c.Param("name")
 	comp := c.Query("component")
@@ -166,7 +166,7 @@ func (h *Handler) GetComponentVulnDep(c *gin.Context) {
 		return
 	}
 
-	bom, err := h.svc.Get(workspaceID, name)
+	bom, err := h.svc.Get(projectID, name)
 	if err != nil {
 		slog.Error("SBOM not found", slog.String("name", name))
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidComponent})

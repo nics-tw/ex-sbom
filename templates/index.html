@@ -47,74 +47,116 @@
     </header>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <!-- Workspace selector -->
+      <!-- Project selector -->
       <div class="flex items-center space-x-3 mb-6 p-3 bg-gray-50 rounded-lg border border-gray-200">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
           <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
         </svg>
-        <label class="text-sm font-medium text-gray-600 flex-shrink-0" data-i18n="workspace">Workspace</label>
-        <select id="workspace-select" class="flex-1 max-w-xs border border-gray-300 rounded-md py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
-        <button id="workspace-rename-btn" title="Rename" class="inline-flex items-center gap-1 border border-[#009999] text-[#009999] hover:bg-[#009999] hover:text-white text-xs font-medium py-1 px-2 rounded transition-colors duration-150">
+        <label class="text-sm font-medium text-gray-600 flex-shrink-0" data-i18n="project">Project</label>
+        <select id="project-select" class="flex-1 max-w-xs border border-gray-300 rounded-md py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
+        <button id="project-rename-btn" title="Rename" class="inline-flex items-center gap-1 border border-[#009999] text-[#009999] hover:bg-[#009999] hover:text-white text-xs font-medium py-1 px-2 rounded transition-colors duration-150">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
           </svg>
-          <span data-i18n="workspaceRename">Rename</span>
+          <span data-i18n="projectRename">Rename</span>
         </button>
-        <button id="workspace-delete-btn" title="Delete" class="inline-flex items-center gap-1 border border-red-400 text-red-500 hover:bg-red-500 hover:text-white text-xs font-medium py-1 px-2 rounded transition-colors duration-150">
+        <button id="project-delete-btn" title="Delete" class="inline-flex items-center gap-1 border border-red-400 text-red-500 hover:bg-red-500 hover:text-white text-xs font-medium py-1 px-2 rounded transition-colors duration-150">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
           </svg>
-          <span data-i18n="workspaceDelete">Delete</span>
+          <span data-i18n="projectDelete">Delete</span>
         </button>
         <span class="text-gray-400 text-sm">or</span>
-        <input id="workspace-input" type="text" placeholder="New workspace name" class="flex-1 max-w-xs border border-gray-300 rounded-md py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999]" data-i18n-placeholder="newWorkspace" />
-        <button id="workspace-switch-btn" class="bg-[#009999] hover:bg-[#19a3a3] text-white text-sm font-medium py-1.5 px-4 rounded-md shadow transition duration-200">
-          <span data-i18n="workspaceSwitch">Switch</span>
+        <input id="project-input" type="text" placeholder="New project name" class="flex-1 max-w-xs border border-gray-300 rounded-md py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999]" data-i18n-placeholder="newProject" />
+        <button id="project-switch-btn" class="bg-[#009999] hover:bg-[#19a3a3] text-white text-sm font-medium py-1.5 px-4 rounded-md shadow transition duration-200">
+          <span data-i18n="projectSwitch">Switch</span>
         </button>
-        <span id="workspace-current" class="text-xs text-gray-400"></span>
+        <span id="project-current" class="text-xs text-gray-400"></span>
       </div>
 
-      <div class="flex items-start">
-        <div class="flex items-center space-x-2">
-          <input type="file" id="sbom-file-input" class="hidden" multiple accept=".json,.xml,.spdx" />
-          <button id="select-sbom-btn" class="select-btn bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow transition duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-300">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+      <!-- Main tab bar -->
+      <div class="flex items-center border-b border-gray-200 mb-6">
+        <button id="main-tab-analysis" class="main-tab px-5 py-2.5 text-sm font-medium text-[#009999] border-b-2 border-[#009999] -mb-px">SBOM 分析</button>
+        <button id="main-tab-diff" class="main-tab px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent -mb-px">Diff 比對</button>
+        <div class="ml-auto pb-1">
+          <button id="select-sbom-btn" class="bg-[#009999] hover:bg-[#19a3a3] text-white text-sm font-medium py-1.5 px-4 rounded-md shadow transition duration-200 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>
-            <span data-i18n="selectFiles">Select SBOM Files</span>
-          </button>
-          <button id="diff-sbom-btn" class="bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow transition duration-200 flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-blue-300">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M3 4a1 1 0 000 2h10a1 1 0 100-2H3zm0 4a1 1 0 000 2h6a1 1 0 100-2H3zm0 4a1 1 0 100 2h8a1 1 0 100-2H3z" clip-rule="evenodd" />
-            </svg>
-            <span data-i18n="diffFiles">diff files</span>
+            <span data-i18n="selectFiles">新增版本</span>
           </button>
         </div>
-        <div id="selected-files" class="ml-6 mt-1 text-gray-700"></div>
       </div>
 
-      <!-- Search bar -->
-      <div class="mt-4 flex items-center gap-2">
-        <div class="relative flex-1 max-w-md">
-          <input id="search-input" type="text" placeholder="Search component or CVE..."
-            class="w-full border border-gray-300 rounded-md py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999]" />
-          <svg class="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-          </svg>
+      <!-- Diff 比對 panel -->
+      <div id="panel-diff" class="hidden"></div>
+
+      <!-- SBOM 分析 panel -->
+      <div id="panel-analysis">
+        <!-- Search bar -->
+        <div class="flex items-center gap-2 mb-4">
+          <div class="relative flex-1 max-w-md">
+            <input id="search-input" type="text" placeholder="Search component or CVE..."
+              class="w-full border border-gray-300 rounded-md py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999]" />
+            <svg class="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <button id="search-clear-btn" class="hidden text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
         </div>
-        <button id="search-clear-btn" class="hidden text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
+        <div id="search-results" class="hidden mb-4 border border-gray-200 rounded-md bg-white shadow-sm max-h-80 overflow-y-auto"></div>
+        <div id="upload-status"></div>
+        <!-- 版本歷史 -->
+        <div class="mt-6">
+          <div class="text-lg font-medium text-gray-700 mb-2">版本歷史</div>
+          <div id="version-history-list" class="mt-2">
+            <p class="text-gray-400 italic text-sm">載入中...</p>
+          </div>
+        </div>
+        <div class="mt-4 border-b border-gray-200">
+          <div class="text-lg font-medium text-gray-700 mb-2" data-i18n="uploadedFiles">Uploaded SBOM Files</div>
+          <div id="file-tabs" class="flex flex-wrap"></div>
+        </div>
+        <div id="tab-content" class="py-4">
+          <div id="no-tabs-message" class="text-gray-500 italic" data-i18n="noFilesUploaded">No files processed yet</div>
+        </div>
       </div>
-      <div id="search-results" class="hidden mt-3 border border-gray-200 rounded-md bg-white shadow-sm max-h-80 overflow-y-auto"></div>
+    </div>
 
-      <div id="upload-status" class="mt-4"></div>
+    <!-- SBOM Modal (two-state: pick file → preview result) -->
+    <div id="sbom-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl p-6">
 
-      <!-- Tabs -->
-      <div class="mt-6 border-b border-gray-200">
-        <div class="text-lg font-medium text-gray-700 mb-2" data-i18n="uploadedFiles">Uploaded SBOM Files</div>
-        <div id="file-tabs" class="flex flex-wrap"></div>
-      </div>
-      <div id="tab-content" class="py-4">
-        <div id="no-tabs-message" class="text-gray-500 italic" data-i18n="noFilesUploaded">No files processed yet</div>
+        <!-- Step 1: pick file -->
+        <div id="sbom-modal-step1">
+          <h2 class="text-lg font-semibold text-gray-800 mb-4">選擇 SBOM 檔案</h2>
+          <input type="file" id="sbom-file-input" class="hidden" accept=".json,.xml,.spdx" />
+          <div class="flex items-center gap-3 mb-6">
+            <button id="sbom-pick-file-btn" class="px-3 py-1.5 text-sm rounded-md border border-[#009999] text-[#009999] hover:bg-[#009999] hover:text-white transition-colors">選擇檔案</button>
+            <span id="sbom-filename-display" class="text-sm text-gray-500 truncate">尚未選擇檔案</span>
+          </div>
+          <p id="sbom-modal-step1-error" class="hidden text-sm text-red-500 mb-3"></p>
+          <div class="flex justify-end gap-3">
+            <button id="sbom-modal-cancel" class="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50">取消</button>
+            <button id="sbom-modal-preview-btn" class="px-4 py-2 text-sm rounded-md bg-[#009999] hover:bg-[#19a3a3] text-white font-medium">預覽</button>
+          </div>
+        </div>
+
+        <!-- Step 2: preview result + create version -->
+        <div id="sbom-modal-step2" class="hidden">
+          <h2 id="sbom-preview-title" class="text-lg font-semibold text-gray-800 mb-4">預覽結果</h2>
+          <div id="sbom-preview-summary" class="mb-4 text-sm"></div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">版本名稱</label>
+          <input id="sbom-version-input" type="text"
+            class="w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999] mb-1" />
+          <p id="sbom-version-hint" class="text-xs text-gray-400 mb-2"></p>
+          <p id="sbom-modal-step2-error" class="hidden text-sm text-red-500 mb-3"></p>
+          <div class="flex justify-end gap-3 mt-4">
+            <button id="sbom-modal-back-btn" class="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50">返回</button>
+            <button id="sbom-modal-commit-btn" class="px-4 py-2 text-sm rounded-md bg-[#009999] hover:bg-[#19a3a3] text-white font-medium">建立版本</button>
+          </div>
+        </div>
+
       </div>
     </div>
 

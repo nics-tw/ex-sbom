@@ -26,7 +26,7 @@ func New(svc *ssbom.Service) *Handler {
 }
 
 // CreatePDF generates a PDF report for the given SBOM and sends it as a download.
-// GET /workspaces/:id/sboms/:name/report
+// GET /projects/:id/sboms/:name/report
 func (h *Handler) CreatePDF(c *gin.Context) {
 	name, bom, err := h.validate(c)
 	if err != nil {
@@ -54,8 +54,8 @@ func (h *Handler) validate(c *gin.Context) (string, ssbom.FormattedSBOM, error) 
 		return "", ssbom.FormattedSBOM{}, fmt.Errorf("sbom name is required")
 	}
 
-	workspaceID := middleware.GetWorkspaceID(c)
-	bom, err := h.svc.Get(workspaceID, name)
+	projectID := middleware.GetProjectID(c)
+	bom, err := h.svc.Get(projectID, name)
 	if err != nil {
 		return "", ssbom.FormattedSBOM{}, fmt.Errorf("sbom %s not found", name)
 	}

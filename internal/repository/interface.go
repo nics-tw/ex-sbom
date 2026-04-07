@@ -5,18 +5,21 @@
 package repository
 
 import (
-	"ex-sbom/internal/domain"
 	"time"
+
+	"ex-sbom/internal/domain"
 )
 
-// Repository defines the persistence operations for workspaces and SBOMs.
+// Repository defines the persistence operations for projects and SBOMs.
 type Repository interface {
-	CreateWorkspace(name domain.WorkspaceName) (domain.WorkspaceID, error)
-	UpdateWorkspaceName(id domain.WorkspaceID, name domain.WorkspaceName) error
-	SoftDeleteWorkspace(id domain.WorkspaceID) error
-	GetWorkspaces() ([]domain.WorkspaceInfo, error)
-	Save(workspaceID domain.WorkspaceID, filename domain.Filename, bomResult any, bomTimestamp time.Time, md5Hash string) error
-	SoftDeleteSBOM(workspaceID domain.WorkspaceID, filename domain.Filename) error
-	GetLatestAll() (domain.WorkspaceID, []domain.SBOMEntry, error)
-	GetLatestByWorkspace(workspaceID domain.WorkspaceID) ([]domain.SBOMEntry, error)
+	CreateProject(name domain.ProjectName) (domain.ProjectID, error)
+	UpdateProjectName(id domain.ProjectID, name domain.ProjectName) error
+	SoftDeleteProject(id domain.ProjectID) error
+	GetProjects() ([]domain.ProjectInfo, error)
+	CreateSBOM(projectID domain.ProjectID, version domain.Version, result any, timestamp time.Time, checksum string) error
+	SoftDeleteSBOM(projectID domain.ProjectID, version domain.Version) error
+	RenameVersion(projectID domain.ProjectID, oldVersion, newVersion domain.Version) error
+	GetAllVersions(projectID domain.ProjectID) ([]domain.VersionInfo, error)
+	GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error)
+	GetLatestByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error)
 }

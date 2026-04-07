@@ -7,42 +7,132 @@ package repository
 import (
 	"encoding/json"
 	"errors"
-	"ex-sbom/internal/domain"
-	"ex-sbom/internal/model"
+	"fmt"
 	"time"
 
+	"ex-sbom/internal/domain"
+	"ex-sbom/internal/model"
+
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
-// Save inserts a processed SBOM result into the sbom_records table.
-func (r *SBOMRepository) Save(workspaceID domain.WorkspaceID, filename domain.Filename, bomResult any, bomTimestamp time.Time, md5Hash string) error {
-	resultJSON, err := json.Marshal(bomResult)
+// ErrVersionExists is returned by CreateSBOM when the (project_id, version) pair already exists.
+var ErrVersionExists = errors.New("version already exists")
+
+// ErrVersionNotFound is returned by SoftDeleteSBOM when no matching version exists.
+var ErrVersionNotFound = errors.New("version not found")
+
+// CreateSBOM inserts a processed SBOM result into the sbom_records table.
+// Returns ErrVersionExists if the same (project_id, version) already exists.
+func (r *SBOMRepository) CreateSBOM(projectID domain.ProjectID, version domain.Version, result any, timestamp time.Time, checksum string) error {
+	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
 
-	return r.db.Exec(`
-		INSERT INTO sbom_records (workspace_id, filename, bom_result_json, bom_result_md5, bom_timestamp)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT (workspace_id, filename, bom_result_md5) DO NOTHING
-	`, workspaceID, filename, string(resultJSON), md5Hash, &bomTimestamp).Error
+	record := model.SBOMRecordModel{
+		ProjectID:     projectID,
+		Version:       version,
+		BomResultJSON: string(resultJSON),
+		BomResultMd5:  checksum,
+		BomTimestamp:  &timestamp,
+	}
+	db := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&record)
+	if db.Error != nil {
+		return db.Error
+	}
+	if db.RowsAffected == 0 {
+		return ErrVersionExists
+	}
+
+	return nil
 }
 
-// SoftDeleteSBOM marks all records for the given workspace + filename as deleted.
-func (r *SBOMRepository) SoftDeleteSBOM(workspaceID domain.WorkspaceID, filename domain.Filename) error {
-	return r.db.Model(&model.SBOMRecordModel{}).
-		Where("workspace_id = ? AND filename = ? AND deleted_at IS NULL", workspaceID, filename).
-		Update("deleted_at", time.Now()).Error
+// RenameVersion updates the version name for a given project + version.
+// Returns ErrVersionExists if newVersion already exists in the project.
+// Uses DELETE + INSERT inside a transaction because DuckDB's ART index
+// implementation produces spurious PK violations on plain UPDATE statements.
+func (r *SBOMRepository) RenameVersion(projectID domain.ProjectID, oldVersion, newVersion domain.Version) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// CAST bom_result_json to VARCHAR: DuckDB returns JSON columns as
+		// map[string]interface{} which cannot be scanned into a string field.
+		var rec model.SBOMRecordModel
+		err := tx.
+			Select(
+				"id, project_id, version",
+				"CAST(bom_result_json AS VARCHAR) AS bom_result_json",
+				"bom_result_md5, bom_timestamp, created_at, updated_at",
+			).
+			Where("project_id = ? AND version = ? AND deleted_at IS NULL", projectID, oldVersion).
+			First(&rec).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("version not found: %s", oldVersion)
+		}
+		if err != nil {
+			return err
+		}
+
+		if err := tx.Delete(&rec).Error; err != nil {
+			return err
+		}
+
+		rec.ID = 0
+		rec.Version = newVersion
+		db := tx.
+			Clauses(clause.OnConflict{DoNothing: true}).
+			Create(&rec)
+		if db.Error != nil {
+			return db.Error
+		}
+		if db.RowsAffected == 0 {
+			return ErrVersionExists
+		}
+
+		return nil
+	})
 }
 
-// GetLatestAll returns the workspaceID and most recent bom_result per filename for the first workspace
-// (ordered by created_at ASC). Used as the default workspace on startup.
-func (r *SBOMRepository) GetLatestAll() (domain.WorkspaceID, []domain.SBOMEntry, error) {
-	var workspace model.WorkspaceModel
+// SoftDeleteSBOM marks the record for the given project + version as deleted.
+// Returns ErrVersionNotFound if no matching non-deleted record exists.
+func (r *SBOMRepository) SoftDeleteSBOM(projectID domain.ProjectID, version domain.Version) error {
+	db := r.db.Model(&model.SBOMRecordModel{}).
+		Where("project_id = ? AND version = ? AND deleted_at IS NULL", projectID, version).
+		Update("deleted_at", time.Now())
+	if db.Error != nil {
+		return db.Error
+	}
+	if db.RowsAffected == 0 {
+		return ErrVersionNotFound
+	}
+
+	return nil
+}
+
+// GetAllVersions returns version name and creation time for all non-deleted records in a project,
+// ordered newest first.
+func (r *SBOMRepository) GetAllVersions(projectID domain.ProjectID) ([]domain.VersionInfo, error) {
+	var rows []domain.VersionInfo
+	err := r.db.Model(&model.SBOMRecordModel{}).
+		Select("version, created_at").
+		Where("project_id = ? AND deleted_at IS NULL", projectID).
+		Order("created_at desc").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+// GetLatestAll returns the projectID and most recent bom_result per filename for the first project
+// (ordered by created_at ASC). Used as the default project on startup.
+func (r *SBOMRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) {
+	var project model.ProjectModel
 	err := r.db.
 		Where("deleted_at IS NULL").
 		Order("created_at ASC").
-		First(&workspace).Error
+		First(&project).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, nil, nil
 	}
@@ -51,26 +141,24 @@ func (r *SBOMRepository) GetLatestAll() (domain.WorkspaceID, []domain.SBOMEntry,
 		return 0, nil, err
 	}
 
-	records, err := r.GetLatestByWorkspace(workspace.ID)
-	return workspace.ID, records, err
+	records, err := r.GetLatestByProject(project.ID)
+	return project.ID, records, err
 }
 
-// GetLatestByWorkspace returns the most recent bom_result per filename for the given workspace,
+// GetLatestByProject returns the most recent bom_result per filename for the given project,
 // excluding soft-deleted records.
-func (r *SBOMRepository) GetLatestByWorkspace(workspaceID domain.WorkspaceID) ([]domain.SBOMEntry, error) {
+func (r *SBOMRepository) GetLatestByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error) {
 	var rows []struct {
-		Filename      string
-		BomResultJSON string
-		BomResultMd5  string
+		Version       domain.Version
+		BomResultJSON domain.BomResultJSON
+		BomResultMd5  domain.Md5
 	}
 
-	err := r.db.Raw(`
-		SELECT r.filename, CAST(r.bom_result_json AS VARCHAR) AS bom_result_json, r.bom_result_md5
-		FROM sbom_records r
-		WHERE r.workspace_id = ?
-		  AND r.deleted_at IS NULL
-		ORDER BY r.created_at ASC
-	`, workspaceID).Scan(&rows).Error
+	err := r.db.Model(&model.SBOMRecordModel{}).
+		Select("version, CAST(bom_result_json AS VARCHAR) AS bom_result_json, bom_result_md5").
+		Where("project_id = ? AND deleted_at IS NULL", projectID).
+		Order("created_at ASC").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +166,7 @@ func (r *SBOMRepository) GetLatestByWorkspace(workspaceID domain.WorkspaceID) ([
 	records := make([]domain.SBOMEntry, 0, len(rows))
 	for _, row := range rows {
 		records = append(records, domain.SBOMEntry{
-			Filename:  row.Filename,
+			Version:   row.Version,
 			BomResult: json.RawMessage(row.BomResultJSON),
 			Md5:       row.BomResultMd5,
 		})

@@ -11,13 +11,13 @@ import (
 
 // SearchResult represents a single search hit.
 type SearchResult struct {
-	SBOM      string `json:"sbom"`
-	Component string `json:"component"`
-	Version   string `json:"version"`
-	VulnCount int    `json:"vuln_count"`
-	Level     int    `json:"level"`
-	HasVuln    bool   `json:"has_vuln"`
-	HasVulnDep bool   `json:"has_vuln_dep"`
+	SBOM       domain.Version `json:"sbom"`
+	Component  string         `json:"component"`
+	Version    string         `json:"version"`
+	VulnCount  int            `json:"vuln_count"`
+	Level      int            `json:"level"`
+	HasVuln    bool           `json:"has_vuln"`
+	HasVulnDep bool           `json:"has_vuln_dep"`
 	// MatchType is "component" when the component name matched,
 	// or "vuln" when a CVE ID or summary matched.
 	MatchType   string `json:"match_type"`
@@ -27,7 +27,7 @@ type SearchResult struct {
 }
 
 // searchInCache returns results matching query (case-insensitive) across all SBOMs in the provided workspace snapshot.
-func searchInCache(workspace map[domain.Filename]FormattedSBOM, query string) []SearchResult {
+func searchInCache(workspace map[domain.Version]FormattedSBOM, query string) []SearchResult {
 	query = strings.ToLower(strings.TrimSpace(query))
 	if query == "" {
 		return nil

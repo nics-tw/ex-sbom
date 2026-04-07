@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	ssbom "ex-sbom/internal/service/sbom"
-	"ex-sbom/internal/service/workspace"
+	psvc "ex-sbom/internal/service/workspace"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -311,10 +311,10 @@ func TestCreateServer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	cache := ssbom.NewInMemoryCache()
-	workspaceSvc := workspace.New(nil, cache)
+	projectSvc := psvc.New(nil, cache)
 	sbomSvc := ssbom.NewService(nil, cache)
 
-	server := createServer(workspaceSvc, sbomSvc)
+	server := createServer(projectSvc, sbomSvc)
 
 	assert.NotNil(t, server)
 

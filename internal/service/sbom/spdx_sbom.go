@@ -28,29 +28,23 @@ const (
 	filePrefix         = "File-"
 )
 
-func (s *Service) ProcessSPDX(workspaceID domain.WorkspaceID, name domain.Filename, document *spdx.Document, rawData []byte) error {
-	if document == nil {
-		return nil
-	}
-
+func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string) {
 	c := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
 	dependency := getSpdxDep(*document, refToName)
 	dependencyLevel := getSpdxDependencyDepthMap(*document, c, refToName)
 
-	s.cache.Set(workspaceID, name, FormattedSBOM{
+	bom := FormattedSBOM{
 		Components:        c,
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
 		ComponentInfo:     getSpdxComponentInfo(*document, rawData, name),
-	})
-
-	cached, _ := s.cache.Get(workspaceID, name)
+	}
 
 	compWithVuln := []string{}
-	for compName, info := range cached.ComponentInfo {
+	for compName, info := range bom.ComponentInfo {
 		if info.VulnNumber > 0 {
 			compWithVuln = append(compWithVuln, compName)
 		}
@@ -58,42 +52,52 @@ func (s *Service) ProcessSPDX(workspaceID domain.WorkspaceID, name domain.Filena
 
 	affecteds := []string{}
 	for _, compName := range compWithVuln {
-		affected := getAffecteds(compName, cached.ReverseDependency)
+		affected := getAffecteds(compName, bom.ReverseDependency)
 		if len(affected) > 0 {
 			affecteds = append(affecteds, affected...)
 		}
 	}
 
 	distinct := util.StringSlice(affecteds)
-
 	for _, compName := range distinct {
-		current, ok := s.cache.Get(workspaceID, name)
-		if !ok {
-			slog.Error("failed to get name from refA", "refA", name)
-			continue
-		}
-		componentInfo := current.ComponentInfo[compName]
+		componentInfo := bom.ComponentInfo[compName]
 		componentInfo.ContainsVulnDep = true
-		current.ComponentInfo[compName] = componentInfo
-		s.cache.Set(workspaceID, name, current)
+		bom.ComponentInfo[compName] = componentInfo
 	}
 
-	final, _ := s.cache.Get(workspaceID, name)
+	sortFormattedSBOM(&bom)
+	md5Hash := hashSBOM(bom)
+	return bom, md5Hash
+}
 
-	sortFormattedSBOM(&final)
-	md5Hash := hashSBOM(final)
-	if err := s.repo.Save(workspaceID, name, final, time.Time{}, md5Hash); err != nil {
+func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, document *spdx.Document, rawData []byte) error {
+	if document == nil {
+		return nil
+	}
+
+	final, md5Hash := buildSPDXResult(document, rawData, name)
+
+	s.cache.Set(projectID, name, final)
+	if err := s.repo.CreateSBOM(projectID, name, final, time.Time{}, md5Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
 
 	slog.Info(
 		"Process SPDX-formatted SBOM successfully",
 		"name", name,
-		"numbers of components", len(c),
+		"numbers of components", len(final.Components),
 		"total levels", fmt.Sprintf("%d", len(final.DependencyLevel)),
 	)
 
 	return nil
+}
+
+func (s *Service) PreviewSPDX(document *spdx.Document, rawData []byte) (FormattedSBOM, string, error) {
+	if document == nil {
+		return FormattedSBOM{}, "", nil
+	}
+	final, md5Hash := buildSPDXResult(document, rawData, "preview")
+	return final, md5Hash, nil
 }
 
 func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameMap map[string]string) map[int][]string {

@@ -12,10 +12,10 @@ import (
 	reporthandler "ex-sbom/internal/handler/report"
 	sbomhandler "ex-sbom/internal/handler/sbom"
 	topohandler "ex-sbom/internal/handler/topology"
-	wshandler "ex-sbom/internal/handler/workspace"
+	projecthandler "ex-sbom/internal/handler/workspace"
 	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
-	"ex-sbom/internal/service/workspace"
+	psvc "ex-sbom/internal/service/workspace"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -82,12 +82,12 @@ func main() {
 	// DI wiring
 	repo := repository.NewSBOMRepository(db.GormDB)
 	cache := ssbom.NewInMemoryCache()
-	workspaceSvc := workspace.New(repo, cache)
+	projectSvc := psvc.New(repo, cache)
 	sbomSvc := ssbom.NewService(repo, cache)
 
 	loadInitialData(repo, cache)
 
-	server := createServer(workspaceSvc, sbomSvc)
+	server := createServer(projectSvc, sbomSvc)
 
 	if config.AutoOpenBrowser {
 		go func() {
@@ -130,7 +130,7 @@ func (c Config) URL() string {
 }
 
 func loadInitialData(repo repository.Repository, cache ssbom.Cache) {
-	workspaceID, records, err := repo.GetLatestAll()
+	projectID, records, err := repo.GetLatestAll()
 	if err != nil {
 		slog.Error("Failed to load SBOMs from DB", "error", err)
 		return
@@ -138,23 +138,23 @@ func loadInitialData(repo repository.Repository, cache ssbom.Cache) {
 	for _, rec := range records {
 		var formatted ssbom.FormattedSBOM
 		if err := json.Unmarshal(rec.BomResult, &formatted); err != nil {
-			slog.Error("Failed to unmarshal SBOM from DB", "filename", rec.Filename, "error", err)
+			slog.Error("Failed to unmarshal SBOM from DB", "version", rec.Version, "error", err)
 			continue
 		}
-		cache.Set(workspaceID, rec.Filename, formatted)
-		slog.Info("Loaded SBOM from DB", "filename", rec.Filename)
+		cache.Set(projectID, rec.Version, formatted)
+		slog.Info("Loaded SBOM from DB", "version", rec.Version)
 	}
 }
 
-func createServer(workspaceSvc *workspace.Service, sbomSvc *ssbom.Service) *gin.Engine {
-	workspaceH := wshandler.New(workspaceSvc)
-	sbomH := sbomhandler.New(sbomSvc, workspaceSvc)
+func createServer(projectSvc *psvc.Service, sbomSvc *ssbom.Service) *gin.Engine {
+	projectH := projecthandler.New(projectSvc)
+	sbomH := sbomhandler.New(sbomSvc, projectSvc)
 	topoH := topohandler.New(sbomSvc)
 	reportH := reporthandler.New(sbomSvc)
 
 	r := gin.Default()
 	setupSSR(r)
-	handler.SetupRouterGroup(r, workspaceH, sbomH, topoH, reportH)
+	handler.SetupRouterGroup(r, projectH, sbomH, topoH, reportH)
 
 	return r
 }
