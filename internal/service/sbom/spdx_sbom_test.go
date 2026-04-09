@@ -520,101 +520,61 @@ func TestGetSpdxComponents(t *testing.T) {
 			name: "document with valid packages",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg2",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg3",
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg2", PackageName: "pkg2"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg3", PackageName: "pkg3"},
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2", "SPDXRef-pkg3"},
+			expected: []string{"pkg1", "pkg2", "pkg3"},
 		},
 		{
 			name: "document with empty identifiers",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg3",
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "", PackageName: "should-be-filtered"}, // Should be filtered out
+					{PackageSPDXIdentifier: "SPDXRef-pkg3", PackageName: "pkg3"},
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
+			expected: []string{"pkg1", "pkg3"},
 		},
 		{
 			name: "document with generated root packages",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "File-something", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg3",
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "DOCUMENT", PackageName: "document-root"},          // Should be filtered out
+					{PackageSPDXIdentifier: "DocumentRoot-something", PackageName: "doc-root"}, // Should be filtered out
+					{PackageSPDXIdentifier: "File-something", PackageName: "file-pkg"},         // Should be filtered out
+					{PackageSPDXIdentifier: "SPDXRef-pkg3", PackageName: "pkg3"},
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
+			expected: []string{"pkg1", "pkg3"},
 		},
 		{
-			name: "document with duplicate packages",
+			name: "document with duplicate package names",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg2",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg2", PackageName: "pkg2"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1-dup", PackageName: "pkg1"}, // Duplicate name
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
+			expected: []string{"pkg1", "pkg2"},
 		},
 		{
 			name: "document with mixed packages",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg2",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
-					},
-					{
-						PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "", PackageName: "should-be-filtered"},    // Should be filtered out
+					{PackageSPDXIdentifier: "DOCUMENT", PackageName: "document-root"}, // Should be filtered out
+					{PackageSPDXIdentifier: "SPDXRef-pkg2", PackageName: "pkg2"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1-dup", PackageName: "pkg1"},           // Duplicate name
+					{PackageSPDXIdentifier: "DocumentRoot-something", PackageName: "doc-root"}, // Should be filtered out
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
+			expected: []string{"pkg1", "pkg2"},
 		},
 		{
 			name: "document with only filtered packages",

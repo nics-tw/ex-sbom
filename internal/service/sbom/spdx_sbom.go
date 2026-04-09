@@ -27,6 +27,8 @@ const (
 	documentID         = "DOCUMENT"
 	documentRootPrefix = "DocumentRoot-"
 	filePrefix         = "File-"
+	spdxNoAssertion    = "NOASSERTION"
+	spdxNone           = "NONE"
 )
 
 func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string) {
@@ -117,6 +119,9 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 		if isGeneratedRoot(refAStr) || isGeneratedRoot(refBStr) {
 			continue
 		}
+		if isSPDXSpecialValue(refAStr) || isSPDXSpecialValue(refBStr) {
+			continue
+		}
 
 		graph[refAStr] = append(graph[refAStr], refBStr)
 		inDegree[refBStr]++
@@ -187,7 +192,7 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 		}
 	}
 
-	return result
+	return convertedResult
 }
 
 func getSpdxComponents(input spdx.Document) []string {
@@ -195,7 +200,7 @@ func getSpdxComponents(input spdx.Document) []string {
 
 	for _, p := range input.Packages {
 		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
-			components = append(components, string(p.PackageSPDXIdentifier))
+			components = append(components, p.PackageName)
 		}
 	}
 
@@ -225,6 +230,9 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 			refB := trimSPDXPrefix(getRefIDStr(r.RefB))
 
 			if isGeneratedRoot(refA) || isGeneratedRoot(refB) {
+				continue
+			}
+			if isSPDXSpecialValue(refA) || isSPDXSpecialValue(refB) {
 				continue
 			}
 
@@ -277,8 +285,8 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
 
 	for _, p := range input.Packages {
-		if p.PackageSPDXIdentifier != "" {
-			result[string(p.PackageSPDXIdentifier)] = Component{
+		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
+			result[p.PackageName] = Component{
 				Name:       p.PackageName,
 				Version:    p.PackageVersion,
 				VulnNumber: getVulnNumber(p.PackageName, trimmedVulnPkgs),
@@ -361,6 +369,11 @@ func trimSPDXPrefix(input string) string {
 // for better understanding and preventing confusion, we will ignore it as default
 func isGeneratedRoot(input string) bool {
 	return input == documentID || strings.HasPrefix(input, documentRootPrefix) || strings.HasPrefix(input, filePrefix)
+}
+
+// isSPDXSpecialValue returns true for SPDX special values that are not real package references.
+func isSPDXSpecialValue(input string) bool {
+	return input == spdxNoAssertion || input == spdxNone
 }
 
 // some document will have publication naming as prefix for the component name containing vulnerability
