@@ -19,7 +19,6 @@ type SBOMRecordModel struct {
 	BomResultMd5  domain.Md5           `gorm:"column:bom_result_md5"`
 	CreatedAt     time.Time            `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt     *time.Time           `gorm:"column:updated_at;autoUpdateTime"`
-	DeletedAt     *time.Time           `gorm:"column:deleted_at;index"`
 	BomTimestamp  *time.Time           `gorm:"column:bom_timestamp"`
 }
 

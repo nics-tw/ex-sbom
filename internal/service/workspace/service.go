@@ -39,9 +39,9 @@ func (s *Service) Update(id domain.ProjectID, name domain.ProjectName) error {
 	return s.repo.UpdateProjectName(id, name)
 }
 
-// Delete soft-deletes the project and all its sbom_records, then clears the in-memory cache.
+// Delete removes the project and all its sbom_records, then clears the in-memory cache.
 func (s *Service) Delete(id domain.ProjectID) error {
-	if err := s.repo.SoftDeleteProject(id); err != nil {
+	if err := s.repo.DeleteProject(id); err != nil {
 		return err
 	}
 	s.cache.DeleteProject(id)

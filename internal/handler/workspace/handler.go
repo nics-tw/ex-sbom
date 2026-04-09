@@ -100,7 +100,7 @@ func (h *Handler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{"project_id": projectID, "name": body.Name}})
 }
 
-// Delete soft-deletes a project and all its sbom_records.
+// Delete removes a project and all its sbom_records.
 // DELETE /projects/:id
 func (h *Handler) Delete(c *gin.Context) {
 	projectID := middleware.GetProjectID(c)

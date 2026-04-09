@@ -52,9 +52,9 @@ func (s *Service) Rename(projectID domain.ProjectID, oldVersion, newVersion doma
 	return nil
 }
 
-// Delete soft-deletes the SBOM record from DB and removes it from the cache.
+// Delete removes the SBOM record from DB and cache.
 func (s *Service) Delete(projectID domain.ProjectID, name domain.Version) error {
-	if err := s.repo.SoftDeleteSBOM(projectID, name); err != nil {
+	if err := s.repo.DeleteSBOM(projectID, name); err != nil {
 		return err
 	}
 

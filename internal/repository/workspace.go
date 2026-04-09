@@ -7,7 +7,6 @@ package repository
 import (
 	"errors"
 	"fmt"
-	"time"
 
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/model"
@@ -21,7 +20,7 @@ import (
 func (r *SBOMRepository) CreateProject(name domain.ProjectName) (domain.ProjectID, error) {
 	var existing model.ProjectModel
 	err := r.db.
-		Where("project_name = ? AND deleted_at IS NULL", name).
+		Where("project_name = ?", name).
 		First(&existing).Error
 	if err == nil {
 		return existing.ID, nil
@@ -45,31 +44,24 @@ func (r *SBOMRepository) CreateProject(name domain.ProjectName) (domain.ProjectI
 // UpdateProjectName renames a project.
 func (r *SBOMRepository) UpdateProjectName(id domain.ProjectID, name domain.ProjectName) error {
 	return r.db.Model(&model.ProjectModel{}).
-		Where("id = ? AND deleted_at IS NULL", id).
+		Where("id = ?", id).
 		Update("project_name", name).Error
 }
 
-// SoftDeleteProject marks a project and all its sbom_records as deleted.
-func (r *SBOMRepository) SoftDeleteProject(id domain.ProjectID) error {
-	now := time.Now()
+// DeleteProject hard-deletes a project and all its sbom_records.
+func (r *SBOMRepository) DeleteProject(id domain.ProjectID) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.SBOMRecordModel{}).
-			Where("project_id = ? AND deleted_at IS NULL", id).
-			Update("deleted_at", now).Error; err != nil {
+		if err := tx.Where("project_id = ?", id).Delete(&model.SBOMRecordModel{}).Error; err != nil {
 			return err
 		}
-
-		return tx.Model(&model.ProjectModel{}).
-			Where("id = ? AND deleted_at IS NULL", id).
-			Update("deleted_at", now).Error
+		return tx.Where("id = ?", id).Delete(&model.ProjectModel{}).Error
 	})
 }
 
-// GetProjects returns all projects (id + uuid + name), excluding soft-deleted.
+// GetProjects returns all projects (id + uuid + name).
 func (r *SBOMRepository) GetProjects() ([]domain.ProjectInfo, error) {
 	var rows []model.ProjectModel
 	if err := r.db.
-		Where("deleted_at IS NULL").
 		Order("created_at ASC").
 		Find(&rows).Error; err != nil {
 

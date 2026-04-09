@@ -17,7 +17,6 @@ type ProjectModel struct {
 	UUID        domain.UUID        `gorm:"column:uuid;uniqueIndex"`
 	CreatedAt   time.Time          `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt   *time.Time         `gorm:"column:updated_at;autoUpdateTime"`
-	DeletedAt   *time.Time         `gorm:"column:deleted_at;index"`
 }
 
 func (ProjectModel) TableName() string { return "projects" }

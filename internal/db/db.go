@@ -62,7 +62,6 @@ func migrate(db *sql.DB) error {
 			uuid         VARCHAR,
 			created_at   TIMESTAMP NOT NULL DEFAULT current_timestamp,
 			updated_at   TIMESTAMP,
-			deleted_at   TIMESTAMP,
 			UNIQUE (uuid)
 		)
 	`)
@@ -79,7 +78,6 @@ func migrate(db *sql.DB) error {
 			bom_result_md5  VARCHAR,
 			created_at      TIMESTAMP NOT NULL DEFAULT current_timestamp,
 			updated_at      TIMESTAMP,
-			deleted_at      TIMESTAMP,
 			bom_timestamp   TIMESTAMP,
 			UNIQUE (project_id, version)
 		)

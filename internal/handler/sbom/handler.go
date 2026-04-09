@@ -97,7 +97,7 @@ func (h *Handler) Rename(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: gin.H{"version": body.Version}})
 }
 
-// Delete soft-deletes an SBOM version and reloads the project.
+// Delete removes an SBOM version and reloads the project.
 // DELETE /projects/:id/sboms/:name
 func (h *Handler) Delete(c *gin.Context) {
 	projectID := middleware.GetProjectID(c)

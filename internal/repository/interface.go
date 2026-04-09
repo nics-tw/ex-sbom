@@ -14,10 +14,10 @@ import (
 type Repository interface {
 	CreateProject(name domain.ProjectName) (domain.ProjectID, error)
 	UpdateProjectName(id domain.ProjectID, name domain.ProjectName) error
-	SoftDeleteProject(id domain.ProjectID) error
+	DeleteProject(id domain.ProjectID) error
 	GetProjects() ([]domain.ProjectInfo, error)
 	CreateSBOM(projectID domain.ProjectID, version domain.Version, result any, timestamp time.Time, checksum string) error
-	SoftDeleteSBOM(projectID domain.ProjectID, version domain.Version) error
+	DeleteSBOM(projectID domain.ProjectID, version domain.Version) error
 	RenameVersion(projectID domain.ProjectID, oldVersion, newVersion domain.Version) error
 	GetAllVersions(projectID domain.ProjectID) ([]domain.VersionInfo, error)
 	GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error)

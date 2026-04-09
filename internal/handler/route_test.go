@@ -33,14 +33,14 @@ func (r *noopRepository) CreateProject(_ domain.ProjectName) (domain.ProjectID, 
 func (r *noopRepository) UpdateProjectName(_ domain.ProjectID, _ domain.ProjectName) error {
 	return nil
 }
-func (r *noopRepository) SoftDeleteProject(_ domain.ProjectID) error { return nil }
+func (r *noopRepository) DeleteProject(_ domain.ProjectID) error { return nil }
 func (r *noopRepository) GetProjects() ([]domain.ProjectInfo, error) {
 	return []domain.ProjectInfo{}, nil
 }
 func (r *noopRepository) CreateSBOM(_ domain.ProjectID, _ domain.Version, _ any, _ time.Time, _ string) error {
 	return nil
 }
-func (r *noopRepository) SoftDeleteSBOM(_ domain.ProjectID, _ domain.Version) error { return nil }
+func (r *noopRepository) DeleteSBOM(_ domain.ProjectID, _ domain.Version) error { return nil }
 func (r *noopRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) {
 	return 0, nil, nil
 }

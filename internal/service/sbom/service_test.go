@@ -31,12 +31,12 @@ func (r *stubRepository) CreateProject(_ domain.ProjectName) (domain.ProjectID, 
 func (r *stubRepository) UpdateProjectName(_ domain.ProjectID, _ domain.ProjectName) error {
 	return nil
 }
-func (r *stubRepository) SoftDeleteProject(_ domain.ProjectID) error { return nil }
+func (r *stubRepository) DeleteProject(_ domain.ProjectID) error     { return nil }
 func (r *stubRepository) GetProjects() ([]domain.ProjectInfo, error) { return nil, nil }
 func (r *stubRepository) CreateSBOM(_ domain.ProjectID, _ domain.Version, _ any, _ time.Time, _ string) error {
 	return r.saveErr
 }
-func (r *stubRepository) SoftDeleteSBOM(_ domain.ProjectID, _ domain.Version) error {
+func (r *stubRepository) DeleteSBOM(_ domain.ProjectID, _ domain.Version) error {
 	return r.softDeleteSBOMErr
 }
 func (r *stubRepository) RenameVersion(_ domain.ProjectID, _, _ domain.Version) error {
