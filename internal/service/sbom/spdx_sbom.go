@@ -261,7 +261,6 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 	var result = make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
-		Name:  filename,
 		IsCDX: false,
 		Data:  files,
 	})

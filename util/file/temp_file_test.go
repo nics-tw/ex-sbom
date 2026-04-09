@@ -45,33 +45,30 @@ func TestCopyAndCreate(t *testing.T) {
 		{
 			name: "CDX file",
 			input: FileInput{
-				Name:  "custom.json",
 				IsCDX: true,
 				Data:  []byte(`{"name":"test-cdx"}`),
 			},
-			expectedPath:    DefaultName, // Should use DefaultName (bom.json)
+			expectedPath:    DefaultCDXName,
 			expectedError:   false,
 			expectedContent: []byte(`{"name":"test-cdx"}`),
 		},
 		{
 			name: "SPDX file",
 			input: FileInput{
-				Name:  "spdx-test.json",
 				IsCDX: false,
 				Data:  []byte(`{"name":"test-spdx"}`),
 			},
-			expectedPath:    "spdx-test.json", // Should use input.Name
+			expectedPath:    DefaultSPDXName,
 			expectedError:   false,
 			expectedContent: []byte(`{"name":"test-spdx"}`),
 		},
 		{
 			name: "Empty data",
 			input: FileInput{
-				Name:  "empty.json",
 				IsCDX: false,
 				Data:  []byte{},
 			},
-			expectedPath:    "empty.json",
+			expectedPath:    DefaultSPDXName,
 			expectedError:   false,
 			expectedContent: []byte{},
 		},
@@ -132,7 +129,6 @@ func TestCopyAndCreate(t *testing.T) {
 
 		// Try to create a file in the read-only directory
 		input := FileInput{
-			Name:  "test.json",
 			IsCDX: false,
 			Data:  []byte(`{"test":"data"}`),
 		}

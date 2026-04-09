@@ -7,17 +7,16 @@ package file
 import "os"
 
 const (
-	// Currently the file naming pattern that consumed by the scalibre is limited,
-	// here apply the most acceptble name for cyclonedx sbom file.
-	// as for the spdx format sbom, currently we apply the original file name
-	DefaultName = "bom.json"
+	// DefaultCDXName is the fixed filename used when writing a CycloneDX SBOM for OSV scanning.
+	DefaultCDXName = "bom.json"
+	// DefaultSPDXName is the fixed filename used when writing an SPDX SBOM for OSV scanning.
+	DefaultSPDXName = "sbom.spdx.json"
 
 	defaultPermissions = 0644
 )
 
 type (
 	FileInput struct {
-		Name  string
 		IsCDX bool
 		Data  []byte
 	}
@@ -26,9 +25,9 @@ type (
 func CopyAndCreate(input FileInput) (string, error) {
 	var name string
 	if input.IsCDX {
-		name = DefaultName
+		name = DefaultCDXName
 	} else {
-		name = input.Name
+		name = DefaultSPDXName
 	}
 
 	if err := os.WriteFile(name, input.Data, defaultPermissions); err != nil {

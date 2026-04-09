@@ -291,7 +291,6 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 	componentInfo := make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
-		Name:  filename,
 		IsCDX: true,
 		Data:  files,
 	})
