@@ -3,7 +3,7 @@ module ex-sbom
 go 1.25.0
 
 require (
-	github.com/CycloneDX/cyclonedx-go v0.9.2
+	github.com/CycloneDX/cyclonedx-go v0.10.0
 	github.com/alifiroozi80/duckdb v1.1.1
 	github.com/gin-gonic/gin v1.10.1
 	github.com/google/osv-scanner/v2 v2.0.3

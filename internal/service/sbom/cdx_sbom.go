@@ -21,8 +21,22 @@ import (
 )
 
 func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, string, time.Time) {
-	c := getCdxComponents(bom.Components)
 	refToName := getCdxBomRefToName(bom.Components)
+
+	// Include the metadata/root component so its BOMRef is resolvable in the dependency graph.
+	if bom.Metadata != nil && bom.Metadata.Component != nil {
+		mc := bom.Metadata.Component
+		if mc.BOMRef != "" && mc.Name != "" {
+			refToName[mc.BOMRef] = mc.Name
+		}
+	}
+
+	// Resolve any BOMRefs that appear in the dependency graph but are not listed
+	// as standalone components (e.g. .NET project references). Names are derived
+	// from the BOMRef using nameFromBOMRef.
+	resolveMissingRefs(bom.Dependencies, refToName)
+
+	c := getCdxComponents(bom.Components)
 	dependency := getCdxDep(bom.Dependencies, refToName)
 	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName)
 
@@ -98,6 +112,61 @@ func (s *Service) PreviewCDX(bom cdx.BOM, rawData []byte) (FormattedSBOM, string
 	return final, md5Hash, bomTimestamp, nil
 }
 
+// nameFromBOMRef extracts a human-readable name from a BOM reference.
+// For purl-formatted refs (e.g. pkg:nuget/WebSite@latest), it extracts the package name.
+// Falls back to the raw ref string if no pattern matches.
+func nameFromBOMRef(ref string) string {
+	if !strings.HasPrefix(ref, "pkg:") {
+		return ref
+	}
+
+	// purl format: pkg:type/[namespace/]name[@version]
+	// Strip "pkg:type/" prefix to get "[namespace/]name[@version]"
+	parts := strings.SplitN(ref, "/", 2)
+	if len(parts) < 2 {
+		return ref
+	}
+
+	nameWithVersion := parts[1]
+
+	// Remove version suffix (@version)
+	if idx := strings.Index(nameWithVersion, "@"); idx != -1 {
+		nameWithVersion = nameWithVersion[:idx]
+	}
+
+	// Take the last path segment (handles namespace/name)
+	segments := strings.Split(nameWithVersion, "/")
+	return segments[len(segments)-1]
+}
+
+// resolveMissingRefs adds BOMRef→name mappings for any refs that appear in the
+// dependency graph but are not already in refToName. This covers project references
+// (e.g. .NET projects) that act as dependency intermediaries but are not listed
+// as standalone components. Names are derived from the BOMRef via nameFromBOMRef.
+func resolveMissingRefs(deps *[]cdx.Dependency, refToName map[string]string) {
+	if deps == nil {
+		return
+	}
+
+	for _, d := range *deps {
+		if d.Ref != "" {
+			if _, ok := refToName[d.Ref]; !ok {
+				refToName[d.Ref] = nameFromBOMRef(d.Ref)
+			}
+		}
+
+		if d.Dependencies == nil {
+			continue
+		}
+
+		for _, dep := range *d.Dependencies {
+			if _, ok := refToName[dep]; !ok {
+				refToName[dep] = nameFromBOMRef(dep)
+			}
+		}
+	}
+}
+
 func getCdxComponents(input *[]cdx.Component) []string {
 	var components []string
 
@@ -139,45 +208,34 @@ func getCdxBomRefToName(input *[]cdx.Component) map[string]string {
 }
 
 func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName map[string]string) map[int][]string {
-	// Create dependency graph and track in-degrees
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
 
-	// Initialize all components as potential nodes
 	for _, ref := range allComponents {
 		allNodes[ref] = true
-
 		inDegree[ref] = 0
 	}
 
-	// Build the dependency graph
-	if sbom.Dependencies != nil && len(*sbom.Dependencies) > 0 {
+	if sbom.Dependencies != nil {
 		for _, d := range *sbom.Dependencies {
 			if d.Ref != "" {
 				allNodes[d.Ref] = true
 			}
 
-			if d.Dependencies != nil && len(*d.Dependencies) > 0 {
-				for _, dep := range *d.Dependencies {
-					// Add edge: d.Ref -> dep
-					graph[d.Ref] = append(graph[d.Ref], dep)
-					inDegree[dep]++
-					allNodes[dep] = true
-				}
+			if d.Dependencies == nil {
+				continue
+			}
+
+			for _, dep := range *d.Dependencies {
+				graph[d.Ref] = append(graph[d.Ref], dep)
+				inDegree[dep]++
+				allNodes[dep] = true
 			}
 		}
 	}
 
-	// Find all root nodes (in-degree = 0)
-	var roots []string
-	for node := range allNodes {
-		if inDegree[node] == 0 {
-			roots = append(roots, node)
-		}
-	}
-
-	// BFS to determine level of each node
+	// BFS from all root nodes (in-degree = 0)
 	levelMap := make(map[string]int)
 	visited := make(map[string]bool)
 	queue := make([]struct {
@@ -185,25 +243,22 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 		level int
 	}, 0)
 
-	// Add all roots to initial queue at level 0
-	for _, root := range roots {
-		queue = append(queue, struct {
-			node  string
-			level int
-		}{root, 0})
-		visited[root] = true
+	for node := range allNodes {
+		if inDegree[node] == 0 {
+			queue = append(queue, struct {
+				node  string
+				level int
+			}{node, 0})
+			visited[node] = true
+		}
 	}
 
-	// Process the queue
 	for len(queue) > 0 {
-		// Dequeue
 		current := queue[0]
 		queue = queue[1:]
 
-		// Set the level for this node
 		levelMap[current.node] = current.level
 
-		// Process all neighbors
 		for _, neighbor := range graph[current.node] {
 			if !visited[neighbor] {
 				visited[neighbor] = true
@@ -215,34 +270,32 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 		}
 	}
 
-	// Convert from ref-based level map to name-based result
+	// Convert ref-based level map to name-based result.
+	// refToName is guaranteed complete after resolveMissingRefs, so missing keys
+	// indicate an unexpected ref — log a warning and skip.
 	result := make(map[int][]string)
 
-	// Process each node by its level
 	for node, level := range levelMap {
 		name, ok := refToName[node]
 		if !ok {
-			slog.Error("failed to get name for reference", "ref", node)
+			slog.Warn("unresolved BOMRef in dependency graph", "ref", node)
 			continue
 		}
-
-		// Add component name to the appropriate level
 		result[level] = append(result[level], name)
 	}
 
-	// Handle isolated nodes (not visited in BFS) - place at level 0
 	for ref := range allNodes {
 		if !visited[ref] {
 			name, ok := refToName[ref]
 			if !ok {
-				slog.Error("failed to get name for isolated reference", "ref", ref)
+				slog.Warn("unresolved isolated BOMRef", "ref", ref)
 				continue
 			}
 			result[0] = append(result[0], name)
 		}
 	}
 
-	// Remove empty levels and ensure continuous numbering
+	// Re-index levels to remove gaps.
 	finalResult := make(map[int][]string)
 	nextLevel := 0
 
@@ -259,29 +312,32 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 func getCdxDep(input *[]cdx.Dependency, refToName map[string]string) map[string][]string {
 	dependency := make(map[string][]string)
 
-	if input != nil {
-		for _, d := range *input {
-			if d.Dependencies != nil && len(*d.Dependencies) > 0 {
-				// convert the ref to name
-				refName, ok := refToName[d.Ref]
-				if !ok {
-					slog.Error("failed to get ref name", "ref", d.Ref)
-					continue
-				}
+	if input == nil {
+		return dependency
+	}
 
-				var deps []string
-				for _, dep := range *d.Dependencies {
-					depName, ok := refToName[dep]
-					if !ok {
-						slog.Error("failed to get dep name", "dep", dep)
-						continue
-					}
-					deps = append(deps, depName)
-				}
-
-				dependency[refName] = deps
-			}
+	for _, d := range *input {
+		if d.Dependencies == nil || len(*d.Dependencies) == 0 {
+			continue
 		}
+
+		refName, ok := refToName[d.Ref]
+		if !ok {
+			slog.Warn("unresolved BOMRef in dependency list", "ref", d.Ref)
+			continue
+		}
+
+		var deps []string
+		for _, dep := range *d.Dependencies {
+			depName, ok := refToName[dep]
+			if !ok {
+				slog.Warn("unresolved dependency BOMRef", "dep", dep)
+				continue
+			}
+			deps = append(deps, depName)
+		}
+
+		dependency[refName] = deps
 	}
 
 	return dependency
@@ -296,7 +352,6 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 	})
 	if err != nil {
 		slog.Error("failed to copy and create file", "error", err)
-
 		return nil
 	}
 
@@ -313,7 +368,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 
 	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
 
-	if input != nil && len(*input) > 0 {
+	if input != nil {
 		for _, c := range *input {
 			componentInfo[c.Name] = Component{
 				Name:       c.Name,
@@ -326,7 +381,6 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 	}
 
 	var cves []string
-
 	for _, c := range componentInfo {
 		for _, v := range c.Vulns {
 			if v.ID != "" {
@@ -335,7 +389,6 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		}
 	}
 
-	// will call api for get epss and lev
 	firstInfos, err := lev.GetByChunk(cves)
 	if err != nil {
 		slog.Error("failed to get lev info", "error", err)
@@ -366,19 +419,23 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 func getCdxLicences(input *cdx.Licenses) string {
 	var licences strings.Builder
 
-	if input != nil && len(*input) > 0 {
-		for _, l := range *input {
-			if l.License != nil {
-				if licences.Len() > 0 {
-					licences.WriteString(", ")
-				}
+	if input == nil {
+		return ""
+	}
 
-				if l.License.ID != "" {
-					licences.WriteString(l.License.ID)
-				} else if l.License.Name != "" {
-					licences.WriteString(l.License.Name)
-				}
-			}
+	for _, l := range *input {
+		if l.License == nil {
+			continue
+		}
+
+		if licences.Len() > 0 {
+			licences.WriteString(", ")
+		}
+
+		if l.License.ID != "" {
+			licences.WriteString(l.License.ID)
+		} else if l.License.Name != "" {
+			licences.WriteString(l.License.Name)
 		}
 	}
 

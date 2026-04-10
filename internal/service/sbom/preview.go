@@ -45,7 +45,8 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		return bom, md5Hash, time.Time{}, err
 
 	case sbomFormatCycloneDX:
-		decoder := cdx.NewBOMDecoder(bytes.NewReader(rawData), cdx.BOMFileFormatJSON)
+		cdxData := downgradeCDXSpecVersion(rawData)
+		decoder := cdx.NewBOMDecoder(bytes.NewReader(cdxData), cdx.BOMFileFormatJSON)
 		var bom cdx.BOM
 		if err := decoder.Decode(&bom); err != nil {
 			return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("%w: %w", ErrCycloneDXParseFailed, err)
@@ -89,8 +90,47 @@ const (
 	keySPDXVersion = "spdxVersion"
 	keySPDXID      = "SPDXID"
 	keyBOMFormat   = "bomFormat"
+	keySpecVersion = "specVersion"
 	valCycloneDX   = "CycloneDX"
 )
+
+// maxSupportedCDXSpec is the highest CycloneDX spec version the decoder library supports.
+const maxSupportedCDXSpec = cdx.SpecVersion1_6
+
+// downgradeCDXSpecVersion replaces the specVersion field with the highest supported version
+// when the file declares a newer spec that the decoder library does not yet recognise.
+// CycloneDX minor versions are backward-compatible, so newer fields are simply ignored.
+func downgradeCDXSpecVersion(data []byte) []byte {
+	var generic map[string]json.RawMessage
+	if err := json.Unmarshal(data, &generic); err != nil {
+		return data
+	}
+
+	var specVersion string
+	if raw, ok := generic[keySpecVersion]; ok {
+		_ = json.Unmarshal(raw, &specVersion)
+	}
+	if specVersion == "" {
+		return data
+	}
+
+	supported := fmt.Sprintf("%s", maxSupportedCDXSpec)
+	if specVersion <= supported {
+		return data
+	}
+
+	encoded, err := json.Marshal(supported)
+	if err != nil {
+		return data
+	}
+	generic[keySpecVersion] = encoded
+
+	downgraded, err := json.Marshal(generic)
+	if err != nil {
+		return data
+	}
+	return downgraded
+}
 
 func detectSBOMFormat(data []byte) sbomFormat {
 	var generic map[string]interface{}
