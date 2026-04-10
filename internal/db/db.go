@@ -29,7 +29,7 @@ func Init(path string) error {
 		return err
 	}
 
-	gdb, err := gorm.Open(gorm_duckdb.Open(path), &gorm.Config{
+	gdb, err := gorm.Open(gorm_duckdb.New(gorm_duckdb.Config{Conn: db}), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
