@@ -381,56 +381,6 @@
         const label = document.createElement("span");
         label.textContent = fileName;
 
-        const editBtn = document.createElement("span");
-        editBtn.className = "text-gray-400 hover:text-[#009999] leading-none";
-        editBtn.title = "重新命名";
-        editBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-        </svg>`;
-        editBtn.addEventListener("click", e => {
-          e.stopPropagation();
-          const input = document.createElement("input");
-          input.type = "text";
-          input.value = fileName;
-          input.className = "border border-[#009999] rounded px-1 text-sm w-40 focus:outline-none";
-          label.replaceWith(input);
-          input.focus();
-          input.select();
-
-          const errTip = document.createElement("span");
-          errTip.className = "text-red-500 text-xs ml-1 hidden";
-          input.after(errTip);
-
-          const doRename = async () => {
-            const currentName = tab.dataset.version;
-            const newName = input.value.trim();
-            if (!newName || newName === currentName) { input.replaceWith(label); errTip.remove(); return; }
-            try {
-              const json = await Api.renameSBOM(State.projectID, currentName, newName);
-              if (json?.data?.version) {
-                label.textContent = newName;
-                tab.dataset.version = newName;
-                if (State.uploadedFiles.has(currentName)) {
-                  State.uploadedFiles.delete(currentName);
-                  State.uploadedFiles.add(newName);
-                }
-                VersionHistory.load();
-              }
-              input.replaceWith(label);
-              errTip.remove();
-            } catch (err) {
-              errTip.textContent = err.message || "更新失敗";
-              errTip.classList.remove("hidden");
-              input.focus();
-            }
-          };
-          input.addEventListener("keydown", e => {
-            if (e.key === "Enter") doRename();
-            if (e.key === "Escape") { input.replaceWith(label); errTip.remove(); }
-          });
-          input.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== input) doRename(); }, 150));
-        });
-
         const closeBtn = document.createElement("span");
         closeBtn.className = "ml-1 text-gray-400 hover:text-gray-700 leading-none";
         closeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -455,7 +405,6 @@
 
         tab.appendChild(fileIcon);
         tab.appendChild(label);
-        tab.appendChild(editBtn);
         tab.appendChild(closeBtn);
         tab.addEventListener("click", () => this.selectTab(tab));
         tabsContainer.appendChild(tab);
@@ -697,6 +646,19 @@
       },
 
       // Remove a tab by version name without calling the API (used after 版本歷史 delete).
+      renameTab(oldVersion, newVersion) {
+        const tabsContainer = document.getElementById("file-tabs");
+        const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.version === oldVersion);
+        if (!tabEl) return;
+        tabEl.dataset.version = newVersion;
+        const label = tabEl.querySelector("span:not(.leading-none)");
+        if (label) label.textContent = newVersion;
+        if (State.uploadedFiles.has(oldVersion)) {
+          State.uploadedFiles.delete(oldVersion);
+          State.uploadedFiles.add(newVersion);
+        }
+      },
+
       removeTab(version) {
         const tabsContainer = document.getElementById("file-tabs");
         const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.version === version);
@@ -1336,6 +1298,7 @@
             <td class="px-4 py-3 text-sm text-gray-500">${date}</td>
             <td class="px-4 py-3 text-sm">
               <button class="text-[#009999] hover:underline text-xs mr-3 version-load-btn" data-version="${v.version}">載入分析</button>
+              <button class="text-gray-500 hover:underline text-xs mr-3 version-rename-btn" data-version="${v.version}">重新命名</button>
               <button class="text-red-400 hover:underline text-xs version-delete-btn" data-version="${v.version}">刪除</button>
             </td>
           </tr>`;
@@ -1365,6 +1328,25 @@
             const version = btn.dataset.version;
             MainTab.show("analysis");
             Sbom.addTab(version, true);
+          });
+        });
+
+        container.querySelectorAll(".version-rename-btn").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            const oldName = btn.dataset.version;
+            const newName = prompt("輸入新的版本名稱：", oldName);
+            if (!newName || newName.trim() === oldName) return;
+            try {
+              const json = await Api.renameSBOM(State.projectID, oldName, newName.trim());
+              if (json?.data?.version) {
+                const entry = this._versions.find(v => v.version === oldName);
+                if (entry) entry.version = newName.trim();
+                this._render(container);
+                Sbom.renameTab(oldName, newName.trim());
+              }
+            } catch (e) {
+              alert(`重新命名失敗：${e.message}`);
+            }
           });
         });
 
