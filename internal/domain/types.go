@@ -5,26 +5,15 @@ import (
 	"time"
 )
 
-// ProjectID is the unique identifier for a project.
-type ProjectID = int64
-
-// SBOMID is the unique identifier for an SBOM record.
-type SBOMID = int64
-
-// ProjectName is the name of a project.
-type ProjectName = string
-
-// UUID is a universally unique identifier string.
-type UUID = string
-
-// Version is the user-supplied version label for an SBOM snapshot.
-type Version = string
-
-// BomResultJSON is the JSON-serialised SBOM result stored in the database.
-type BomResultJSON = string
-
-// SHA256 is the SHA-256 checksum of an SBOM file.
-type SHA256 = string
+type (
+	ProjectID     = int64  // unique identifier for a project
+	SBOMID        = int64  // unique identifier for an SBOM record
+	ProjectName   = string // name of a project
+	UUID          = string // universally unique identifier string
+	Version       = string // user-supplied version label for an SBOM snapshot
+	BomResultJSON = string // JSON-serialised SBOM result stored in the database
+	SHA256        = string // SHA-256 checksum of an SBOM file
+)
 
 // ProjectInfo holds a project's id, uuid and name.
 type ProjectInfo struct {
