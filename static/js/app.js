@@ -1405,11 +1405,13 @@
       _bomResult: null,
       _md5: null,
       _bomTimestamp: null,
+      _existingVersion: null,
 
       open() {
         this._bomResult = null;
         this._md5 = null;
         this._bomTimestamp = null;
+        this._existingVersion = null;
         document.getElementById("sbom-file-input").value = "";
         document.getElementById("sbom-filename-display").textContent = "尚未選擇檔案";
         document.getElementById("sbom-modal-step1-error").classList.add("hidden");
@@ -1422,6 +1424,7 @@
         document.getElementById("sbom-modal").classList.add("hidden");
         document.getElementById("sbom-file-input").value = "";
         this._bomResult = null;
+        this._existingVersion = null;
       },
 
       _onFileSelected(files) {
@@ -1458,6 +1461,7 @@
           this._bomResult = data.bom_result;
           this._md5 = data.md5;
           this._bomTimestamp = data.bom_timestamp;
+          this._existingVersion = data.existing_version || "";
 
           const summary = document.getElementById("sbom-preview-summary");
           summary.innerHTML = `
@@ -1471,8 +1475,20 @@
           document.getElementById("sbom-preview-title").innerHTML =
             `預覽結果 <span class="text-gray-400 font-normal text-base">— ${displayName}</span>`;
           document.getElementById("sbom-version-input").value = "";
-          document.getElementById("sbom-version-hint").textContent =
-            "建議命名方式：{filename}_{version} / {filename}_{date} / {prefix}_{version} / {prefix}_{date}";
+
+          const commitBtn = document.getElementById("sbom-modal-commit-btn");
+          if (this._existingVersion) {
+            document.getElementById("sbom-version-hint").textContent =
+              `此檔案已存在，版本：${this._existingVersion}`;
+            document.getElementById("sbom-version-hint").classList.add("text-yellow-600");
+            commitBtn.disabled = true;
+          } else {
+            document.getElementById("sbom-version-hint").textContent =
+              "建議命名方式：{filename}_{version} / {filename}_{date} / {prefix}_{version} / {prefix}_{date}";
+            document.getElementById("sbom-version-hint").classList.remove("text-yellow-600");
+            commitBtn.disabled = false;
+          }
+
           document.getElementById("sbom-modal-step2-error").classList.add("hidden");
           document.getElementById("sbom-modal-step1").classList.add("hidden");
           document.getElementById("sbom-modal-step2").classList.remove("hidden");

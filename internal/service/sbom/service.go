@@ -92,6 +92,15 @@ func (s *Service) Search(projectID domain.ProjectID, query string) []SearchResul
 	return searchInCache(s.cache.All(projectID), query)
 }
 
+// FindVersionByMD5 returns the version name that already has the given MD5, or "" if none.
+func (s *Service) FindVersionByMD5(projectID domain.ProjectID, md5Hash string) (domain.Version, error) {
+	version, err := s.repo.FindVersionByMD5(projectID, md5Hash)
+	if errors.Is(err, repository.ErrVersionNotFound) {
+		return "", nil
+	}
+	return version, err
+}
+
 // ListVersions returns all non-deleted SBOM versions for a project, newest first.
 func (s *Service) ListVersions(projectID domain.ProjectID) ([]domain.VersionInfo, error) {
 	return s.repo.GetAllVersions(projectID)

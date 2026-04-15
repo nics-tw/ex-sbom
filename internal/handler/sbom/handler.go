@@ -181,6 +181,8 @@ func (h *Handler) Search(c *gin.Context) {
 // Preview parses an uploaded SBOM file and returns the result without saving to DB.
 // POST /projects/:id/sboms/preview
 func (h *Handler) Preview(c *gin.Context) {
+	projectID := middleware.GetProjectID(c)
+
 	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
@@ -219,11 +221,18 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
+	existingVersion, err := h.sbomSvc.FindVersionByMD5(projectID, md5Hash)
+	if err != nil {
+		slog.Error("Failed to check duplicate MD5", "error", err)
+		existingVersion = ""
+	}
+
 	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{
-		"bom_result":    bomResult,
-		"md5":           md5Hash,
-		"bom_timestamp": bomTimestamp,
-		"filename":      baseName,
+		"bom_result":       bomResult,
+		"md5":              md5Hash,
+		"bom_timestamp":    bomTimestamp,
+		"filename":         baseName,
+		"existing_version": existingVersion,
 		"summary": gin.H{
 			"component_count": len(bomResult.Components),
 			"vuln_count":      countVulns(bomResult),
