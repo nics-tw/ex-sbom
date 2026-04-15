@@ -32,11 +32,11 @@ func (r *SBOMRepository) CreateSBOM(projectID domain.ProjectID, version domain.V
 	}
 
 	record := model.SBOMRecordModel{
-		ProjectID:     projectID,
-		Version:       version,
-		BomResultJSON: string(resultJSON),
-		BomResultMd5:  checksum,
-		BomTimestamp:  &timestamp,
+		ProjectID:       projectID,
+		Version:         version,
+		BomResultJSON:   string(resultJSON),
+		BomResultSHA256: checksum,
+		BomTimestamp:    &timestamp,
 	}
 	db := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&record)
 	if db.Error != nil {
@@ -62,7 +62,7 @@ func (r *SBOMRepository) RenameVersion(projectID domain.ProjectID, oldVersion, n
 			Select(
 				"id, project_id, version",
 				"CAST(bom_result_json AS VARCHAR) AS bom_result_json",
-				"bom_result_md5, bom_timestamp, created_at, updated_at",
+				"bom_result_sha256, bom_timestamp, created_at, updated_at",
 			).
 			Where("project_id = ? AND version = ?", projectID, oldVersion).
 			First(&rec).Error
@@ -142,34 +142,37 @@ func (r *SBOMRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, e
 	return project.ID, records, err
 }
 
-// FindVersionByMD5 returns the version name for a given project + MD5 checksum.
+// FindVersionBySHA256 returns the version name for a given project + SHA-256 checksum.
 // Returns ErrVersionNotFound if no matching record exists.
-func (r *SBOMRepository) FindVersionByMD5(projectID domain.ProjectID, md5 domain.Md5) (domain.Version, error) {
-	var rec model.SBOMRecordModel
-	err := r.db.
-		Select("version").
-		Where("project_id = ? AND bom_result_md5 = ?", projectID, md5).
-		First(&rec).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", ErrVersionNotFound
+func (r *SBOMRepository) FindVersionBySHA256(projectID domain.ProjectID, checksum domain.SHA256) (domain.Version, error) {
+	var rows []struct {
+		Version domain.Version
 	}
+	err := r.db.Model(&model.SBOMRecordModel{}).
+		Select("version").
+		Where("project_id = ? AND bom_result_sha256 = ?", projectID, checksum).
+		Limit(1).
+		Scan(&rows).Error
 	if err != nil {
 		return "", err
 	}
+	if len(rows) == 0 {
+		return "", ErrVersionNotFound
+	}
 
-	return rec.Version, nil
+	return rows[0].Version, nil
 }
 
 // GetLatestByProject returns the most recent bom_result per filename for the given project.
 func (r *SBOMRepository) GetLatestByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error) {
 	var rows []struct {
-		Version       domain.Version
-		BomResultJSON domain.BomResultJSON
-		BomResultMd5  domain.Md5
+		Version         domain.Version
+		BomResultJSON   domain.BomResultJSON
+		BomResultSHA256 domain.SHA256
 	}
 
 	err := r.db.Model(&model.SBOMRecordModel{}).
-		Select("version, CAST(bom_result_json AS VARCHAR) AS bom_result_json, bom_result_md5").
+		Select("version, CAST(bom_result_json AS VARCHAR) AS bom_result_json, bom_result_sha256").
 		Where("project_id = ?", projectID).
 		Order("created_at ASC").
 		Scan(&rows).Error
@@ -182,7 +185,7 @@ func (r *SBOMRepository) GetLatestByProject(projectID domain.ProjectID) ([]domai
 		records = append(records, domain.SBOMEntry{
 			Version:   row.Version,
 			BomResult: json.RawMessage(row.BomResultJSON),
-			Md5:       row.BomResultMd5,
+			SHA256:    row.BomResultSHA256,
 		})
 	}
 

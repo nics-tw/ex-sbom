@@ -75,7 +75,7 @@ func migrate(db *sql.DB) error {
 			project_id     INTEGER NOT NULL REFERENCES projects(id),
 			version        VARCHAR NOT NULL,
 			bom_result_json JSON,
-			bom_result_md5  VARCHAR,
+			bom_result_sha256 VARCHAR,
 			created_at      TIMESTAMP NOT NULL DEFAULT current_timestamp,
 			updated_at      TIMESTAMP,
 			bom_timestamp   TIMESTAMP,

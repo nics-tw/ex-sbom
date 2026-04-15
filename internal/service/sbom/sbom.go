@@ -5,7 +5,7 @@
 package ssbom
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -112,7 +112,7 @@ func sortFormattedSBOM(sbom *FormattedSBOM) {
 	}
 }
 
-// hashSBOM returns the MD5 hex string of the JSON-serialized FormattedSBOM.
+// hashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
 // encoding/json sorts map keys deterministically, so the hash is stable for the same content.
 func hashSBOM(sbom FormattedSBOM) string {
 	b, err := json.Marshal(sbom)
@@ -121,7 +121,7 @@ func hashSBOM(sbom FormattedSBOM) string {
 		return ""
 	}
 
-	return fmt.Sprintf("%x", md5.Sum(b))
+	return fmt.Sprintf("%x", sha256.Sum256(b))
 }
 
 func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]string) []VlunDepPath {

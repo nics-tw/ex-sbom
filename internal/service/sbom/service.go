@@ -13,13 +13,13 @@ import (
 	"ex-sbom/internal/repository"
 )
 
-// DuplicateMD5Error is returned by SaveParsed when the MD5 already exists for the project.
-type DuplicateMD5Error struct {
+// DuplicateSHA256Error is returned by SaveParsed when the SHA-256 already exists for the project.
+type DuplicateSHA256Error struct {
 	Version domain.Version
 }
 
-func (e *DuplicateMD5Error) Error() string {
-	return fmt.Sprintf("md5 already exists for version %q", e.Version)
+func (e *DuplicateSHA256Error) Error() string {
+	return fmt.Sprintf("sha256 already exists for version %q", e.Version)
 }
 
 // Service provides SBOM business logic using injected repository and cache.
@@ -92,9 +92,9 @@ func (s *Service) Search(projectID domain.ProjectID, query string) []SearchResul
 	return searchInCache(s.cache.All(projectID), query)
 }
 
-// FindVersionByMD5 returns the version name that already has the given MD5, or "" if none.
-func (s *Service) FindVersionByMD5(projectID domain.ProjectID, md5Hash string) (domain.Version, error) {
-	version, err := s.repo.FindVersionByMD5(projectID, md5Hash)
+// FindVersionBySHA256 returns the version name that already has the given SHA-256, or "" if none.
+func (s *Service) FindVersionBySHA256(projectID domain.ProjectID, checksum string) (domain.Version, error) {
+	version, err := s.repo.FindVersionBySHA256(projectID, checksum)
 	if errors.Is(err, repository.ErrVersionNotFound) {
 		return "", nil
 	}
@@ -107,18 +107,18 @@ func (s *Service) ListVersions(projectID domain.ProjectID) ([]domain.VersionInfo
 }
 
 // SaveParsed stores a pre-parsed SBOM result into DB and cache without re-parsing the file.
-// Returns *DuplicateMD5Error if the same MD5 already exists for the project.
-func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version, bom FormattedSBOM, md5Hash string, bomTimestamp time.Time) error {
-	existing, err := s.repo.FindVersionByMD5(projectID, domain.Md5(md5Hash))
+// Returns *DuplicateSHA256Error if the same SHA-256 already exists for the project.
+func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version, bom FormattedSBOM, sha256Hash string, bomTimestamp time.Time) error {
+	existing, err := s.repo.FindVersionBySHA256(projectID, sha256Hash)
 	if err != nil && !errors.Is(err, repository.ErrVersionNotFound) {
 		return err
 	}
 	if err == nil {
-		return &DuplicateMD5Error{Version: existing}
+		return &DuplicateSHA256Error{Version: existing}
 	}
 
 	sortFormattedSBOM(&bom)
-	if err := s.repo.CreateSBOM(projectID, version, bom, bomTimestamp, md5Hash); err != nil {
+	if err := s.repo.CreateSBOM(projectID, version, bom, bomTimestamp, sha256Hash); err != nil {
 		return err
 	}
 

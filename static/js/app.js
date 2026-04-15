@@ -239,11 +239,11 @@
         return fetch(`/projects/${projectID}/sboms/preview`, { method: "POST", body: form });
       },
 
-      commitSBOM(projectID, version, bomResult, md5, bomTimestamp) {
+      commitSBOM(projectID, version, bomResult, sha256, bomTimestamp) {
         return fetch(`/projects/${projectID}/sboms`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version, bom_result: bomResult, md5, bom_timestamp: bomTimestamp }),
+          body: JSON.stringify({ version, bom_result: bomResult, sha256, bom_timestamp: bomTimestamp }),
         });
       },
       listVersions(projectID) {
@@ -1403,13 +1403,13 @@
     // ═══════════════════════════════════════════════════════════════════════════
     const SbomModal = {
       _bomResult: null,
-      _md5: null,
+      _sha256: null,
       _bomTimestamp: null,
       _existingVersion: null,
 
       open() {
         this._bomResult = null;
-        this._md5 = null;
+        this._sha256 = null;
         this._bomTimestamp = null;
         this._existingVersion = null;
         document.getElementById("sbom-file-input").value = "";
@@ -1424,6 +1424,7 @@
         document.getElementById("sbom-modal").classList.add("hidden");
         document.getElementById("sbom-file-input").value = "";
         this._bomResult = null;
+        this._sha256 = null;
         this._existingVersion = null;
       },
 
@@ -1459,7 +1460,7 @@
 
           const data = json.data;
           this._bomResult = data.bom_result;
-          this._md5 = data.md5;
+          this._sha256 = data.sha256;
           this._bomTimestamp = data.bom_timestamp;
           this._existingVersion = data.existing_version || "";
 
@@ -1517,7 +1518,7 @@
         commitBtn.textContent = "建立中...";
 
         try {
-          const resp = await Api.commitSBOM(State.projectID, version, this._bomResult, this._md5, this._bomTimestamp);
+          const resp = await Api.commitSBOM(State.projectID, version, this._bomResult, this._sha256, this._bomTimestamp);
           const json = await resp.json();
           if (resp.status === 409 || !resp.ok) {
             errEl.textContent = json.error || "建立失敗";

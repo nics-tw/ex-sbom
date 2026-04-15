@@ -54,7 +54,7 @@ func (r *noopRepository) GetAllVersions(_ domain.ProjectID) ([]domain.VersionInf
 func (r *noopRepository) RenameVersion(_ domain.ProjectID, _, _ domain.Version) error {
 	return nil
 }
-func (r *noopRepository) FindVersionByMD5(_ domain.ProjectID, _ domain.Md5) (domain.Version, error) {
+func (r *noopRepository) FindVersionBySHA256(_ domain.ProjectID, _ domain.SHA256) (domain.Version, error) {
 	return "", repository.ErrVersionNotFound
 }
 

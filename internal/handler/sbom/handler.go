@@ -201,7 +201,7 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
-	bomResult, md5Hash, bomTimestamp, err := h.sbomSvc.Preview(sbomData)
+	bomResult, sha256Hash, bomTimestamp, err := h.sbomSvc.Preview(sbomData)
 	if err != nil {
 		switch {
 		case errors.Is(err, ssbom.ErrXMLNotSupported):
@@ -221,15 +221,15 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
-	existingVersion, err := h.sbomSvc.FindVersionByMD5(projectID, md5Hash)
+	existingVersion, err := h.sbomSvc.FindVersionBySHA256(projectID, sha256Hash)
 	if err != nil {
-		slog.Error("Failed to check duplicate MD5", "error", err)
+		slog.Error("Failed to check duplicate SHA-256", "error", err)
 		existingVersion = ""
 	}
 
 	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{
 		"bom_result":       bomResult,
-		"md5":              md5Hash,
+		"sha256":           sha256Hash,
 		"bom_timestamp":    bomTimestamp,
 		"filename":         baseName,
 		"existing_version": existingVersion,
@@ -248,7 +248,7 @@ func (h *Handler) Create(c *gin.Context) {
 	var body struct {
 		Version      domain.Version      `json:"version"`
 		BomResult    ssbom.FormattedSBOM `json:"bom_result"`
-		Md5          domain.Md5          `json:"md5"`
+		SHA256       domain.SHA256       `json:"sha256"`
 		BomTimestamp time.Time           `json:"bom_timestamp"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -260,8 +260,8 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	if err := h.sbomSvc.SaveParsed(projectID, body.Version, body.BomResult, body.Md5, body.BomTimestamp); err != nil {
-		var dupErr *ssbom.DuplicateMD5Error
+	if err := h.sbomSvc.SaveParsed(projectID, body.Version, body.BomResult, body.SHA256, body.BomTimestamp); err != nil {
+		var dupErr *ssbom.DuplicateSHA256Error
 		if errors.As(err, &dupErr) {
 			c.JSON(http.StatusConflict, gin.H{msg.RespErr: fmt.Sprintf("相同檔案已存在，版本：%s", dupErr.Version)})
 			return
