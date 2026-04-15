@@ -254,7 +254,7 @@ func (h *Handler) Create(c *gin.Context) {
 	if err := h.sbomSvc.SaveParsed(projectID, body.Version, body.BomResult, body.Md5, body.BomTimestamp); err != nil {
 		var dupErr *ssbom.DuplicateMD5Error
 		if errors.As(err, &dupErr) {
-			c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{"version": dupErr.Version, "duplicate": true}})
+			c.JSON(http.StatusConflict, gin.H{msg.RespErr: fmt.Sprintf("相同檔案已存在，版本：%s", dupErr.Version)})
 			return
 		}
 
