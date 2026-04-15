@@ -156,6 +156,7 @@ func (r *SBOMRepository) FindVersionByMD5(projectID domain.ProjectID, md5 domain
 	if err != nil {
 		return "", err
 	}
+
 	return rec.Version, nil
 }
 
