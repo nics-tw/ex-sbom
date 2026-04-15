@@ -142,6 +142,23 @@ func (r *SBOMRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, e
 	return project.ID, records, err
 }
 
+// FindVersionByMD5 returns the version name for a given project + MD5 checksum.
+// Returns ErrVersionNotFound if no matching record exists.
+func (r *SBOMRepository) FindVersionByMD5(projectID domain.ProjectID, md5 domain.Md5) (domain.Version, error) {
+	var rec model.SBOMRecordModel
+	err := r.db.
+		Select("version").
+		Where("project_id = ? AND bom_result_md5 = ?", projectID, md5).
+		First(&rec).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", ErrVersionNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return rec.Version, nil
+}
+
 // GetLatestByProject returns the most recent bom_result per filename for the given project.
 func (r *SBOMRepository) GetLatestByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error) {
 	var rows []struct {

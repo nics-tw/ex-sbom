@@ -5,12 +5,22 @@
 package ssbom
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/repository"
 )
+
+// DuplicateMD5Error is returned by SaveParsed when the MD5 already exists for the project.
+type DuplicateMD5Error struct {
+	Version domain.Version
+}
+
+func (e *DuplicateMD5Error) Error() string {
+	return fmt.Sprintf("md5 already exists for version %q", e.Version)
+}
 
 // Service provides SBOM business logic using injected repository and cache.
 type Service struct {
@@ -88,7 +98,16 @@ func (s *Service) ListVersions(projectID domain.ProjectID) ([]domain.VersionInfo
 }
 
 // SaveParsed stores a pre-parsed SBOM result into DB and cache without re-parsing the file.
+// Returns *DuplicateMD5Error if the same MD5 already exists for the project.
 func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version, bom FormattedSBOM, md5Hash string, bomTimestamp time.Time) error {
+	existing, err := s.repo.FindVersionByMD5(projectID, domain.Md5(md5Hash))
+	if err != nil && !errors.Is(err, repository.ErrVersionNotFound) {
+		return err
+	}
+	if err == nil {
+		return &DuplicateMD5Error{Version: existing}
+	}
+
 	sortFormattedSBOM(&bom)
 	if err := s.repo.CreateSBOM(projectID, version, bom, bomTimestamp, md5Hash); err != nil {
 		return err

@@ -17,6 +17,7 @@ import (
 	sbomhandler "ex-sbom/internal/handler/sbom"
 	topohandler "ex-sbom/internal/handler/topology"
 	projecthandler "ex-sbom/internal/handler/workspace"
+	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
 	psvc "ex-sbom/internal/service/workspace"
 
@@ -52,6 +53,9 @@ func (r *noopRepository) GetAllVersions(_ domain.ProjectID) ([]domain.VersionInf
 }
 func (r *noopRepository) RenameVersion(_ domain.ProjectID, _, _ domain.Version) error {
 	return nil
+}
+func (r *noopRepository) FindVersionByMD5(_ domain.ProjectID, _ domain.Md5) (domain.Version, error) {
+	return "", repository.ErrVersionNotFound
 }
 
 // buildTestRouter constructs a router with all handlers wired using a no-op repository.

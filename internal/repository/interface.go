@@ -22,4 +22,5 @@ type Repository interface {
 	GetAllVersions(projectID domain.ProjectID) ([]domain.VersionInfo, error)
 	GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error)
 	GetLatestByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error)
+	FindVersionByMD5(projectID domain.ProjectID, md5 domain.Md5) (domain.Version, error)
 }

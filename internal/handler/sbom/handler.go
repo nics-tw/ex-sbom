@@ -252,10 +252,17 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	if err := h.sbomSvc.SaveParsed(projectID, body.Version, body.BomResult, body.Md5, body.BomTimestamp); err != nil {
+		var dupErr *ssbom.DuplicateMD5Error
+		if errors.As(err, &dupErr) {
+			c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{"version": dupErr.Version, "duplicate": true}})
+			return
+		}
+
 		if errors.Is(err, repository.ErrVersionExists) {
 			c.JSON(http.StatusConflict, gin.H{msg.RespErr: fmt.Sprintf("版本「%s」已存在", body.Version)})
 			return
 		}
+
 		slog.Error("Failed to save SBOM", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
