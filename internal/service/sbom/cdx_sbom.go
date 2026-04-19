@@ -23,11 +23,16 @@ import (
 func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, string, time.Time) {
 	refToName := getCdxBomRefToName(bom.Components)
 
-	// Include the metadata/root component so its BOMRef is resolvable in the dependency graph.
+	// metadata.component represents the application being described, not a real
+	// dependency. Mirror SPDX's treatment of SPDXRef-DOCUMENT: register the ref so
+	// it stays resolvable, but filter it from the dependency graph so level 0 is
+	// the application's direct dependencies.
+	var rootRef string
 	if bom.Metadata != nil && bom.Metadata.Component != nil {
 		mc := bom.Metadata.Component
 		if mc.BOMRef != "" && mc.Name != "" {
 			refToName[mc.BOMRef] = mc.Name
+			rootRef = mc.BOMRef
 		}
 	}
 
@@ -37,8 +42,8 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	resolveMissingRefs(bom.Dependencies, refToName)
 
 	c := getCdxComponents(bom.Components)
-	dependency := getCdxDep(bom.Dependencies, refToName)
-	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName)
+	dependency := getCdxDep(bom.Dependencies, refToName, rootRef)
+	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName, rootRef)
 
 	result := FormattedSBOM{
 		Components:        c,
@@ -207,7 +212,7 @@ func getCdxBomRefToName(input *[]cdx.Component) map[string]string {
 	return components
 }
 
-func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName map[string]string) map[int][]string {
+func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName map[string]string, rootRef string) map[int][]string {
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
@@ -219,6 +224,18 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 
 	if sbom.Dependencies != nil {
 		for _, d := range *sbom.Dependencies {
+			// Skip the synthetic root app: register its direct deps so they become
+			// level-0 nodes, but do not create rootRef→child edges or add rootRef
+			// as a node. This aligns CDX behavior with SPDX's isGeneratedRoot.
+			if d.Ref == rootRef && rootRef != "" {
+				if d.Dependencies != nil {
+					for _, dep := range *d.Dependencies {
+						allNodes[dep] = true
+					}
+				}
+				continue
+			}
+
 			if d.Ref != "" {
 				allNodes[d.Ref] = true
 			}
@@ -309,7 +326,7 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 	return finalResult
 }
 
-func getCdxDep(input *[]cdx.Dependency, refToName map[string]string) map[string][]string {
+func getCdxDep(input *[]cdx.Dependency, refToName map[string]string, rootRef string) map[string][]string {
 	dependency := make(map[string][]string)
 
 	if input == nil {
@@ -317,6 +334,13 @@ func getCdxDep(input *[]cdx.Dependency, refToName map[string]string) map[string]
 	}
 
 	for _, d := range *input {
+		// The metadata.component is a synthetic root describing the application
+		// itself; its "depends on" edges are promoted to level-0 by the depth map
+		// builder, so exclude them from the Dependency adjacency list.
+		if d.Ref == rootRef && rootRef != "" {
+			continue
+		}
+
 		if d.Dependencies == nil || len(*d.Dependencies) == 0 {
 			continue
 		}
