@@ -49,13 +49,21 @@ func (r *SBOMRepository) UpdateProjectName(id domain.ProjectID, name domain.Proj
 }
 
 // DeleteProject hard-deletes a project and all its sbom_records.
+// DuckDB does not support ON DELETE CASCADE, so child rows are removed
+// explicitly before the parent. No GORM Transaction wrapper is used
+// because the GORM DuckDB driver does not propagate statements reliably
+// inside gorm.Transaction — the non-atomic failure mode here is benign
+// (children gone, parent remains → retry succeeds).
 func (r *SBOMRepository) DeleteProject(id domain.ProjectID) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("project_id = ?", id).Delete(&model.SBOMRecordModel{}).Error; err != nil {
-			return err
-		}
-		return tx.Where("id = ?", id).Delete(&model.ProjectModel{}).Error
-	})
+	if err := r.db.Where("project_id = ?", id).Delete(&model.SBOMRecordModel{}).Error; err != nil {
+		return fmt.Errorf("delete sbom_records for project %d: %w", id, err)
+	}
+
+	if err := r.db.Where("id = ?", id).Delete(&model.ProjectModel{}).Error; err != nil {
+		return fmt.Errorf("delete project %d: %w", id, err)
+	}
+
+	return nil
 }
 
 // GetProjects returns all projects (id + uuid + name).
