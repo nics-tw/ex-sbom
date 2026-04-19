@@ -7,6 +7,7 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
@@ -48,6 +49,7 @@ var staticJS embed.FS
 const (
 	appName    = "ex-sbom"
 	dbFileName = "data.duckdb"
+	osvAPI     = "https://api.osv.dev/"
 )
 
 // defaultDBPath returns the platform-native path for the database file:
@@ -79,6 +81,11 @@ func main() {
 	}
 	defer db.Close()
 	slog.Info("LocalDB initialized")
+
+	if err := checkNetworkConnectivity(); err != nil {
+		slog.Error("Network check failed", "error", err)
+		os.Exit(1)
+	}
 
 	// DI wiring
 	repo := repository.NewSBOMRepository(db.GormDB)
@@ -179,6 +186,21 @@ func openBrowser(url string) error {
 	}
 
 	return cmd.Start()
+}
+
+// checkNetworkConnectivity verifies that the OSV API is reachable.
+// osv-scanner requires internet access to query vulnerability data;
+// the program exits if the endpoint is unreachable.
+func checkNetworkConnectivity() error {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(osvAPI)
+	if err != nil {
+		return fmt.Errorf("unable to reach %s: %w — osv-scanner requires internet access to query vulnerability data", osvAPI, err)
+	}
+	resp.Body.Close()
+
+	slog.Info("Network connectivity OK", "endpoint", osvAPI)
+	return nil
 }
 
 func setupSSR(r *gin.Engine) {
