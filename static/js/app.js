@@ -77,6 +77,7 @@
           diffSbomA: "SBOM A (before)",
           diffSbomB: "SBOM B (after)",
           diffCompare: "Compare",
+          diffSwap: "Swap A ↔ B",
           diffAdded: "Added",
           diffRemoved: "Removed",
           diffChanged: "Changed",
@@ -158,6 +159,7 @@
           diffSbomA: "SBOM A（舊版）",
           diffSbomB: "SBOM B（新版）",
           diffCompare: "比較",
+          diffSwap: "A ↔ B 交換",
           diffAdded: "新增",
           diffRemoved: "移除",
           diffChanged: "變更",
@@ -977,6 +979,11 @@
                   <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-a"></label>
                   <select id="diff-select-a" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
                 </div>
+                <button id="diff-swap-btn" type="button" class="border border-gray-300 hover:bg-gray-100 text-gray-600 p-2 rounded-md transition duration-150" title="">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                </button>
                 <div class="flex-1">
                   <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-b"></label>
                   <select id="diff-select-b" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
@@ -990,6 +997,7 @@
           document.getElementById("diff-modal-close").addEventListener("click", hideModal);
           modal.addEventListener("click", e => { if (e.target === modal) hideModal(); });
           document.getElementById("diff-compare-btn").addEventListener("click", () => this._run());
+          document.getElementById("diff-swap-btn").addEventListener("click", () => this._swap());
           // Event delegation for version-cell component clicks
           document.getElementById("diff-result").addEventListener("click", e => {
             const el = e.target.closest("[data-action='show-component']");
@@ -1003,6 +1011,7 @@
         document.getElementById("diff-label-a").textContent     = t("diffSbomA");
         document.getElementById("diff-label-b").textContent     = t("diffSbomB");
         document.getElementById("diff-compare-btn").textContent = t("diffCompare");
+        document.getElementById("diff-swap-btn").title          = t("diffSwap");
         document.getElementById("diff-result").innerHTML = "";
 
         const names = Array.from(State.uploadedFiles);
@@ -1011,6 +1020,13 @@
           sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
           if (names[i]) sel.value = names[i];
         });
+      },
+
+      _swap() {
+        const a = document.getElementById("diff-select-a");
+        const b = document.getElementById("diff-select-b");
+        if (!a || !b) return;
+        [a.value, b.value] = [b.value, a.value];
       },
 
       async _run() {
@@ -1116,6 +1132,11 @@
                 <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-a"></label>
                 <select id="diff-select-a" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
               </div>
+              <button id="diff-swap-btn" type="button" class="border border-gray-300 hover:bg-gray-100 text-gray-600 p-2 rounded-md transition duration-150" title="">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+              </button>
               <div class="flex-1">
                 <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-b"></label>
                 <select id="diff-select-b" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
@@ -1125,6 +1146,7 @@
             <div id="diff-result"></div>`;
 
           document.getElementById("diff-compare-btn").addEventListener("click", () => this._run());
+          document.getElementById("diff-swap-btn").addEventListener("click", () => this._swap());
           document.getElementById("diff-result").addEventListener("click", e => {
             const el = e.target.closest("[data-action='show-component']");
             if (!el) return;
@@ -1135,6 +1157,7 @@
         document.getElementById("diff-label-a").textContent     = t("diffSbomA");
         document.getElementById("diff-label-b").textContent     = t("diffSbomB");
         document.getElementById("diff-compare-btn").textContent = t("diffCompare");
+        document.getElementById("diff-swap-btn").title          = t("diffSwap");
         document.getElementById("diff-result").innerHTML        = "";
 
         try {
