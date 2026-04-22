@@ -84,6 +84,10 @@ func main() {
 
 	if err := checkNetworkConnectivity(); err != nil {
 		slog.Error("Network check failed", "error", err)
+		if runtime.GOOS == "windows" {
+			fmt.Println("按 Enter 鍵關閉...")
+			fmt.Scanln()
+		}
 		os.Exit(1)
 	}
 
