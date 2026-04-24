@@ -11,8 +11,10 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-var DB *sql.DB
-var GormDB *gorm.DB
+var (
+	DB     *sql.DB
+	GormDB *gorm.DB
+)
 
 func Init(path string) error {
 	db, err := sql.Open("duckdb", path)
