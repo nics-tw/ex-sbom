@@ -99,6 +99,8 @@ func migrate(db *sql.DB) error {
 
 func Close() {
 	if DB != nil {
-		DB.Close()
+		if err := DB.Close(); err != nil {
+			slog.Error("Failed to close DB", "error", err)
+		}
 	}
 }
