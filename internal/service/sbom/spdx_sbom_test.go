@@ -9,6 +9,7 @@ package ssbom
 import (
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
@@ -500,6 +501,42 @@ func TestGetSpdxIdentifierToName(t *testing.T) {
 				assert.True(t, exists, "Unexpected identifier %s found in result", id)
 			}
 		})
+	}
+}
+
+func TestGetSpdxDependencyDepthMap_Cycle(t *testing.T) {
+	// Cyclic relationships (A → B → A) must not cause infinite recursion.
+	// Regression test for stack overflow seen on Keycloak SPDX SBOMs.
+	document := spdx.Document{
+		Relationships: []*spdx.Relationship{
+			{
+				RefA: common.DocElementID{ElementRefID: "SPDXRef-root"},
+				RefB: common.DocElementID{ElementRefID: "SPDXRef-pkgA"},
+			},
+			{
+				RefA: common.DocElementID{ElementRefID: "SPDXRef-pkgA"},
+				RefB: common.DocElementID{ElementRefID: "SPDXRef-pkgB"},
+			},
+			{
+				RefA: common.DocElementID{ElementRefID: "SPDXRef-pkgB"},
+				RefB: common.DocElementID{ElementRefID: "SPDXRef-pkgA"},
+			},
+		},
+	}
+
+	done := make(chan map[int][]string, 1)
+	go func() {
+		done <- getSpdxDependencyDepthMap(document, []string{"root", "pkgA", "pkgB"}, map[string]string{
+			"SPDXRef-root": "root",
+			"SPDXRef-pkgA": "pkgA",
+			"SPDXRef-pkgB": "pkgB",
+		})
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("getSpdxDependencyDepthMap did not return — cycle likely caused infinite recursion")
 	}
 }
 

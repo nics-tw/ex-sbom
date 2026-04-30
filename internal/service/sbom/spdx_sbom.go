@@ -138,16 +138,21 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 	}
 
 	depthMap := make(map[string]int)
+	visiting := make(map[string]bool)
 
 	var dfs func(node string, depth int)
 	dfs = func(node string, depth int) {
+		if visiting[node] {
+			return
+		}
 		if depth > depthMap[node] {
 			depthMap[node] = depth
 		}
-
+		visiting[node] = true
 		for _, neighbor := range graph[node] {
 			dfs(neighbor, depth+1)
 		}
+		visiting[node] = false
 	}
 
 	for _, root := range roots {
