@@ -10,6 +10,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
@@ -115,7 +117,7 @@ func downgradeCDXSpecVersion(data []byte) []byte {
 	}
 
 	supported := fmt.Sprintf("%s", maxSupportedCDXSpec)
-	if specVersion <= supported {
+	if compareSpecVersions(specVersion, supported) <= 0 {
 		return data
 	}
 
@@ -130,6 +132,37 @@ func downgradeCDXSpecVersion(data []byte) []byte {
 		return data
 	}
 	return downgraded
+}
+
+// compareSpecVersions compares two dotted version strings (e.g. "1.6", "1.10")
+// numerically component by component. It returns -1 if a < b, 0 if a == b, and
+// 1 if a > b. Non-numeric or missing components are treated as 0.
+func compareSpecVersions(a, b string) int {
+	aParts := strings.Split(a, ".")
+	bParts := strings.Split(b, ".")
+
+	n := len(aParts)
+	if len(bParts) > n {
+		n = len(bParts)
+	}
+
+	for i := 0; i < n; i++ {
+		var av, bv int
+		if i < len(aParts) {
+			av, _ = strconv.Atoi(aParts[i])
+		}
+		if i < len(bParts) {
+			bv, _ = strconv.Atoi(bParts[i])
+		}
+		if av < bv {
+			return -1
+		}
+		if av > bv {
+			return 1
+		}
+	}
+
+	return 0
 }
 
 func detectSBOMFormat(data []byte) sbomFormat {

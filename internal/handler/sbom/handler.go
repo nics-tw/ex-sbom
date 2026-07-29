@@ -211,9 +211,9 @@ func (h *Handler) Preview(c *gin.Context) {
 		case errors.Is(err, ssbom.ErrInvalidSBOMFormat):
 			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidSBOM})
 		case errors.Is(err, ssbom.ErrSPDXParseFailed):
-			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingSPDX})
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf("%s: %s", msg.ErrParsingSPDX, errCause(err))})
 		case errors.Is(err, ssbom.ErrCycloneDXParseFailed):
-			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrParsingJson})
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf("%s: %s", msg.ErrParsingCycloneDX, errCause(err))})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		}
@@ -304,4 +304,17 @@ func toCreateResponse(projectID domain.ProjectID, versions []domain.Version) gin
 			"sboms":      versions,
 		},
 	}
+}
+
+// errCause returns the message of the innermost wrapped error, so responses can
+// surface the concrete parse failure (e.g. "invalid specification version")
+// instead of only the sentinel wrapper. Errors are wrapped with two %w verbs
+// (fmt.Errorf("%w: %w", sentinel, cause)), which yields a multi-error Unwrap.
+func errCause(err error) string {
+	if u, ok := err.(interface{ Unwrap() []error }); ok {
+		if errs := u.Unwrap(); len(errs) > 0 {
+			return errs[len(errs)-1].Error()
+		}
+	}
+	return err.Error()
 }

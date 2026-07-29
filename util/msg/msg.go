@@ -15,9 +15,9 @@ const (
 	ErrXMLNotSupport      = "XML-formatted SBOM is currently not supported"
 	ErrFileTypeNotSupport = "File type not supported"
 
-	ErrBindingJSON = "Error binding JSON"
-	ErrParsingJson = "Error parsing JSON:"
-	ErrParsingSPDX = "Error parsing SPDX SBOM"
+	ErrBindingJSON      = "Error binding JSON"
+	ErrParsingSPDX      = "Error parsing SPDX SBOM"
+	ErrParsingCycloneDX = "Error parsing CycloneDX SBOM"
 
 	ErrMissingParam     = "Missing required parameter: %s"
 	ErrInvalidComponent = "Component or SBOM is not found"

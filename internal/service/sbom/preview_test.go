@@ -7,6 +7,7 @@
 package ssbom
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -306,4 +307,76 @@ func TestDetectFileType_ThreadSafety(t *testing.T) {
 
 	assert.Equal(t, numGoroutines, jsonCount)
 	assert.Equal(t, numGoroutines, xmlCount)
+}
+
+func TestCompareSpecVersions(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        string
+		b        string
+		expected int
+	}{
+		{"equal", "1.6", "1.6", 0},
+		{"minor less", "1.5", "1.6", -1},
+		{"minor greater", "1.7", "1.6", 1},
+		// Regression: lexicographic compare would wrongly report "1.10" < "1.6".
+		{"double digit minor greater", "1.10", "1.6", 1},
+		{"double digit minor vs double digit", "1.10", "1.11", -1},
+		{"major greater", "2.0", "1.6", 1},
+		{"major less", "1.9", "2.0", -1},
+		{"missing minor treated as zero", "2", "2.0", 0},
+		{"unparseable treated as zero", "abc", "1.6", -1},
+		{"partially unparseable", "1.x", "1.0", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, compareSpecVersions(tt.a, tt.b))
+		})
+	}
+}
+
+func TestDowngradeCDXSpecVersion(t *testing.T) {
+	supported := "1.6"
+
+	extract := func(data []byte) string {
+		var generic map[string]json.RawMessage
+		if err := json.Unmarshal(data, &generic); err != nil {
+			return ""
+		}
+		var v string
+		_ = json.Unmarshal(generic[keySpecVersion], &v)
+		return v
+	}
+
+	t.Run("newer double-digit spec is downgraded", func(t *testing.T) {
+		// Regression: "1.10" is newer than "1.6" and must be downgraded.
+		data := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.10"}`)
+		out := downgradeCDXSpecVersion(data)
+		assert.Equal(t, supported, extract(out))
+	})
+
+	t.Run("supported spec is unchanged", func(t *testing.T) {
+		data := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6"}`)
+		out := downgradeCDXSpecVersion(data)
+		assert.Equal(t, supported, extract(out))
+	})
+
+	t.Run("older spec is unchanged", func(t *testing.T) {
+		data := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.4"}`)
+		out := downgradeCDXSpecVersion(data)
+		assert.Equal(t, "1.4", extract(out))
+	})
+
+	t.Run("unparseable version is left untouched", func(t *testing.T) {
+		data := []byte(`{"bomFormat":"CycloneDX","specVersion":"abc"}`)
+		out := downgradeCDXSpecVersion(data)
+		assert.Equal(t, "abc", extract(out))
+	})
+
+	t.Run("missing version returns data unchanged", func(t *testing.T) {
+		data := []byte(`{"bomFormat":"CycloneDX"}`)
+		out := downgradeCDXSpecVersion(data)
+		assert.Equal(t, data, out)
+	})
 }
