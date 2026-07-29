@@ -82,8 +82,8 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	}
 
 	sortFormattedSBOM(&result)
-	md5Hash := hashSBOM(result)
-	return result, md5Hash, bomTimestamp
+	sha256Hash := hashSBOM(result)
+	return result, sha256Hash, bomTimestamp
 }
 
 func (s *Service) ProcessCDX(projectID domain.ProjectID, name domain.Version, bom cdx.BOM, rawData []byte) error {
@@ -91,10 +91,10 @@ func (s *Service) ProcessCDX(projectID domain.ProjectID, name domain.Version, bo
 		return fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
 	}
 
-	final, md5Hash, bomTimestamp := buildCDXResult(bom, rawData, name)
+	final, sha256Hash, bomTimestamp := buildCDXResult(bom, rawData, name)
 
 	s.cache.Set(projectID, name, final)
-	if err := s.repo.CreateSBOM(projectID, name, final, bomTimestamp, md5Hash); err != nil {
+	if err := s.repo.CreateSBOM(projectID, name, final, bomTimestamp, sha256Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
 
@@ -113,8 +113,8 @@ func (s *Service) PreviewCDX(bom cdx.BOM, rawData []byte) (FormattedSBOM, string
 		return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
 	}
 
-	final, md5Hash, bomTimestamp := buildCDXResult(bom, rawData, "preview")
-	return final, md5Hash, bomTimestamp, nil
+	final, sha256Hash, bomTimestamp := buildCDXResult(bom, rawData, "preview")
+	return final, sha256Hash, bomTimestamp, nil
 }
 
 // nameFromBOMRef extracts a human-readable name from a BOM reference.

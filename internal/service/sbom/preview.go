@@ -43,8 +43,8 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		if err != nil {
 			return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("%w: %w", ErrSPDXParseFailed, err)
 		}
-		bom, md5Hash, err := s.PreviewSPDX(doc, rawData)
-		return bom, md5Hash, time.Time{}, err
+		bom, sha256Hash, err := s.PreviewSPDX(doc, rawData)
+		return bom, sha256Hash, time.Time{}, err
 
 	case sbomFormatCycloneDX:
 		cdxData := downgradeCDXSpecVersion(rawData)
@@ -53,8 +53,8 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		if err := decoder.Decode(&bom); err != nil {
 			return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("%w: %w", ErrCycloneDXParseFailed, err)
 		}
-		result, md5Hash, bomTimestamp, err := s.PreviewCDX(bom, rawData)
-		return result, md5Hash, bomTimestamp, err
+		result, sha256Hash, bomTimestamp, err := s.PreviewCDX(bom, rawData)
+		return result, sha256Hash, bomTimestamp, err
 
 	default:
 		return FormattedSBOM{}, "", time.Time{}, ErrInvalidSBOMFormat

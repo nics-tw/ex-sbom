@@ -69,8 +69,8 @@ func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (Form
 	}
 
 	sortFormattedSBOM(&bom)
-	md5Hash := hashSBOM(bom)
-	return bom, md5Hash
+	sha256Hash := hashSBOM(bom)
+	return bom, sha256Hash
 }
 
 func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, document *spdx.Document, rawData []byte) error {
@@ -78,10 +78,10 @@ func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, d
 		return nil
 	}
 
-	final, md5Hash := buildSPDXResult(document, rawData, name)
+	final, sha256Hash := buildSPDXResult(document, rawData, name)
 
 	s.cache.Set(projectID, name, final)
-	if err := s.repo.CreateSBOM(projectID, name, final, time.Time{}, md5Hash); err != nil {
+	if err := s.repo.CreateSBOM(projectID, name, final, time.Time{}, sha256Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
 
@@ -99,8 +99,8 @@ func (s *Service) PreviewSPDX(document *spdx.Document, rawData []byte) (Formatte
 	if document == nil {
 		return FormattedSBOM{}, "", nil
 	}
-	final, md5Hash := buildSPDXResult(document, rawData, "preview")
-	return final, md5Hash, nil
+	final, sha256Hash := buildSPDXResult(document, rawData, "preview")
+	return final, sha256Hash, nil
 }
 
 func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameMap map[string]string) map[int][]string {
