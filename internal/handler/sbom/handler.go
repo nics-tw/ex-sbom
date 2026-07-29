@@ -40,7 +40,11 @@ func New(sbomSvc *ssbom.Service, projectSvc *psvc.Service) *Handler {
 // List returns the versions of all currently loaded SBOMs for a project.
 // GET /projects/:id/sboms
 func (h *Handler) List(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
+
 	versions := h.sbomSvc.List(projectID)
 	if versions == nil {
 		versions = []domain.Version{}
@@ -52,7 +56,10 @@ func (h *Handler) List(c *gin.Context) {
 // ListVersions returns all stored SBOM versions for a project, newest first.
 // GET /projects/:id/versions
 func (h *Handler) ListVersions(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	versions, err := h.sbomSvc.ListVersions(projectID)
 	if err != nil {
@@ -71,7 +78,10 @@ func (h *Handler) ListVersions(c *gin.Context) {
 // Rename updates the version name for an existing SBOM.
 // PUT /projects/:id/sboms/:name
 func (h *Handler) Rename(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 	oldVersion := c.Param("name")
 
 	var body struct {
@@ -100,7 +110,10 @@ func (h *Handler) Rename(c *gin.Context) {
 // Delete removes an SBOM version and reloads the project.
 // DELETE /projects/:id/sboms/:name
 func (h *Handler) Delete(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	version := c.Param("name")
 	if len(version) == 0 {
@@ -136,7 +149,10 @@ func (h *Handler) Delete(c *gin.Context) {
 // Diff compares two uploaded SBOMs and returns added/removed/changed components.
 // GET /projects/:id/diff?a=<sbom name>&b=<sbom name>
 func (h *Handler) Diff(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	nameA := c.Query("a")
 	nameB := c.Query("b")
@@ -156,7 +172,10 @@ func (h *Handler) Diff(c *gin.Context) {
 
 // Search handles GET /projects/:id/search?q=<query>
 func (h *Handler) Search(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	query := c.Query("q")
 	if query == "" {
@@ -181,7 +200,10 @@ func (h *Handler) Search(c *gin.Context) {
 // Preview parses an uploaded SBOM file and returns the result without saving to DB.
 // POST /projects/:id/sboms/preview
 func (h *Handler) Preview(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
@@ -243,7 +265,10 @@ func (h *Handler) Preview(c *gin.Context) {
 // Create saves a pre-parsed SBOM result to DB under the given version name.
 // POST /projects/:id/sboms
 func (h *Handler) Create(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	var body struct {
 		Version      domain.Version      `json:"version"`

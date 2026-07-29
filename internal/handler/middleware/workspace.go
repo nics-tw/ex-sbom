@@ -30,8 +30,24 @@ func ProjectID() gin.HandlerFunc {
 	}
 }
 
-// GetProjectID retrieves the project ID that was stored by the ProjectID middleware.
-func GetProjectID(c *gin.Context) domain.ProjectID {
-	id, _ := c.Get(ProjectIDKey)
-	return id.(int64)
+// GetProjectID retrieves the project ID stored by the ProjectID middleware.
+// It returns ok=false and aborts the request with 500 when the key is missing
+// or has an unexpected type (e.g. a route wired without the ProjectID
+// middleware), so callers can stop handling instead of panicking.
+func GetProjectID(c *gin.Context) (domain.ProjectID, bool) {
+	v, ok := c.Get(ProjectIDKey)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusInternalServerError,
+			gin.H{"error": "project id not found in context"})
+		return 0, false
+	}
+
+	id, ok := v.(int64)
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusInternalServerError,
+			gin.H{"error": "invalid project id type"})
+		return 0, false
+	}
+
+	return id, true
 }

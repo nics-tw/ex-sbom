@@ -31,7 +31,9 @@ func New(svc *ssbom.Service) *Handler {
 func (h *Handler) CreatePDF(c *gin.Context) {
 	name, bom, err := h.validate(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: err.Error()})
+		if !c.IsAborted() {
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: err.Error()})
+		}
 		return
 	}
 
@@ -55,7 +57,11 @@ func (h *Handler) validate(c *gin.Context) (string, ssbom.FormattedSBOM, error) 
 		return "", ssbom.FormattedSBOM{}, fmt.Errorf("sbom name is required")
 	}
 
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return "", ssbom.FormattedSBOM{}, fmt.Errorf("project id not found in context")
+	}
+
 	bom, err := h.svc.Get(projectID, name)
 	if err != nil {
 		return "", ssbom.FormattedSBOM{}, fmt.Errorf("sbom %s not found", name)

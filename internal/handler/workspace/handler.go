@@ -75,7 +75,11 @@ func (h *Handler) Create(c *gin.Context) {
 // Get loads the SBOMs of an existing project.
 // GET /projects/:id
 func (h *Handler) Get(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
+
 	payload, ok := h.load(c, projectID)
 	if !ok {
 		return
@@ -86,7 +90,10 @@ func (h *Handler) Get(c *gin.Context) {
 // Update renames a project.
 // PUT /projects/:id  body: {"name": "<new name>"}
 func (h *Handler) Update(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	var body struct {
 		Name string `json:"name"`
@@ -112,7 +119,10 @@ func (h *Handler) Update(c *gin.Context) {
 // Delete removes a project and all its sbom_records.
 // DELETE /projects/:id
 func (h *Handler) Delete(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	if err := h.svc.Delete(projectID); err != nil {
 		slog.Error("Failed to delete project", "id", projectID, "error", err)

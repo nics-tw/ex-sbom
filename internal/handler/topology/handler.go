@@ -46,7 +46,10 @@ type relation struct {
 // ListComponents returns components grouped by dependency depth.
 // GET /projects/:id/sboms/:name/topology
 func (h *Handler) ListComponents(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	bom, err := h.svc.Get(projectID, c.Param("name"))
 	if err != nil {
@@ -85,7 +88,10 @@ func (h *Handler) ListComponents(c *gin.Context) {
 // GetRelations returns the dependency graph as a flat list of root→sub pairs.
 // GET /projects/:id/sboms/:name/topology/relations
 func (h *Handler) GetRelations(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	bom, err := h.svc.Get(projectID, c.Param("name"))
 	if err != nil {
@@ -125,7 +131,10 @@ func (h *Handler) GetRelations(c *gin.Context) {
 // GetComponent returns detailed info for a single component.
 // GET /projects/:id/sboms/:name/topology/component?component=
 func (h *Handler) GetComponent(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	comp := c.Query("component")
 	if len(comp) == 0 {
@@ -153,7 +162,10 @@ func (h *Handler) GetComponent(c *gin.Context) {
 // GetComponentVulnDep returns vulnerability dependency paths for a component.
 // GET /projects/:id/sboms/:name/topology/component/vuln-dep?component=
 func (h *Handler) GetComponentVulnDep(c *gin.Context) {
-	projectID := middleware.GetProjectID(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
 
 	name := c.Param("name")
 	comp := c.Query("component")
