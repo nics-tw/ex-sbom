@@ -21,4 +21,6 @@ const (
 
 	ErrMissingParam     = "Missing required parameter: %s"
 	ErrInvalidComponent = "Component or SBOM is not found"
+
+	ErrDuplicateProjectName = "Project name already exists"
 )

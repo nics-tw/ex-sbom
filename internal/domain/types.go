@@ -2,8 +2,13 @@ package domain
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 )
+
+// ErrDuplicateProjectName is returned when creating or renaming a project to a
+// name that is already used by another project. Handlers map it to HTTP 409.
+var ErrDuplicateProjectName = errors.New("project name already exists")
 
 type (
 	ProjectID     = int64  // unique identifier for a project

@@ -7,6 +7,7 @@ package psvc
 import (
 	"encoding/json"
 	"log/slog"
+	"sync"
 
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/repository"
@@ -17,6 +18,12 @@ import (
 type Service struct {
 	repo  repository.Repository
 	cache ssbom.Cache
+
+	// nameMu serializes project create/rename so the check-then-write in the
+	// repository is race-free. DuckDB is embedded in this single process, so a
+	// process-level lock fully prevents two concurrent requests from writing the
+	// same project name.
+	nameMu sync.Mutex
 }
 
 // New creates a new project Service.
@@ -25,7 +32,10 @@ func New(repo repository.Repository, cache ssbom.Cache) *Service {
 }
 
 // Create inserts a new project and returns its ID.
+// Returns domain.ErrDuplicateProjectName if the name is already taken.
 func (s *Service) Create(name domain.ProjectName) (domain.ProjectID, error) {
+	s.nameMu.Lock()
+	defer s.nameMu.Unlock()
 	return s.repo.CreateProject(name)
 }
 
@@ -35,7 +45,10 @@ func (s *Service) List() ([]domain.ProjectInfo, error) {
 }
 
 // Update renames a project.
+// Returns domain.ErrDuplicateProjectName if another project already uses the name.
 func (s *Service) Update(id domain.ProjectID, name domain.ProjectName) error {
+	s.nameMu.Lock()
+	defer s.nameMu.Unlock()
 	return s.repo.UpdateProjectName(id, name)
 }
 

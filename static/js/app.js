@@ -327,7 +327,10 @@
           this._apply(json);
           await this.load(false);
           document.getElementById("project-select").value = json.data.project_id;
-        } catch (e) { console.error("Failed to create project:", e); }
+        } catch (e) {
+          console.error("Failed to create project:", e);
+          alert(e.message || "Failed to create project");
+        }
       },
 
       async rename(id, name) {

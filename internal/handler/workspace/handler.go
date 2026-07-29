@@ -5,6 +5,7 @@
 package project
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -54,6 +55,10 @@ func (h *Handler) Create(c *gin.Context) {
 
 	projectID, err := h.svc.Create(body.Name)
 	if err != nil {
+		if errors.Is(err, domain.ErrDuplicateProjectName) {
+			c.JSON(http.StatusConflict, gin.H{msg.RespErr: msg.ErrDuplicateProjectName})
+			return
+		}
 		slog.Error("Failed to create project", "name", body.Name, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
@@ -92,6 +97,10 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	if err := h.svc.Update(projectID, body.Name); err != nil {
+		if errors.Is(err, domain.ErrDuplicateProjectName) {
+			c.JSON(http.StatusConflict, gin.H{msg.RespErr: msg.ErrDuplicateProjectName})
+			return
+		}
 		slog.Error("Failed to update project", "id", projectID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
