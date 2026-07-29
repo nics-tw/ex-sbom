@@ -57,7 +57,10 @@ func (h *Handler) ListComponents(c *gin.Context) {
 		return
 	}
 
-	var levels []levelInfo
+	// Initialize as an empty slice (not nil) so the JSON response is always a
+	// [] array rather than null; the frontend treats data as an array and a
+	// null would push valid SBOMs without dependency levels into an error path.
+	levels := make([]levelInfo, 0)
 	for level, components := range bom.DependencyLevel {
 		var totalVulns int
 		var withVuln, withVulnDep []string
@@ -99,7 +102,8 @@ func (h *Handler) GetRelations(c *gin.Context) {
 		return
 	}
 
-	var relations []relation
+	// Empty slice (not nil) so the JSON data field is always [] rather than null.
+	relations := make([]relation, 0)
 	for rootComp, subComps := range bom.Dependency {
 		rootLevel, ok := bom.ComponentToLevel[rootComp]
 		if !ok {
@@ -193,15 +197,13 @@ func (h *Handler) GetComponentVulnDep(c *gin.Context) {
 	}
 
 	vulnComps := bom.GetVulnComponents()
-	if len(vulnComps) == 0 {
-		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok"})
-		return
-	}
 
+	// Always return data as a [] array (never omit it or send null) so the API
+	// contract stays consistent with the other topology endpoints and the
+	// frontend can treat data as an array unconditionally.
 	paths := ssbom.GetVulnDepPaths(comp, vulnComps, bom.Dependency)
-	if len(paths) == 0 {
-		c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok"})
-		return
+	if paths == nil {
+		paths = []ssbom.VlunDepPath{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: paths})
