@@ -201,9 +201,17 @@ func checkNetworkConnectivity() error {
 	if err != nil {
 		return fmt.Errorf("unable to reach %s: %w — osv-scanner requires internet access to query vulnerability data", osvAPI, err)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
-	slog.Info("Network connectivity OK", "endpoint", osvAPI)
+	// Only 5xx indicates a real connectivity/availability problem. The OSV API
+	// root returns 404 even when healthy, so 4xx must NOT be treated as failure
+	// (it would make startup fail on every run). A 5xx means the API itself is
+	// degraded and later scans would fail, so we stop early.
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("%s returned server error %d — osv-scanner vulnerability data is currently unavailable", osvAPI, resp.StatusCode)
+	}
+
+	slog.Info("Network connectivity OK", "endpoint", osvAPI, "status", resp.StatusCode)
 	return nil
 }
 
