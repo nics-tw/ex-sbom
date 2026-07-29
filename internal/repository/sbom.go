@@ -31,12 +31,20 @@ func (r *SBOMRepository) CreateSBOM(projectID domain.ProjectID, version domain.V
 		return err
 	}
 
+	// A zero timestamp (e.g. SPDX without a creation date) must be stored as
+	// NULL rather than 0001-01-01, otherwise reports/UI show year 0001 instead
+	// of an "unknown" timestamp.
+	ts := &timestamp
+	if timestamp.IsZero() {
+		ts = nil
+	}
+
 	record := model.SBOMRecordModel{
 		ProjectID:       projectID,
 		Version:         version,
 		BomResultJSON:   string(resultJSON),
 		BomResultSHA256: checksum,
-		BomTimestamp:    &timestamp,
+		BomTimestamp:    ts,
 	}
 	db := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&record)
 	if db.Error != nil {
