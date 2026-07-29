@@ -64,7 +64,7 @@ func (s *Service) Delete(id domain.ProjectID) error {
 // Load fetches the latest SBOMs for a project from DB, populates the
 // in-memory cache, and returns the list of loaded filenames.
 func (s *Service) Load(projectID domain.ProjectID) ([]domain.Version, error) {
-	records, err := s.repo.GetLatestByProject(projectID)
+	records, err := s.repo.GetAllByProject(projectID)
 	if err != nil {
 		return nil, err
 	}

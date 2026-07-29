@@ -45,7 +45,7 @@ func (r *noopRepository) DeleteSBOM(_ domain.ProjectID, _ domain.Version) error 
 func (r *noopRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) {
 	return 0, nil, nil
 }
-func (r *noopRepository) GetLatestByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
+func (r *noopRepository) GetAllByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
 	return nil, nil
 }
 func (r *noopRepository) GetAllVersions(_ domain.ProjectID) ([]domain.VersionInfo, error) {

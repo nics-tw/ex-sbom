@@ -21,6 +21,6 @@ type Repository interface {
 	RenameVersion(projectID domain.ProjectID, oldVersion, newVersion domain.Version) error
 	GetAllVersions(projectID domain.ProjectID) ([]domain.VersionInfo, error)
 	GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error)
-	GetLatestByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error)
+	GetAllByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error)
 	FindVersionBySHA256(projectID domain.ProjectID, checksum domain.SHA256) (domain.Version, error)
 }

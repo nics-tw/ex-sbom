@@ -49,7 +49,7 @@ func (r *stubRepository) GetAllVersions(_ domain.ProjectID) ([]domain.VersionInf
 func (r *stubRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) {
 	return 0, nil, nil
 }
-func (r *stubRepository) GetLatestByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
+func (r *stubRepository) GetAllByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
 	return nil, nil
 }
 func (r *stubRepository) FindVersionBySHA256(_ domain.ProjectID, _ domain.SHA256) (domain.Version, error) {

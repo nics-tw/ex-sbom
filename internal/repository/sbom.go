@@ -146,7 +146,7 @@ func (r *SBOMRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, e
 		return 0, nil, err
 	}
 
-	records, err := r.GetLatestByProject(project.ID)
+	records, err := r.GetAllByProject(project.ID)
 	return project.ID, records, err
 }
 
@@ -171,8 +171,9 @@ func (r *SBOMRepository) FindVersionBySHA256(projectID domain.ProjectID, checksu
 	return rows[0].Version, nil
 }
 
-// GetLatestByProject returns the most recent bom_result per filename for the given project.
-func (r *SBOMRepository) GetLatestByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error) {
+// GetAllByProject returns all stored SBOM entries for the given project,
+// ordered by created_at ASC.
+func (r *SBOMRepository) GetAllByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error) {
 	var rows []struct {
 		Version         domain.Version
 		BomResultJSON   domain.BomResultJSON
