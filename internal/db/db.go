@@ -1,15 +1,29 @@
 package db
 
 import (
+	"context"
 	"database/sql"
+	"embed"
+	"io/fs"
 	"log/slog"
 
 	gorm_duckdb "github.com/alifiroozi80/duckdb"
-	"github.com/google/uuid"
 	_ "github.com/marcboeker/go-duckdb"
+	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// migrationsFS holds the goose SQL migrations, embedded so the binary is
+// self-contained and migrations run automatically at startup.
+//
+// The migrations directory must live alongside this file (internal/db/migrations)
+// because //go:embed cannot reference parent directories (no "../" is allowed).
+// Moving it to the repository root would break this embed; if that layout is ever
+// desired, the embed declaration must move to a Go file in that same root directory.
+//
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 var (
 	DB     *sql.DB
@@ -44,57 +58,27 @@ func Init(path string) error {
 	return nil
 }
 
-// migrate creates tables and seeds default data.
-// todo: should apply with db migration
+// migrate applies all pending goose migrations from the embedded migrations
+// directory. goose has no built-in DuckDB dialect, so a custom store
+// (duckDBStore) tracks applied versions in a DuckDB-compatible version table.
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(`CREATE SEQUENCE IF NOT EXISTS projects_id_seq START 1`)
+	subFS, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec(`CREATE SEQUENCE IF NOT EXISTS sbom_records_id_seq START 1`)
+	provider, err := goose.NewProvider(
+		goose.DialectCustom, db, subFS,
+		goose.WithStore(newDuckDBStore("goose_db_version")),
+	)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS projects (
-			id           INTEGER DEFAULT nextval('projects_id_seq') PRIMARY KEY,
-			project_name VARCHAR NOT NULL,
-			uuid         VARCHAR,
-			created_at   TIMESTAMP NOT NULL DEFAULT current_timestamp,
-			updated_at   TIMESTAMP,
-			UNIQUE (uuid)
-		)
-	`)
-	if err != nil {
+	if _, err := provider.Up(context.Background()); err != nil {
 		return err
 	}
-
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS sbom_records (
-			id             INTEGER DEFAULT nextval('sbom_records_id_seq') PRIMARY KEY,
-			project_id     INTEGER NOT NULL REFERENCES projects(id),
-			version        VARCHAR NOT NULL,
-			bom_result_json JSON,
-			bom_result_sha256 VARCHAR,
-			created_at      TIMESTAMP NOT NULL DEFAULT current_timestamp,
-			updated_at      TIMESTAMP,
-			bom_timestamp   TIMESTAMP,
-			UNIQUE (project_id, version)
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.Exec(`
-		INSERT INTO projects (project_name, uuid)
-		SELECT 'default', ? WHERE NOT EXISTS (
-			SELECT 1 FROM projects WHERE project_name = 'default'
-		)
-	`, uuid.New().String())
-	return err
+	return nil
 }
 
 func Close() {
