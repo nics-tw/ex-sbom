@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
 	"time"
 
@@ -35,7 +34,7 @@ func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (Form
 	c := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
 	dependency := getSpdxDep(*document, refToName)
-	dependencyLevel := getSpdxDependencyDepthMap(*document, c, refToName)
+	dependencyLevel := getSpdxDependencyDepthMap(*document, refToName)
 
 	bom := FormattedSBOM{
 		Components:        c,
@@ -103,13 +102,22 @@ func (s *Service) PreviewSPDX(document *spdx.Document, rawData []byte) (Formatte
 	return final, sha256Hash, nil
 }
 
-func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameMap map[string]string) map[int][]string {
+// getSpdxDependencyDepthMap builds the dependency graph and computes depth levels
+// entirely with SPDX package IDs, and only converts them to display names at the end.
+// This keeps the topology correct even when a package's SPDX ID differs from its name.
+func getSpdxDependencyDepthMap(sbom spdx.Document, nameMap map[string]string) map[int][]string {
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
 
 	if len(sbom.Relationships) == 0 {
 		return nil
+	}
+
+	// nameMap keys are raw SPDX identifiers; graph nodes are trimmed, so align them here
+	idToName := make(map[string]string, len(nameMap))
+	for id, name := range nameMap {
+		idToName[trimSPDXPrefix(id)] = name
 	}
 
 	for _, d := range sbom.Relationships {
@@ -145,7 +153,7 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 		if visiting[node] {
 			return
 		}
-		if depth > depthMap[node] {
+		if current, seen := depthMap[node]; !seen || depth > current {
 			depthMap[node] = depth
 		}
 		visiting[node] = true
@@ -165,33 +173,19 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 		result[depth] = append(result[depth], node)
 	}
 
-	roots = getRootComponents(allComponents, result)
-
-	if len(result[0]) == 0 {
-		var levels []int
-		for level := range result {
-			levels = append(levels, level)
-		}
-
-		slices.Sort(levels)
-
-		for _, level := range levels {
-			if level == 0 {
-				continue
-			}
-
-			result[level-1] = result[level]
-			delete(result, level)
+	// packages that never appear in any traversed relationship (e.g. isolated
+	// components, or components only related to the generated root) are roots
+	for id := range idToName {
+		if _, ok := depthMap[id]; !ok {
+			result[0] = append(result[0], id)
 		}
 	}
-
-	result[0] = append(result[0], roots...)
 
 	convertedResult := make(map[int][]string)
 
 	for level, components := range result {
 		for _, component := range components {
-			if name, ok := nameMap[component]; ok {
+			if name, ok := idToName[component]; ok {
 				convertedResult[level] = append(convertedResult[level], name)
 			}
 		}

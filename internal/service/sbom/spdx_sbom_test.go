@@ -7,10 +7,12 @@
 package ssbom
 
 import (
+	"os"
 	"sort"
 	"testing"
 	"time"
 
+	sbomreader "github.com/spdx/tools-golang/json"
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
 	"github.com/stretchr/testify/assert"
@@ -526,7 +528,7 @@ func TestGetSpdxDependencyDepthMap_Cycle(t *testing.T) {
 
 	done := make(chan map[int][]string, 1)
 	go func() {
-		done <- getSpdxDependencyDepthMap(document, []string{"root", "pkgA", "pkgB"}, map[string]string{
+		done <- getSpdxDependencyDepthMap(document, map[string]string{
 			"SPDXRef-root": "root",
 			"SPDXRef-pkgA": "pkgA",
 			"SPDXRef-pkgB": "pkgB",
@@ -537,6 +539,42 @@ func TestGetSpdxDependencyDepthMap_Cycle(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("getSpdxDependencyDepthMap did not return — cycle likely caused infinite recursion")
+	}
+}
+
+func TestGetSpdxDependencyDepthMap_IDDiffersFromName(t *testing.T) {
+	// Regression test: SPDX relationships reference SPDX IDs, while display uses
+	// package names. When IDs differ from names, the depth map must still cover
+	// every component and keep the correct levels.
+	// Fixture: alpha (SPDXRef-Package-a-3f9c1e) DEPENDS_ON beta (SPDXRef-Package-b-7ab212),
+	// gamma (SPDXRef-Package-c-c0ffee) is isolated; all IDs differ from names.
+	f, err := os.Open("testdata/spdx-id-not-name.spdx.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	doc, err := sbomreader.Read(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	refToName := getSpdxIdentifierToName(*doc)
+	depLevel := getSpdxDependencyDepthMap(*doc, refToName)
+
+	assert.ElementsMatch(t, []string{"alpha", "gamma"}, depLevel[0],
+		"root and isolated components should be at level 0")
+	assert.ElementsMatch(t, []string{"beta"}, depLevel[1],
+		"dependency should be at level 1")
+
+	seen := map[string]bool{}
+	for _, names := range depLevel {
+		for _, n := range names {
+			seen[n] = true
+		}
+	}
+	for _, name := range getSpdxComponents(*doc) {
+		assert.True(t, seen[name], "component %q missing from dependency level map", name)
 	}
 }
 
