@@ -93,10 +93,12 @@ func (s *Service) ProcessCDX(projectID domain.ProjectID, name domain.Version, bo
 
 	final, sha256Hash, bomTimestamp := buildCDXResult(bom, rawData, name)
 
+	unlock := s.cache.LockProject(projectID)
 	s.cache.Set(projectID, name, final)
 	if err := s.repo.CreateSBOM(projectID, name, final, bomTimestamp, sha256Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
+	unlock()
 
 	slog.Info(
 		"Process CycloneDX-formatted SBOM successfully",

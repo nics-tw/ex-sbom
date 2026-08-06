@@ -54,6 +54,9 @@ func (s *Service) Update(id domain.ProjectID, name domain.ProjectName) error {
 
 // Delete removes the project and all its sbom_records, then clears the in-memory cache.
 func (s *Service) Delete(id domain.ProjectID) error {
+	unlock := s.cache.LockProject(id)
+	defer unlock()
+
 	if err := s.repo.DeleteProject(id); err != nil {
 		return err
 	}
@@ -63,7 +66,12 @@ func (s *Service) Delete(id domain.ProjectID) error {
 
 // Load fetches the latest SBOMs for a project from DB, populates the
 // in-memory cache, and returns the list of loaded filenames.
+// The whole read-then-rebuild sequence holds the project lock so a concurrent
+// save cannot be overwritten by a stale DB snapshot.
 func (s *Service) Load(projectID domain.ProjectID) ([]domain.Version, error) {
+	unlock := s.cache.LockProject(projectID)
+	defer unlock()
+
 	records, err := s.repo.GetAllByProject(projectID)
 	if err != nil {
 		return nil, err

@@ -18,18 +18,45 @@ type Cache interface {
 	DeleteProject(projectID domain.ProjectID)
 	Keys(projectID domain.ProjectID) []domain.Version
 	All(projectID domain.ProjectID) map[domain.Version]FormattedSBOM
+
+	// LockProject serializes save/load/delete sequences that must keep the DB
+	// and the cache consistent for the same project. Callers must invoke the
+	// returned unlock function when the whole sequence (DB access + cache
+	// mutation) is done. Individual cache methods stay thread-safe on their
+	// own; this lock protects multi-step read-modify-write sequences from
+	// interleaving (e.g. a stale DB snapshot overwriting a newer save).
+	LockProject(projectID domain.ProjectID) (unlock func())
 }
 
 type inMemoryCache struct {
 	mu   sync.RWMutex
 	data map[domain.ProjectID]map[domain.Version]FormattedSBOM
+
+	lockMu       sync.Mutex
+	projectLocks map[domain.ProjectID]*sync.Mutex
 }
 
 // NewInMemoryCache returns a new in-memory Cache implementation.
 func NewInMemoryCache() Cache {
 	return &inMemoryCache{
-		data: make(map[domain.ProjectID]map[domain.Version]FormattedSBOM),
+		data:         make(map[domain.ProjectID]map[domain.Version]FormattedSBOM),
+		projectLocks: make(map[domain.ProjectID]*sync.Mutex),
 	}
+}
+
+func (c *inMemoryCache) LockProject(projectID domain.ProjectID) (unlock func()) {
+	c.lockMu.Lock()
+
+	l, ok := c.projectLocks[projectID]
+	if !ok {
+		l = &sync.Mutex{}
+		c.projectLocks[projectID] = l
+	}
+	c.lockMu.Unlock()
+
+	l.Lock()
+
+	return l.Unlock
 }
 
 func (c *inMemoryCache) Get(projectID domain.ProjectID, name domain.Version) (FormattedSBOM, bool) {

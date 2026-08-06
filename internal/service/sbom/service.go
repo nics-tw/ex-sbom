@@ -50,6 +50,9 @@ func (s *Service) List(projectID domain.ProjectID) []domain.Version {
 
 // Rename updates the version name in DB and cache.
 func (s *Service) Rename(projectID domain.ProjectID, oldVersion, newVersion domain.Version) error {
+	unlock := s.cache.LockProject(projectID)
+	defer unlock()
+
 	if err := s.repo.RenameVersion(projectID, oldVersion, newVersion); err != nil {
 		return err
 	}
@@ -64,6 +67,9 @@ func (s *Service) Rename(projectID domain.ProjectID, oldVersion, newVersion doma
 
 // Delete removes the SBOM record from DB and cache.
 func (s *Service) Delete(projectID domain.ProjectID, name domain.Version) error {
+	unlock := s.cache.LockProject(projectID)
+	defer unlock()
+
 	if err := s.repo.DeleteSBOM(projectID, name); err != nil {
 		return err
 	}
@@ -109,6 +115,9 @@ func (s *Service) ListVersions(projectID domain.ProjectID) ([]domain.VersionInfo
 // SaveParsed stores a pre-parsed SBOM result into DB and cache without re-parsing the file.
 // Returns *DuplicateSHA256Error if the same SHA-256 already exists for the project.
 func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version, bom FormattedSBOM, sha256Hash string, bomTimestamp time.Time) error {
+	unlock := s.cache.LockProject(projectID)
+	defer unlock()
+
 	existing, err := s.repo.FindVersionBySHA256(projectID, sha256Hash)
 	if err != nil && !errors.Is(err, repository.ErrVersionNotFound) {
 		return err
