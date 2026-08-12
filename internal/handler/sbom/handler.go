@@ -23,6 +23,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// MaxSBOMUploadBytes is the maximum accepted size for an uploaded SBOM file.
+// Requests exceeding this limit are rejected with HTTP 413 before parsing.
+const MaxSBOMUploadBytes int64 = 50 << 20 // 50 MiB
+
 // Handler holds SBOM-related HTTP handlers.
 type Handler struct {
 	sbomSvc    *ssbom.Service
@@ -205,8 +209,18 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
+	// Cap the request body so an oversized upload is rejected before it is
+	// buffered into memory; MaxBytesReader takes effect during FormFile parsing.
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, MaxSBOMUploadBytes)
+
 	file, fileHeader, err := c.Request.FormFile("file")
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{msg.RespErr: msg.ErrFileTooLarge})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
 		return
 	}
@@ -217,9 +231,13 @@ func (h *Handler) Preview(c *gin.Context) {
 		baseName = baseName[:idx]
 	}
 
-	sbomData, err := io.ReadAll(file)
+	sbomData, err := io.ReadAll(io.LimitReader(file, MaxSBOMUploadBytes+1))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
+		return
+	}
+	if int64(len(sbomData)) > MaxSBOMUploadBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{msg.RespErr: msg.ErrFileTooLarge})
 		return
 	}
 

@@ -7,8 +7,13 @@
 package sbom
 
 import (
+	"bytes"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"ex-sbom/internal/handler/middleware"
 	"ex-sbom/util/msg"
 
 	"github.com/gin-gonic/gin"
@@ -32,10 +37,46 @@ func TestToCreateResponse(t *testing.T) {
 			if tt.input != "" {
 				names = []string{tt.input}
 			}
+
 			result := toCreateResponse(1, names)
 
 			assert.IsType(t, gin.H{}, result)
 			assert.Equal(t, tt.expectedMsg, result[msg.RespMsg])
 		})
 	}
+}
+
+func TestPreviewOversizedUpload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Handler with nil services: if the oversized upload ever reached the
+	// parser/scanner, the test would panic on a nil pointer dereference.
+	h := New(nil, nil)
+
+	router := gin.New()
+	router.POST("/preview", func(c *gin.Context) {
+		c.Set(middleware.ProjectIDKey, int64(1))
+		h.Preview(c)
+	})
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, err := writer.CreateFormFile("file", "huge.json")
+	assert.NoError(t, err)
+
+	chunk := bytes.Repeat([]byte("a"), 1<<20) // 1 MiB
+	for written := int64(0); written <= MaxSBOMUploadBytes; written += int64(len(chunk)) {
+		_, err := part.Write(chunk)
+		assert.NoError(t, err)
+	}
+	assert.NoError(t, writer.Close())
+
+	req := httptest.NewRequest(http.MethodPost, "/preview", &buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+	assert.Contains(t, w.Body.String(), msg.ErrFileTooLarge)
 }
