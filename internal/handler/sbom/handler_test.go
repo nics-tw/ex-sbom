@@ -13,7 +13,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"fmt"
+
+	"ex-sbom/internal/domain"
 	"ex-sbom/internal/handler/middleware"
+	"ex-sbom/internal/repository"
+	ssbom "ex-sbom/internal/service/sbom"
 	"ex-sbom/util/msg"
 
 	"github.com/gin-gonic/gin"
@@ -79,4 +84,37 @@ func TestPreviewOversizedUpload(t *testing.T) {
 
 	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 	assert.Contains(t, w.Body.String(), msg.ErrFileTooLarge)
+}
+
+// notFoundRepo embeds repository.Repository so only RenameVersion needs a real
+// implementation; any other call would panic, proving nothing else is touched.
+type notFoundRepo struct {
+	repository.Repository
+}
+
+func (notFoundRepo) RenameVersion(_ domain.ProjectID, oldVersion, _ domain.Version) error {
+	return fmt.Errorf("%w: %s", repository.ErrVersionNotFound, oldVersion)
+}
+
+func TestRenameDeletedVersionReturns404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := ssbom.NewService(notFoundRepo{}, ssbom.NewInMemoryCache())
+	h := New(svc, nil)
+
+	router := gin.New()
+	router.PUT("/sboms/:name", func(c *gin.Context) {
+		c.Set(middleware.ProjectIDKey, int64(1))
+		h.Rename(c)
+	})
+
+	body := bytes.NewBufferString(`{"version":"v2"}`)
+	req := httptest.NewRequest(http.MethodPut, "/sboms/deleted-version", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), msg.ErrSBOMNotFound)
 }

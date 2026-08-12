@@ -97,6 +97,10 @@ func (h *Handler) Rename(c *gin.Context) {
 	}
 
 	if err := h.sbomSvc.Rename(projectID, oldVersion, body.Version); err != nil {
+		if errors.Is(err, repository.ErrVersionNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
+			return
+		}
 		if errors.Is(err, repository.ErrVersionExists) {
 			c.JSON(http.StatusConflict, gin.H{msg.RespErr: fmt.Sprintf("版本「%s」已存在", body.Version)})
 			return

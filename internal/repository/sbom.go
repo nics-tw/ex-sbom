@@ -58,6 +58,7 @@ func (r *SBOMRepository) CreateSBOM(projectID domain.ProjectID, version domain.V
 }
 
 // RenameVersion updates the version name for a given project + version.
+// Returns ErrVersionNotFound if oldVersion does not exist in the project.
 // Returns ErrVersionExists if newVersion already exists in the project.
 // Uses DELETE + INSERT inside a transaction because DuckDB's ART index
 // implementation produces spurious PK violations on plain UPDATE statements.
@@ -74,10 +75,11 @@ func (r *SBOMRepository) RenameVersion(projectID domain.ProjectID, oldVersion, n
 			).
 			Where("project_id = ? AND version = ?", projectID, oldVersion).
 			First(&rec).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("version not found: %s", oldVersion)
-		}
 		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("%w: %s", ErrVersionNotFound, oldVersion)
+			}
+
 			return err
 		}
 

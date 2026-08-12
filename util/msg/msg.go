@@ -14,6 +14,7 @@ const (
 	ErrComponentNotFound  = "Component not found"
 	ErrXMLNotSupport      = "XML-formatted SBOM is currently not supported"
 	ErrFileTypeNotSupport = "File type not supported"
+	ErrFileTooLarge       = "Uploaded SBOM exceeds the maximum allowed size"
 
 	ErrBindingJSON      = "Error binding JSON"
 	ErrParsingSPDX      = "Error parsing SPDX SBOM"

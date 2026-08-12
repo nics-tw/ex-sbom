@@ -156,6 +156,17 @@ func TestDuckDBPersistence(t *testing.T) {
 		assert.Equal(t, "v2", renamed, "rename must preserve checksum and payload under the new version")
 	})
 
+	t.Run("rename missing version returns ErrVersionNotFound", func(t *testing.T) {
+		// Arrange: "v1" no longer exists — it was renamed to "v2" above.
+
+		// Act
+		err := repo.RenameVersion(pid, "v1", "v3")
+
+		// Assert
+		assert.ErrorIs(t, err, ErrVersionNotFound,
+			"renaming a deleted/stale version must return ErrVersionNotFound")
+	})
+
 	t.Run("lookup by unknown checksum returns ErrVersionNotFound", func(t *testing.T) {
 		// Arrange: a checksum that was never stored.
 
