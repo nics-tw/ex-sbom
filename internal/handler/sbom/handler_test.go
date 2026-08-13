@@ -43,7 +43,7 @@ func TestToCreateResponse(t *testing.T) {
 				names = []string{tt.input}
 			}
 
-			result := toCreateResponse(1, names)
+			result := toCreateResponse(1, names, nil)
 
 			assert.IsType(t, gin.H{}, result)
 			assert.Equal(t, tt.expectedMsg, result[msg.RespMsg])

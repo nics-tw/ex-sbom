@@ -137,14 +137,20 @@ func (h *Handler) Delete(c *gin.Context) {
 // load reloads SBOMs from DB for the given project and returns the payload and success flag.
 // On error it writes the error response and returns false — callers must return immediately.
 func (h *Handler) load(c *gin.Context, projectID domain.ProjectID) (gin.H, bool) {
-	names, err := h.svc.Load(projectID)
+	names, corrupted, err := h.svc.Load(projectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return nil, false
 	}
 
-	return gin.H{
+	payload := gin.H{
 		"project_id": projectID,
 		"sboms":      names,
-	}, true
+	}
+
+	if len(corrupted) > 0 {
+		payload["corrupted"] = corrupted
+	}
+
+	return payload, true
 }

@@ -65,31 +65,49 @@ func (s *Service) Delete(id domain.ProjectID) error {
 }
 
 // Load fetches the latest SBOMs for a project from DB, populates the
-// in-memory cache, and returns the list of loaded filenames.
+// in-memory cache, and returns the list of loaded filenames plus the versions
+// whose persisted JSON failed to decode (degraded state). The cache is only
+// rebuilt after every record has been decoded, so a failure mid-way never
+// leaves it half-populated.
 // The whole read-then-rebuild sequence holds the project lock so a concurrent
 // save cannot be overwritten by a stale DB snapshot.
-func (s *Service) Load(projectID domain.ProjectID) ([]domain.Version, error) {
+func (s *Service) Load(projectID domain.ProjectID) (names, corrupted []domain.Version, err error) {
 	unlock := s.cache.LockProject(projectID)
 	defer unlock()
 
 	records, err := s.repo.GetAllByProject(projectID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// Decode everything first; the cache stays untouched until the outcome of
+	// the whole snapshot is known.
+	type loaded struct {
+		version domain.Version
+		bom     ssbom.FormattedSBOM
+	}
+
+	decoded := make([]loaded, 0, len(records))
+
+	for _, rec := range records {
+		var formatted ssbom.FormattedSBOM
+		if err := json.Unmarshal(rec.BomResult, &formatted); err != nil {
+			slog.Error("Corrupted persisted SBOM, excluded from load",
+				"projectID", projectID, "version", rec.Version, "error", err)
+			corrupted = append(corrupted, rec.Version)
+			continue
+		}
+
+		decoded = append(decoded, loaded{version: rec.Version, bom: formatted})
 	}
 
 	s.cache.DeleteProject(projectID)
 
-	names := make([]domain.Version, 0, len(records))
-	for _, rec := range records {
-		var formatted ssbom.FormattedSBOM
-		if err := json.Unmarshal(rec.BomResult, &formatted); err != nil {
-			slog.Error("Failed to unmarshal SBOM", "version", rec.Version, "error", err)
-			continue
-		}
-
-		s.cache.Set(projectID, rec.Version, formatted)
-		names = append(names, rec.Version)
+	names = make([]domain.Version, 0, len(decoded))
+	for _, l := range decoded {
+		s.cache.Set(projectID, l.version, l.bom)
+		names = append(names, l.version)
 	}
 
-	return names, nil
+	return names, corrupted, nil
 }

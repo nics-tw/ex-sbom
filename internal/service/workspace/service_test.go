@@ -8,6 +8,7 @@ package psvc
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -25,7 +26,10 @@ type fakeRepo struct {
 
 	getAllStarted chan struct{}
 	getAllRelease chan struct{}
+	getAllErr     error
 }
+
+var errFakeDB = errors.New("fake db failure")
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{records: make(map[domain.ProjectID][]domain.SBOMEntry)}
@@ -48,6 +52,10 @@ func (f *fakeRepo) CreateSBOM(projectID domain.ProjectID, version domain.Version
 }
 
 func (f *fakeRepo) GetAllByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error) {
+	if f.getAllErr != nil {
+		return nil, f.getAllErr
+	}
+
 	f.mu.Lock()
 	snapshot := append([]domain.SBOMEntry(nil), f.records[projectID]...)
 	f.mu.Unlock()
@@ -69,8 +77,8 @@ func (f *fakeRepo) CreateProject(domain.ProjectName) (domain.ProjectID, error) {
 func (f *fakeRepo) UpdateProjectName(domain.ProjectID, domain.ProjectName) error {
 	return nil
 }
-func (f *fakeRepo) DeleteProject(domain.ProjectID) error          { return nil }
-func (f *fakeRepo) GetProjects() ([]domain.ProjectInfo, error)    { return nil, nil }
+func (f *fakeRepo) DeleteProject(domain.ProjectID) error       { return nil }
+func (f *fakeRepo) GetProjects() ([]domain.ProjectInfo, error) { return nil, nil }
 func (f *fakeRepo) DeleteSBOM(domain.ProjectID, domain.Version) error {
 	return nil
 }
@@ -105,7 +113,7 @@ func TestLoadDoesNotClobberConcurrentSave(t *testing.T) {
 
 	loadDone := make(chan error, 1)
 	go func() {
-		_, err := projectSvc.Load(projectID)
+		_, _, err := projectSvc.Load(projectID)
 		loadDone <- err
 	}()
 
@@ -136,5 +144,76 @@ func TestLoadDoesNotClobberConcurrentSave(t *testing.T) {
 	}
 	if _, ok := cache.Get(projectID, "v2"); !ok {
 		t.Error("v2 missing from cache: stale load snapshot clobbered the concurrent save")
+	}
+}
+
+// addRawRecord injects a persisted record with arbitrary raw JSON, bypassing
+// CreateSBOM's marshalling, to simulate on-disk corruption or schema drift.
+func (f *fakeRepo) addRawRecord(projectID domain.ProjectID, version domain.Version, raw []byte) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.records[projectID] = append(f.records[projectID], domain.SBOMEntry{
+		Version:   version,
+		BomResult: raw,
+	})
+}
+
+// TestLoadMixedValidAndCorruptedRecords: corrupted persisted JSON must be
+// reported (degraded state), valid versions must still load, and the caller
+// must be able to tell corruption apart from absence.
+func TestLoadMixedValidAndCorruptedRecords(t *testing.T) {
+	const projectID domain.ProjectID = 1
+
+	repo := newFakeRepo()
+	cache := ssbom.NewInMemoryCache()
+	projectSvc := New(repo, cache)
+
+	if err := repo.CreateSBOM(projectID, "v-good-1", ssbom.FormattedSBOM{Components: []string{"a"}}, time.Time{}, "sha-1"); err != nil {
+		t.Fatal(err)
+	}
+	repo.addRawRecord(projectID, "v-corrupt", []byte(`{"components": not-json`))
+	if err := repo.CreateSBOM(projectID, "v-good-2", ssbom.FormattedSBOM{Components: []string{"b"}}, time.Time{}, "sha-2"); err != nil {
+		t.Fatal(err)
+	}
+
+	names, corrupted, err := projectSvc.Load(projectID)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if len(names) != 2 || names[0] != "v-good-1" || names[1] != "v-good-2" {
+		t.Errorf("valid versions must still load, got %v", names)
+	}
+	if len(corrupted) != 1 || corrupted[0] != "v-corrupt" {
+		t.Errorf("corrupted version must be reported, got %v", corrupted)
+	}
+
+	if _, ok := cache.Get(projectID, "v-good-1"); !ok {
+		t.Error("v-good-1 missing from cache")
+	}
+	if _, ok := cache.Get(projectID, "v-corrupt"); ok {
+		t.Error("corrupted record must not be cached")
+	}
+}
+
+// TestLoadKeepsCacheIntactWhenRepoFails: if the DB read fails outright, the
+// previously cached state must survive untouched.
+func TestLoadKeepsCacheIntactWhenRepoFails(t *testing.T) {
+	const projectID domain.ProjectID = 1
+
+	repo := newFakeRepo()
+	repo.getAllErr = errFakeDB
+	cache := ssbom.NewInMemoryCache()
+	projectSvc := New(repo, cache)
+
+	cache.Set(projectID, "v-cached", ssbom.FormattedSBOM{Components: []string{"a"}})
+
+	_, _, err := projectSvc.Load(projectID)
+	if err == nil {
+		t.Fatal("expected error from failing repo")
+	}
+
+	if _, ok := cache.Get(projectID, "v-cached"); !ok {
+		t.Error("cache must keep its original state when the load fails")
 	}
 }

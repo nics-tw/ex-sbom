@@ -140,7 +140,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	versions, err := h.projectSvc.Load(projectID)
+	versions, corrupted, err := h.projectSvc.Load(projectID)
 	if err != nil {
 		slog.Error("Failed to reload project", "projectID", projectID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
@@ -148,10 +148,15 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	slog.Info("SBOM deleted successfully", "version", version)
-	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: gin.H{
+	data := gin.H{
 		"project_id": projectID,
 		"sboms":      versions,
-	}})
+	}
+	if len(corrupted) > 0 {
+		data["corrupted"] = corrupted
+	}
+
+	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: data})
 }
 
 // Diff compares two uploaded SBOMs and returns added/removed/changed components.
@@ -324,14 +329,14 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	names, err := h.projectSvc.Load(projectID)
+	names, corrupted, err := h.projectSvc.Load(projectID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
 
 	slog.Info("SBOM version created", "version", body.Version)
-	c.JSON(http.StatusOK, toCreateResponse(projectID, names))
+	c.JSON(http.StatusOK, toCreateResponse(projectID, names, corrupted))
 }
 
 func countVulns(bom ssbom.FormattedSBOM) int {
@@ -343,13 +348,18 @@ func countVulns(bom ssbom.FormattedSBOM) int {
 	return count
 }
 
-func toCreateResponse(projectID domain.ProjectID, versions []domain.Version) gin.H {
+func toCreateResponse(projectID domain.ProjectID, versions, corrupted []domain.Version) gin.H {
+	data := gin.H{
+		"project_id": projectID,
+		"sboms":      versions,
+	}
+	if len(corrupted) > 0 {
+		data["corrupted"] = corrupted
+	}
+
 	return gin.H{
-		msg.RespMsg: "ok",
-		msg.RespData: gin.H{
-			"project_id": projectID,
-			"sboms":      versions,
-		},
+		msg.RespMsg:  "ok",
+		msg.RespData: data,
 	}
 }
 
