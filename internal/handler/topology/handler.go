@@ -12,6 +12,7 @@ import (
 
 	"ex-sbom/internal/handler/middleware"
 	ssbom "ex-sbom/internal/service/sbom"
+	"ex-sbom/util"
 	"ex-sbom/util/msg"
 
 	"github.com/gin-gonic/gin"
@@ -108,7 +109,7 @@ func (h *Handler) GetRelations(c *gin.Context) {
 		rootLevel, ok := bom.ComponentToLevel[rootComp]
 		if !ok {
 			if !slices.Contains(bom.Components, rootComp) {
-				slog.Error("failed to get root level", "component", rootComp)
+				slog.Error("failed to get root level", "component", util.LogSafe(rootComp))
 				continue
 			}
 			rootLevel = 0
@@ -116,7 +117,7 @@ func (h *Handler) GetRelations(c *gin.Context) {
 		for _, subComp := range subComps {
 			subLevel, ok := bom.ComponentToLevel[subComp]
 			if !ok {
-				slog.Error("failed to get sub level", "component", subComp)
+				slog.Error("failed to get sub level", "component", util.LogSafe(subComp))
 				continue
 			}
 
@@ -149,7 +150,7 @@ func (h *Handler) GetComponent(c *gin.Context) {
 	name := c.Param("name")
 	bom, err := h.svc.Get(projectID, name)
 	if err != nil {
-		slog.Error("GetComponent: sbom not found", "name", name)
+		slog.Error("GetComponent: sbom not found", "name", util.LogSafe(name))
 		c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
 		return
 	}
@@ -185,13 +186,13 @@ func (h *Handler) GetComponentVulnDep(c *gin.Context) {
 
 	bom, err := h.svc.Get(projectID, name)
 	if err != nil {
-		slog.Error("SBOM not found", slog.String("name", name))
+		slog.Error("SBOM not found", slog.String("name", util.LogSafe(name)))
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidComponent})
 		return
 	}
 
 	if !slices.Contains(bom.Components, comp) {
-		slog.Error("Component not found in SBOM", slog.String("name", name), slog.String("component", comp))
+		slog.Error("Component not found in SBOM", slog.String("name", util.LogSafe(name)), slog.String("component", util.LogSafe(comp)))
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrInvalidComponent})
 		return
 	}

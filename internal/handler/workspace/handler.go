@@ -12,6 +12,7 @@ import (
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/handler/middleware"
 	psvc "ex-sbom/internal/service/workspace"
+	"ex-sbom/util"
 	"ex-sbom/util/msg"
 
 	"github.com/gin-gonic/gin"
@@ -59,7 +60,7 @@ func (h *Handler) Create(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{msg.RespErr: msg.ErrDuplicateProjectName})
 			return
 		}
-		slog.Error("Failed to create project", "name", body.Name, "error", err)
+		slog.Error("Failed to create project", "name", util.LogSafe(body.Name), "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}

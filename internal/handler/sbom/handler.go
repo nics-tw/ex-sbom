@@ -18,6 +18,7 @@ import (
 	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
 	psvc "ex-sbom/internal/service/workspace"
+	"ex-sbom/util"
 	"ex-sbom/util/msg"
 
 	"github.com/gin-gonic/gin"
@@ -111,7 +112,7 @@ func (h *Handler) Rename(c *gin.Context) {
 		return
 	}
 
-	slog.Info("SBOM version renamed", "from", oldVersion, "to", body.Version)
+	slog.Info("SBOM version renamed", "from", util.LogSafe(oldVersion), "to", util.LogSafe(body.Version))
 	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: gin.H{"version": body.Version}})
 }
 
@@ -135,7 +136,7 @@ func (h *Handler) Delete(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrSBOMNotFound})
 			return
 		}
-		slog.Error("Failed to delete SBOM", "version", version, "error", err)
+		slog.Error("Failed to delete SBOM", "version", util.LogSafe(version), "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
 	}
@@ -147,7 +148,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	slog.Info("SBOM deleted successfully", "version", version)
+	slog.Info("SBOM deleted successfully", "version", util.LogSafe(version))
 	data := gin.H{
 		"project_id": projectID,
 		"sboms":      versions,
@@ -335,7 +336,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	slog.Info("SBOM version created", "version", body.Version)
+	slog.Info("SBOM version created", "version", util.LogSafe(body.Version))
 	c.JSON(http.StatusOK, toCreateResponse(projectID, names, corrupted))
 }
 
