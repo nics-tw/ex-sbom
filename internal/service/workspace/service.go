@@ -53,15 +53,21 @@ func (s *Service) Update(id domain.ProjectID, name domain.ProjectName) error {
 }
 
 // Delete removes the project and all its sbom_records, then clears the in-memory cache.
+// The per-project lock serializes Delete against concurrent saves/loads, so a
+// save can never slip between the child- and parent-row deletes.
+// The cache is cleared even when the repository delete fails partway
+// (children removed, parent left behind — DuckDB has no usable transaction
+// support in the GORM driver): the DB rows the cache mirrored are already
+// gone, so keeping cache entries would serve ghost data. The next successful
+// Load or retried Delete re-syncs both sides.
 func (s *Service) Delete(id domain.ProjectID) error {
 	unlock := s.cache.LockProject(id)
 	defer unlock()
 
-	if err := s.repo.DeleteProject(id); err != nil {
-		return err
-	}
+	err := s.repo.DeleteProject(id)
 	s.cache.DeleteProject(id)
-	return nil
+
+	return err
 }
 
 // Load fetches the latest SBOMs for a project from DB, populates the

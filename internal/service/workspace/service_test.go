@@ -27,9 +27,17 @@ type fakeRepo struct {
 	getAllStarted chan struct{}
 	getAllRelease chan struct{}
 	getAllErr     error
+
+	deleteStarted chan struct{}
+	deleteRelease chan struct{}
+	deleteErr     error
+	projectGone   bool
 }
 
-var errFakeDB = errors.New("fake db failure")
+var (
+	errFakeDB      = errors.New("fake db failure")
+	errFKViolation = errors.New("foreign key violation: project does not exist")
+)
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{records: make(map[domain.ProjectID][]domain.SBOMEntry)}
@@ -43,6 +51,10 @@ func (f *fakeRepo) CreateSBOM(projectID domain.ProjectID, version domain.Version
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.projectGone {
+		// mimic the sbom_records.project_id FK: no parent row, insert rejected
+		return errFKViolation
+	}
 	f.records[projectID] = append(f.records[projectID], domain.SBOMEntry{
 		Version:   version,
 		BomResult: raw,
@@ -77,7 +89,27 @@ func (f *fakeRepo) CreateProject(domain.ProjectName) (domain.ProjectID, error) {
 func (f *fakeRepo) UpdateProjectName(domain.ProjectID, domain.ProjectName) error {
 	return nil
 }
-func (f *fakeRepo) DeleteProject(domain.ProjectID) error       { return nil }
+func (f *fakeRepo) DeleteProject(id domain.ProjectID) error {
+	// children first, matching the real repository's delete order
+	f.mu.Lock()
+	delete(f.records, id)
+	f.mu.Unlock()
+
+	// expose the moment between the child delete and the parent delete
+	if f.deleteStarted != nil {
+		f.deleteStarted <- struct{}{}
+		<-f.deleteRelease
+	}
+
+	if f.deleteErr != nil {
+		return f.deleteErr // parent delete failed: children already gone
+	}
+
+	f.mu.Lock()
+	f.projectGone = true
+	f.mu.Unlock()
+	return nil
+}
 func (f *fakeRepo) GetProjects() ([]domain.ProjectInfo, error) { return nil, nil }
 func (f *fakeRepo) DeleteSBOM(domain.ProjectID, domain.Version) error {
 	return nil
@@ -215,5 +247,87 @@ func TestLoadKeepsCacheIntactWhenRepoFails(t *testing.T) {
 
 	if _, ok := cache.Get(projectID, "v-cached"); !ok {
 		t.Error("cache must keep its original state when the load fails")
+	}
+}
+
+// TestDeleteSaveRace: a save issued while a delete sits between its child- and
+// parent-row deletes must be serialized behind the delete by the per-project
+// lock, then rejected because the project is gone — never interleaved.
+func TestDeleteSaveRace(t *testing.T) {
+	const projectID domain.ProjectID = 1
+
+	repo := newFakeRepo()
+	cache := ssbom.NewInMemoryCache()
+	projectSvc := New(repo, cache)
+	sbomSvc := ssbom.NewService(repo, cache)
+
+	if err := repo.CreateSBOM(projectID, "v1", ssbom.FormattedSBOM{Components: []string{"a"}}, time.Time{}, "sha-v1"); err != nil {
+		t.Fatal(err)
+	}
+	cache.Set(projectID, "v1", ssbom.FormattedSBOM{Components: []string{"a"}})
+
+	repo.deleteStarted = make(chan struct{})
+	repo.deleteRelease = make(chan struct{})
+
+	deleteDone := make(chan error, 1)
+	go func() { deleteDone <- projectSvc.Delete(projectID) }()
+
+	// wait until the delete has removed the child rows but not the parent
+	<-repo.deleteStarted
+	repo.deleteStarted = nil
+
+	// a save arrives mid-delete; it must block on the project lock
+	saveDone := make(chan error, 1)
+	go func() {
+		saveDone <- sbomSvc.SaveParsed(projectID, "v2", ssbom.FormattedSBOM{Components: []string{"b"}}, "sha-v2", time.Time{})
+	}()
+
+	select {
+	case err := <-saveDone:
+		t.Fatalf("save must not run while delete is in flight, returned: %v", err)
+	case <-time.After(50 * time.Millisecond):
+		// expected: still blocked on the per-project lock
+	}
+
+	close(repo.deleteRelease)
+
+	if err := <-deleteDone; err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+	if err := <-saveDone; !errors.Is(err, errFKViolation) {
+		t.Fatalf("save after delete must fail on the FK, got: %v", err)
+	}
+
+	if _, ok := cache.Get(projectID, "v1"); ok {
+		t.Error("deleted project's SBOM must be gone from cache")
+	}
+	if _, ok := cache.Get(projectID, "v2"); ok {
+		t.Error("failed save must not leave anything in cache")
+	}
+}
+
+// TestDeletePartialFailureClearsCache: when the parent-row delete fails after
+// the child rows are already gone, the cache must not keep serving SBOMs whose
+// DB rows no longer exist.
+func TestDeletePartialFailureClearsCache(t *testing.T) {
+	const projectID domain.ProjectID = 1
+
+	repo := newFakeRepo()
+	repo.deleteErr = errFakeDB
+	cache := ssbom.NewInMemoryCache()
+	projectSvc := New(repo, cache)
+
+	if err := repo.CreateSBOM(projectID, "v1", ssbom.FormattedSBOM{Components: []string{"a"}}, time.Time{}, "sha-v1"); err != nil {
+		t.Fatal(err)
+	}
+	cache.Set(projectID, "v1", ssbom.FormattedSBOM{Components: []string{"a"}})
+
+	err := projectSvc.Delete(projectID)
+	if !errors.Is(err, errFakeDB) {
+		t.Fatalf("expected the repo error to propagate, got: %v", err)
+	}
+
+	if _, ok := cache.Get(projectID, "v1"); ok {
+		t.Error("cache must be cleared even on partial delete: the child rows it mirrored are gone")
 	}
 }
