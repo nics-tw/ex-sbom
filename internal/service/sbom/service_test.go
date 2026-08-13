@@ -8,6 +8,7 @@ package ssbom
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -343,4 +344,68 @@ func TestService_ListVersions_DelegatesToRepo(t *testing.T) {
 	assert.Len(t, versions, 2)
 	assert.Equal(t, "v2", versions[0].Version)
 	assert.Equal(t, "v1", versions[1].Version)
+}
+
+// ─── Service.SaveParsed (concurrency) ────────────────────────────────────────
+
+// checksumTrackingRepo simulates the real repository's checksum lookup:
+// FindVersionBySHA256 reflects previous CreateSBOM calls. It is intentionally
+// unsynchronized — SaveParsed's per-project lock must serialize access, and
+// `go test -race` will fail if it does not.
+type checksumTrackingRepo struct {
+	stubRepository
+	byChecksum map[string]domain.Version
+	inserts    int
+}
+
+func (r *checksumTrackingRepo) CreateSBOM(_ domain.ProjectID, version domain.Version, _ any, _ time.Time, checksum string) error {
+	r.byChecksum[checksum] = version
+	r.inserts++
+	return nil
+}
+
+func (r *checksumTrackingRepo) FindVersionBySHA256(_ domain.ProjectID, checksum domain.SHA256) (domain.Version, error) {
+	if v, ok := r.byChecksum[string(checksum)]; ok {
+		return v, nil
+	}
+	return "", repository.ErrVersionNotFound
+}
+
+func TestService_SaveParsed_ConcurrentSameChecksumInsertsOnce(t *testing.T) {
+	// Arrange: two concurrent uploads of the same file (same SHA-256), as when
+	// two browser tabs submit simultaneously.
+	repo := &checksumTrackingRepo{byChecksum: map[string]domain.Version{}}
+	svc := NewService(repo, NewInMemoryCache())
+
+	const checksum = "sha-dup"
+	errs := make(chan error, 2)
+
+	var wg sync.WaitGroup
+	for _, version := range []domain.Version{"tab-1", "tab-2"} {
+		wg.Add(1)
+		go func(v domain.Version) {
+			defer wg.Done()
+			errs <- svc.SaveParsed(wsID, v, FormattedSBOM{}, checksum, time.Time{})
+		}(version)
+	}
+	wg.Wait()
+	close(errs)
+
+	// Assert: exactly one insert; the loser gets DuplicateSHA256Error.
+	var okCount, dupCount int
+	for err := range errs {
+		var dup *DuplicateSHA256Error
+		switch {
+		case err == nil:
+			okCount++
+		case errors.As(err, &dup):
+			dupCount++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	assert.Equal(t, 1, okCount, "exactly one request must win")
+	assert.Equal(t, 1, dupCount, "the other must get DuplicateSHA256Error")
+	assert.Equal(t, 1, repo.inserts, "only one row may reach the repository")
 }
