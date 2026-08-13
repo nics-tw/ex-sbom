@@ -95,7 +95,7 @@ func (bom FormattedSBOM) GetVulnComponents() []string {
 
 // sortFormattedSBOM sorts all slices inside FormattedSBOM so that the result is
 // deterministic regardless of map iteration order during construction.
-// Must be called before hashSBOM and repo.Save.
+// Must be called before HashSBOM and repo.Save.
 func sortFormattedSBOM(sbom *FormattedSBOM) {
 	sort.Strings(sbom.Components)
 
@@ -112,9 +112,9 @@ func sortFormattedSBOM(sbom *FormattedSBOM) {
 	}
 }
 
-// hashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
+// HashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
 // encoding/json sorts map keys deterministically, so the hash is stable for the same content.
-func hashSBOM(sbom FormattedSBOM) string {
+func HashSBOM(sbom FormattedSBOM) string {
 	b, err := json.Marshal(sbom)
 	if err != nil {
 		slog.Error("HashSBOM: unreachable marshal failure", "error", err)

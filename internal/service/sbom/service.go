@@ -22,6 +22,11 @@ func (e *DuplicateSHA256Error) Error() string {
 	return fmt.Sprintf("sha256 already exists for version %q", e.Version)
 }
 
+// ErrSHA256Mismatch is returned by SaveParsed when the submitted sha256 does
+// not match the hash recomputed from the submitted bom_result, meaning the
+// pair does not come from the same preview response.
+var ErrSHA256Mismatch = errors.New("sha256 does not match bom_result")
+
 // Service provides SBOM business logic using injected repository and cache.
 type Service struct {
 	repo  repository.Repository
@@ -127,6 +132,14 @@ func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version,
 	}
 
 	sortFormattedSBOM(&bom)
+
+	// The client echoes back the preview payload; recompute the hash so a
+	// stale or mismatched bom_result/sha256 pair (e.g. mixed-up requests)
+	// is rejected instead of persisted under the wrong identity.
+	if actual := HashSBOM(bom); actual != sha256Hash {
+		return ErrSHA256Mismatch
+	}
+
 	if err := s.repo.CreateSBOM(projectID, version, bom, bomTimestamp, sha256Hash); err != nil {
 		return err
 	}

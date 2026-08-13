@@ -325,6 +325,11 @@ func (h *Handler) Create(c *gin.Context) {
 			return
 		}
 
+		if errors.Is(err, ssbom.ErrSHA256Mismatch) {
+			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrSBOMChecksumMismatch})
+			return
+		}
+
 		slog.Error("Failed to save SBOM", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return

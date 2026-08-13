@@ -156,7 +156,7 @@ func TestLoadDoesNotClobberConcurrentSave(t *testing.T) {
 	// concurrent save of a new version while the load is still in flight
 	saveDone := make(chan error, 1)
 	go func() {
-		saveDone <- sbomSvc.SaveParsed(projectID, "v2", ssbom.FormattedSBOM{Components: []string{"b"}}, "sha-v2", time.Time{})
+		saveDone <- sbomSvc.SaveParsed(projectID, "v2", ssbom.FormattedSBOM{Components: []string{"b"}}, ssbom.HashSBOM(ssbom.FormattedSBOM{Components: []string{"b"}}), time.Time{})
 	}()
 
 	// give the save a chance to run as far as it can before the load resumes;
@@ -279,7 +279,7 @@ func TestDeleteSaveRace(t *testing.T) {
 	// a save arrives mid-delete; it must block on the project lock
 	saveDone := make(chan error, 1)
 	go func() {
-		saveDone <- sbomSvc.SaveParsed(projectID, "v2", ssbom.FormattedSBOM{Components: []string{"b"}}, "sha-v2", time.Time{})
+		saveDone <- sbomSvc.SaveParsed(projectID, "v2", ssbom.FormattedSBOM{Components: []string{"b"}}, ssbom.HashSBOM(ssbom.FormattedSBOM{Components: []string{"b"}}), time.Time{})
 	}()
 
 	select {

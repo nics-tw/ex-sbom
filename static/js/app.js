@@ -1414,12 +1414,19 @@
       _sha256: null,
       _bomTimestamp: null,
       _existingVersion: null,
+      // identity captured when the preview request is fired; commit and the
+      // preview response are only honoured while they still match
+      _projectID: null,
+      _file: null,
+      _previewSeq: 0,
 
       open() {
         this._bomResult = null;
         this._sha256 = null;
         this._bomTimestamp = null;
         this._existingVersion = null;
+        this._projectID = null;
+        this._file = null;
         document.getElementById("sbom-file-input").value = "";
         document.getElementById("sbom-filename-display").textContent = "尚未選擇檔案";
         document.getElementById("sbom-modal-step1-error").classList.add("hidden");
@@ -1434,6 +1441,8 @@
         this._bomResult = null;
         this._sha256 = null;
         this._existingVersion = null;
+        this._projectID = null;
+        this._file = null;
       },
 
       _onFileSelected(files) {
@@ -1457,9 +1466,24 @@
         previewBtn.disabled = true;
         previewBtn.textContent = "解析中...";
 
+        // freeze request identity: project, file and a sequence number
+        const projectID = State.projectID;
+        const file = fileInput.files[0];
+        const seq = ++this._previewSeq;
+
         try {
-          const resp = await Api.previewSBOM(State.projectID, fileInput.files[0]);
+          const resp = await Api.previewSBOM(projectID, file);
           const json = await resp.json();
+
+          // a newer preview was fired, or project/file changed while in flight:
+          // this response no longer describes the current selection — drop it
+          if (seq !== this._previewSeq) return;
+          if (State.projectID !== projectID || fileInput.files[0] !== file) {
+            errEl.textContent = "專案或檔案已變更，請重新預覽";
+            errEl.classList.remove("hidden");
+            return;
+          }
+
           if (!resp.ok) {
             errEl.textContent = json.error || "預覽失敗";
             errEl.classList.remove("hidden");
@@ -1471,6 +1495,8 @@
           this._sha256 = data.sha256;
           this._bomTimestamp = data.bom_timestamp;
           this._existingVersion = data.existing_version || "";
+          this._projectID = projectID;
+          this._file = file;
 
           const summary = document.getElementById("sbom-preview-summary");
           summary.innerHTML = `
@@ -1480,7 +1506,7 @@
             </div>`;
           this._renderPreviewTopology(summary, data.bom_result);
 
-          const displayName = data.filename || fileInput.files[0]?.name || "";
+          const displayName = data.filename || file?.name || "";
           document.getElementById("sbom-preview-title").innerHTML =
             `預覽結果 <span class="text-gray-400 font-normal text-base">— ${displayName}</span>`;
           document.getElementById("sbom-version-input").value = "";
@@ -1521,12 +1547,25 @@
           return;
         }
 
+        // the preview result is only valid for the project it was scanned
+        // against; refuse to commit if the user switched project meanwhile
+        if (!this._bomResult || this._projectID == null) {
+          errEl.textContent = "預覽資料已失效，請重新預覽";
+          errEl.classList.remove("hidden");
+          return;
+        }
+        if (State.projectID !== this._projectID) {
+          errEl.textContent = "專案已變更，請重新預覽後再建立版本";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
         const commitBtn = document.getElementById("sbom-modal-commit-btn");
         commitBtn.disabled = true;
         commitBtn.textContent = "建立中...";
 
         try {
-          const resp = await Api.commitSBOM(State.projectID, version, this._bomResult, this._sha256, this._bomTimestamp);
+          const resp = await Api.commitSBOM(this._projectID, version, this._bomResult, this._sha256, this._bomTimestamp);
           const json = await resp.json();
           if (resp.status === 409 || !resp.ok) {
             errEl.textContent = json.error || "建立失敗";

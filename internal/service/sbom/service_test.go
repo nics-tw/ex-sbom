@@ -301,7 +301,7 @@ func TestService_SaveParsed_StoresInCacheAndRepo(t *testing.T) {
 	bom := FormattedSBOM{Components: []string{"curl"}}
 
 	// Act
-	err := svc.SaveParsed(wsID, "v1", bom, "abc123", time.Time{})
+	err := svc.SaveParsed(wsID, "v1", bom, HashSBOM(bom), time.Time{})
 
 	// Assert
 	assert.NoError(t, err)
@@ -317,10 +317,26 @@ func TestService_SaveParsed_PropagatesRepoError(t *testing.T) {
 	bom := FormattedSBOM{Components: []string{"curl"}}
 
 	// Act
-	err := svc.SaveParsed(wsID, "v1", bom, "abc123", time.Time{})
+	err := svc.SaveParsed(wsID, "v1", bom, HashSBOM(bom), time.Time{})
 
 	// Assert
 	assert.Error(t, err)
+}
+
+func TestService_SaveParsed_RejectsChecksumMismatch(t *testing.T) {
+	// Arrange: sha256 does not come from the submitted bom_result, e.g. a
+	// stale preview payload mixed with another request's checksum
+	repo := &stubRepository{}
+	svc, cache := newServiceWithRepo(repo)
+	bom := FormattedSBOM{Components: []string{"curl"}}
+
+	// Act
+	err := svc.SaveParsed(wsID, "v1", bom, "not-the-real-hash", time.Time{})
+
+	// Assert
+	assert.ErrorIs(t, err, ErrSHA256Mismatch)
+	_, found := cache.Get(wsID, "v1")
+	assert.False(t, found, "mismatched payload must not be cached")
 }
 
 // ─── Service.ListVersions ─────────────────────────────────────────────────────
@@ -377,7 +393,7 @@ func TestService_SaveParsed_ConcurrentSameChecksumInsertsOnce(t *testing.T) {
 	repo := &checksumTrackingRepo{byChecksum: map[string]domain.Version{}}
 	svc := NewService(repo, NewInMemoryCache())
 
-	const checksum = "sha-dup"
+	checksum := HashSBOM(FormattedSBOM{})
 	errs := make(chan error, 2)
 
 	var wg sync.WaitGroup

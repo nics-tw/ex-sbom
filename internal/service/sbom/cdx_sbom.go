@@ -82,7 +82,8 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	}
 
 	sortFormattedSBOM(&result)
-	sha256Hash := hashSBOM(result)
+	sha256Hash := HashSBOM(result)
+
 	return result, sha256Hash, bomTimestamp
 }
 

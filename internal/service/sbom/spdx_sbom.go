@@ -68,7 +68,8 @@ func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (Form
 	}
 
 	sortFormattedSBOM(&bom)
-	sha256Hash := hashSBOM(bom)
+	sha256Hash := HashSBOM(bom)
+
 	return bom, sha256Hash
 }
 
