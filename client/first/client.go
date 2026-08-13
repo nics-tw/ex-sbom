@@ -6,12 +6,13 @@ package first
 
 import (
 	"encoding/json"
-	"ex-sbom/util"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"ex-sbom/util"
 )
 
 type (

@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,33 +47,30 @@ func TestCopyAndCreate(t *testing.T) {
 		{
 			name: "CDX file",
 			input: FileInput{
-				Name:  "custom.json",
 				IsCDX: true,
 				Data:  []byte(`{"name":"test-cdx"}`),
 			},
-			expectedPath:    DefaultName, // Should use DefaultName (bom.json)
+			expectedPath:    DefaultCDXName,
 			expectedError:   false,
 			expectedContent: []byte(`{"name":"test-cdx"}`),
 		},
 		{
 			name: "SPDX file",
 			input: FileInput{
-				Name:  "spdx-test.json",
 				IsCDX: false,
 				Data:  []byte(`{"name":"test-spdx"}`),
 			},
-			expectedPath:    "spdx-test.json", // Should use input.Name
+			expectedPath:    DefaultSPDXName,
 			expectedError:   false,
 			expectedContent: []byte(`{"name":"test-spdx"}`),
 		},
 		{
 			name: "Empty data",
 			input: FileInput{
-				Name:  "empty.json",
 				IsCDX: false,
 				Data:  []byte{},
 			},
-			expectedPath:    "empty.json",
+			expectedPath:    DefaultSPDXName,
 			expectedError:   false,
 			expectedContent: []byte{},
 		},
@@ -79,9 +78,6 @@ func TestCopyAndCreate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clean up any previous test files with the same name
-			_ = os.Remove(tt.expectedPath)
-
 			// Call the function we're testing
 			path, err := CopyAndCreate(tt.input)
 
@@ -92,13 +88,15 @@ func TestCopyAndCreate(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			// Check returned path
-			assert.Equal(t, tt.expectedPath, path)
+			// Check returned path: canonical filename inside a unique temp dir
+			assert.Equal(t, tt.expectedPath, filepath.Base(path))
+			assert.True(t, strings.HasPrefix(filepath.Base(filepath.Dir(path)), tempDirPrefix),
+				"file must live in a per-request scan directory")
 
 			// Verify file existence and content
 			if !tt.expectedError {
 				// Check if file exists
-				info, err := os.Stat(tt.expectedPath)
+				info, err := os.Stat(path)
 				assert.NoError(t, err)
 				assert.NotNil(t, info)
 
@@ -106,33 +104,21 @@ func TestCopyAndCreate(t *testing.T) {
 				assert.Equal(t, os.FileMode(defaultPermissions), info.Mode().Perm())
 
 				// Read content and verify
-				content, err := os.ReadFile(tt.expectedPath)
+				content, err := os.ReadFile(path)
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expectedContent, content)
 			}
 
 			// Clean up
-			_ = os.Remove(tt.expectedPath)
+			assert.NoError(t, Delete(path))
 		})
 	}
 
-	// Test permission error case with a read-only directory
-	t.Run("permission error", func(t *testing.T) {
-		// Create a read-only directory
-		readOnlyDir := filepath.Join(tempDir, "readonly")
-		if err := os.Mkdir(readOnlyDir, 0500); err != nil {
-			t.Fatalf("Failed to create read-only directory: %v", err)
-		}
+	// Test error case: temp dir creation fails when TMPDIR is unusable
+	t.Run("temp dir creation error", func(t *testing.T) {
+		t.Setenv("TMPDIR", filepath.Join(tempDir, "does-not-exist"))
 
-		// Change to the read-only directory
-		if err := os.Chdir(readOnlyDir); err != nil {
-			t.Fatalf("Failed to change to read-only directory: %v", err)
-		}
-		defer os.Chdir(tempDir) // Return to temp dir
-
-		// Try to create a file in the read-only directory
 		input := FileInput{
-			Name:  "test.json",
 			IsCDX: false,
 			Data:  []byte(`{"test":"data"}`),
 		}
@@ -242,4 +228,63 @@ func TestDelete(t *testing.T) {
 		// Restore permissions for cleanup
 		_ = os.Chmod(readOnlyDir, 0700)
 	})
+}
+
+// TestCopyAndCreate_ConcurrentSameFormat: two concurrent previews of the same
+// format must get isolated files — neither may see the other's content.
+func TestCopyAndCreate_ConcurrentSameFormat(t *testing.T) {
+	type result struct {
+		path string
+		err  error
+	}
+
+	payloads := [][]byte{
+		[]byte(`{"request":"one"}`),
+		[]byte(`{"request":"two"}`),
+	}
+
+	results := make([]result, len(payloads))
+	var wg sync.WaitGroup
+	for i, data := range payloads {
+		wg.Add(1)
+		go func(i int, data []byte) {
+			defer wg.Done()
+			path, err := CopyAndCreate(FileInput{IsCDX: true, Data: data})
+			results[i] = result{path: path, err: err}
+		}(i, data)
+	}
+	wg.Wait()
+
+	for i, r := range results {
+		assert.NoError(t, r.err)
+		content, err := os.ReadFile(r.path)
+		assert.NoError(t, err)
+		assert.Equal(t, payloads[i], content, "request %d must read back its own content", i)
+	}
+	assert.NotEqual(t, results[0].path, results[1].path, "concurrent requests must not share a path")
+
+	for _, r := range results {
+		assert.NoError(t, Delete(r.path))
+	}
+}
+
+// TestDelete_ConcurrentRequestsDoNotAffectEachOther: one request finishing and
+// cleaning up must not remove a still-running request's file.
+func TestDelete_ConcurrentRequestsDoNotAffectEachOther(t *testing.T) {
+	pathA, err := CopyAndCreate(FileInput{IsCDX: true, Data: []byte(`{"request":"a"}`)})
+	assert.NoError(t, err)
+	pathB, err := CopyAndCreate(FileInput{IsCDX: true, Data: []byte(`{"request":"b"}`)})
+	assert.NoError(t, err)
+
+	// request A finishes first and cleans up its own path
+	assert.NoError(t, Delete(pathA))
+
+	// request B's file must still be intact and readable by the scanner
+	content, err := os.ReadFile(pathB)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte(`{"request":"b"}`), content)
+
+	assert.NoError(t, Delete(pathB))
+	_, statErr := os.Stat(filepath.Dir(pathB))
+	assert.True(t, os.IsNotExist(statErr), "per-request scan directory must be removed after Delete")
 }

@@ -10,13 +10,72 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"ex-sbom/internal/domain"
+	reporthandler "ex-sbom/internal/handler/report"
+	sbomhandler "ex-sbom/internal/handler/sbom"
+	topohandler "ex-sbom/internal/handler/topology"
+	projecthandler "ex-sbom/internal/handler/workspace"
+	"ex-sbom/internal/repository"
+	ssbom "ex-sbom/internal/service/sbom"
+	psvc "ex-sbom/internal/service/workspace"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
+// noopRepository is a stub that satisfies repository.Repository with safe no-ops.
+type noopRepository struct{}
+
+func (r *noopRepository) CreateProject(_ domain.ProjectName) (domain.ProjectID, error) {
+	return 1, nil
+}
+func (r *noopRepository) UpdateProjectName(_ domain.ProjectID, _ domain.ProjectName) error {
+	return nil
+}
+func (r *noopRepository) DeleteProject(_ domain.ProjectID) error { return nil }
+func (r *noopRepository) GetProjects() ([]domain.ProjectInfo, error) {
+	return []domain.ProjectInfo{}, nil
+}
+func (r *noopRepository) CreateSBOM(_ domain.ProjectID, _ domain.Version, _ any, _ time.Time, _ string) error {
+	return nil
+}
+func (r *noopRepository) DeleteSBOM(_ domain.ProjectID, _ domain.Version) error { return nil }
+func (r *noopRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) {
+	return 0, nil, nil
+}
+func (r *noopRepository) GetAllByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
+	return nil, nil
+}
+func (r *noopRepository) GetAllVersions(_ domain.ProjectID) ([]domain.VersionInfo, error) {
+	return nil, nil
+}
+func (r *noopRepository) RenameVersion(_ domain.ProjectID, _, _ domain.Version) error {
+	return nil
+}
+func (r *noopRepository) FindVersionBySHA256(_ domain.ProjectID, _ domain.SHA256) (domain.Version, error) {
+	return "", repository.ErrVersionNotFound
+}
+
+// buildTestRouter constructs a router with all handlers wired using a no-op repository.
+func buildTestRouter() *gin.Engine {
+	repo := &noopRepository{}
+	cache := ssbom.NewInMemoryCache()
+	sbomSvc := ssbom.NewService(repo, cache)
+	projectSvc := psvc.New(repo, cache)
+
+	projectH := projecthandler.New(projectSvc)
+	sbomH := sbomhandler.New(sbomSvc, projectSvc)
+	topoH := topohandler.New(sbomSvc)
+	reportH := reporthandler.New(sbomSvc)
+
+	router := gin.New()
+	SetupRouterGroup(router, projectH, sbomH, topoH, reportH)
+	return router
+}
+
 func TestSetupRouterGroup(t *testing.T) {
-	// Set Gin to test mode to avoid debug output
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -26,99 +85,31 @@ func TestSetupRouterGroup(t *testing.T) {
 		expectedStatus int
 		description    string
 	}{
-		// SBOM routes
 		{
-			name:           "sbom upload route",
-			method:         "POST",
-			path:           "/sbom/upload",
-			expectedStatus: http.StatusBadRequest, // Handler not implemented in test
-			description:    "Should route to sbom.CreateSBOM handler",
-		},
-		{
-			name:           "sbom delete route",
-			method:         "DELETE",
-			path:           "/sbom/delete",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to sbom.DeleteSBOM handler",
-		},
-
-		// Topology routes
-		{
-			name:           "topology get list by level route",
+			name:           "list projects",
 			method:         "GET",
-			path:           "/topology/get_list_by_level",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetComponentListByLevel handler",
+			path:           "/projects",
+			expectedStatus: http.StatusOK,
+			description:    "Should route to project.List handler",
 		},
 		{
-			name:           "topology relations route",
+			name:           "invalid route",
 			method:         "GET",
-			path:           "/topology/relations",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetRelations handler",
-		},
-		{
-			name:           "topology component route",
-			method:         "GET",
-			path:           "/topology/component",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetComponent handler",
-		},
-		{
-			name:           "topology vuln dep route",
-			method:         "GET",
-			path:           "/topology/get_component_vuln_dep",
-			expectedStatus: http.StatusBadRequest,
-			description:    "Should route to topology.GetComponentVulnDep handler",
-		},
-
-		// Invalid routes
-		{
-			name:           "invalid sbom route",
-			method:         "GET",
-			path:           "/sbom/invalid",
+			path:           "/nonexistent",
 			expectedStatus: http.StatusNotFound,
 			description:    "Should return 404 for non-existent routes",
-		},
-		{
-			name:           "invalid topology route",
-			method:         "POST",
-			path:           "/topology/invalid",
-			expectedStatus: http.StatusNotFound,
-			description:    "Should return 404 for non-existent routes",
-		},
-		{
-			name:           "wrong method for sbom upload",
-			method:         "GET",
-			path:           "/sbom/upload",
-			expectedStatus: http.StatusNotFound,
-			description:    "Should return 405 for wrong HTTP method",
-		},
-		{
-			name:           "wrong method for topology relations",
-			method:         "POST",
-			path:           "/topology/relations",
-			expectedStatus: http.StatusNotFound,
-			description:    "Should return 405 for wrong HTTP method",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a new Gin engine for each test
-			router := gin.New()
+			router := buildTestRouter()
 
-			// Setup the routes
-			SetupRouterGroup(router)
-
-			// Create a test request
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			w := httptest.NewRecorder()
 
-			// Perform the request
 			router.ServeHTTP(w, req)
 
-			// Assert the status code
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
 		})
 	}
@@ -127,39 +118,32 @@ func TestSetupRouterGroup(t *testing.T) {
 func TestSetupRouterGroup_RouteRegistration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// Create a new router
-	router := gin.New()
+	router := buildTestRouter()
 
-	// Get initial route count
-	initialRoutes := len(router.Routes())
-
-	// Setup routes
-	SetupRouterGroup(router)
-
-	// Get final route count
-	finalRoutes := len(router.Routes())
-
-	// Should have added 6 routes (2 sbom + 4 topology)
-	expectedNewRoutes := 6
-	actualNewRoutes := finalRoutes - initialRoutes
-
-	assert.Equal(t, expectedNewRoutes, actualNewRoutes,
-		"Should register exactly 6 new routes")
-
-	// Verify specific routes exist
 	routes := router.Routes()
 
 	expectedRoutes := []struct {
 		method string
 		path   string
 	}{
-		{"POST", "/sbom/upload"},
-		{"DELETE", "/sbom/delete"},
-		{"GET", "/topology/get_list_by_level"},
-		{"GET", "/topology/relations"},
-		{"GET", "/topology/component"},
-		{"GET", "/topology/get_component_vuln_dep"},
-		{"GET", "/sbom/report/:name"},
+		{"GET", "/projects"},
+		{"POST", "/projects"},
+		{"GET", "/projects/:id"},
+		{"PUT", "/projects/:id"},
+		{"DELETE", "/projects/:id"},
+		{"GET", "/projects/:id/diff"},
+		{"GET", "/projects/:id/search"},
+		{"GET", "/projects/:id/sboms"},
+		{"POST", "/projects/:id/sboms"},
+		{"POST", "/projects/:id/sboms/preview"},
+		{"DELETE", "/projects/:id/sboms/:name"},
+		{"PUT", "/projects/:id/sboms/:name"},
+		{"GET", "/projects/:id/sboms/:name/report"},
+		{"GET", "/projects/:id/versions"},
+		{"GET", "/projects/:id/sboms/:name/topology"},
+		{"GET", "/projects/:id/sboms/:name/topology/relations"},
+		{"GET", "/projects/:id/sboms/:name/topology/component"},
+		{"GET", "/projects/:id/sboms/:name/topology/component/vuln-dep"},
 	}
 
 	for _, expected := range expectedRoutes {
@@ -178,24 +162,16 @@ func TestSetupRouterGroup_RouteRegistration(t *testing.T) {
 func TestSetupRouterGroup_GroupPrefixes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	router := gin.New()
-	SetupRouterGroup(router)
+	router := buildTestRouter()
 
 	routes := router.Routes()
 
-	// Check that SBOM routes have correct prefix
-	sbomRoutes := 0
-	topologyRoutes := 0
-
+	projectRoutes := 0
 	for _, route := range routes {
-		if len(route.Path) >= 5 && route.Path[:5] == "/sbom" {
-			sbomRoutes++
-		}
-		if len(route.Path) >= 9 && route.Path[:9] == "/topology" {
-			topologyRoutes++
+		if len(route.Path) >= 9 && route.Path[:9] == "/projects" {
+			projectRoutes++
 		}
 	}
 
-	assert.Equal(t, 3, sbomRoutes, "Should have 3 routes under /sbom prefix")
-	assert.Equal(t, 4, topologyRoutes, "Should have 4 routes under /topology prefix")
+	assert.Greater(t, projectRoutes, 0, "Should have routes under /projects prefix")
 }

@@ -5,12 +5,16 @@
 package ssbom
 
 import (
-	"ex-sbom/util"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+
+	"ex-sbom/util"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
@@ -74,8 +78,6 @@ type (
 )
 
 var (
-	SBOMs = map[string]FormattedSBOM{}
-
 	CVSSThreshold = float64(7)
 )
 
@@ -91,17 +93,35 @@ func (bom FormattedSBOM) GetVulnComponents() []string {
 	return vulnComponents
 }
 
-func GetSBOM(name string) (FormattedSBOM, error) {
-	sbom, ok := SBOMs[name]
-	if !ok {
-		return FormattedSBOM{}, fmt.Errorf("SBOM not found")
+// sortFormattedSBOM sorts all slices inside FormattedSBOM so that the result is
+// deterministic regardless of map iteration order during construction.
+// Must be called before HashSBOM and repo.Save.
+func sortFormattedSBOM(sbom *FormattedSBOM) {
+	sort.Strings(sbom.Components)
+
+	for level := range sbom.DependencyLevel {
+		sort.Strings(sbom.DependencyLevel[level])
 	}
 
-	return sbom, nil
+	for name := range sbom.Dependency {
+		sort.Strings(sbom.Dependency[name])
+	}
+
+	for name := range sbom.ReverseDependency {
+		sort.Strings(sbom.ReverseDependency[name])
+	}
 }
 
-func DeleteSBOM(name string) {
-	delete(SBOMs, name)
+// HashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
+// encoding/json sorts map keys deterministically, so the hash is stable for the same content.
+func HashSBOM(sbom FormattedSBOM) string {
+	b, err := json.Marshal(sbom)
+	if err != nil {
+		slog.Error("HashSBOM: unreachable marshal failure", "error", err)
+		return ""
+	}
+
+	return fmt.Sprintf("%x", sha256.Sum256(b))
 }
 
 func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]string) []VlunDepPath {

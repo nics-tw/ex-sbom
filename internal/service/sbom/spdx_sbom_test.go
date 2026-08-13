@@ -7,9 +7,12 @@
 package ssbom
 
 import (
+	"os"
 	"sort"
 	"testing"
+	"time"
 
+	sbomreader "github.com/spdx/tools-golang/json"
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
 	"github.com/stretchr/testify/assert"
@@ -503,6 +506,78 @@ func TestGetSpdxIdentifierToName(t *testing.T) {
 	}
 }
 
+func TestGetSpdxDependencyDepthMap_Cycle(t *testing.T) {
+	// Cyclic relationships (A → B → A) must not cause infinite recursion.
+	// Regression test for stack overflow seen on Keycloak SPDX SBOMs.
+	document := spdx.Document{
+		Relationships: []*spdx.Relationship{
+			{
+				RefA: common.DocElementID{ElementRefID: "SPDXRef-root"},
+				RefB: common.DocElementID{ElementRefID: "SPDXRef-pkgA"},
+			},
+			{
+				RefA: common.DocElementID{ElementRefID: "SPDXRef-pkgA"},
+				RefB: common.DocElementID{ElementRefID: "SPDXRef-pkgB"},
+			},
+			{
+				RefA: common.DocElementID{ElementRefID: "SPDXRef-pkgB"},
+				RefB: common.DocElementID{ElementRefID: "SPDXRef-pkgA"},
+			},
+		},
+	}
+
+	done := make(chan map[int][]string, 1)
+	go func() {
+		done <- getSpdxDependencyDepthMap(document, map[string]string{
+			"SPDXRef-root": "root",
+			"SPDXRef-pkgA": "pkgA",
+			"SPDXRef-pkgB": "pkgB",
+		})
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("getSpdxDependencyDepthMap did not return — cycle likely caused infinite recursion")
+	}
+}
+
+func TestGetSpdxDependencyDepthMap_IDDiffersFromName(t *testing.T) {
+	// Regression test: SPDX relationships reference SPDX IDs, while display uses
+	// package names. When IDs differ from names, the depth map must still cover
+	// every component and keep the correct levels.
+	// Fixture: alpha (SPDXRef-Package-a-3f9c1e) DEPENDS_ON beta (SPDXRef-Package-b-7ab212),
+	// gamma (SPDXRef-Package-c-c0ffee) is isolated; all IDs differ from names.
+	f, err := os.Open("testdata/spdx-id-not-name.spdx.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	doc, err := sbomreader.Read(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	refToName := getSpdxIdentifierToName(*doc)
+	depLevel := getSpdxDependencyDepthMap(*doc, refToName)
+
+	assert.ElementsMatch(t, []string{"alpha", "gamma"}, depLevel[0],
+		"root and isolated components should be at level 0")
+	assert.ElementsMatch(t, []string{"beta"}, depLevel[1],
+		"dependency should be at level 1")
+
+	seen := map[string]bool{}
+	for _, names := range depLevel {
+		for _, n := range names {
+			seen[n] = true
+		}
+	}
+	for _, name := range getSpdxComponents(*doc) {
+		assert.True(t, seen[name], "component %q missing from dependency level map", name)
+	}
+}
+
 func TestGetSpdxComponents(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -520,101 +595,61 @@ func TestGetSpdxComponents(t *testing.T) {
 			name: "document with valid packages",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg2",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg3",
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg2", PackageName: "pkg2"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg3", PackageName: "pkg3"},
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2", "SPDXRef-pkg3"},
+			expected: []string{"pkg1", "pkg2", "pkg3"},
 		},
 		{
 			name: "document with empty identifiers",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg3",
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "", PackageName: "should-be-filtered"}, // Should be filtered out
+					{PackageSPDXIdentifier: "SPDXRef-pkg3", PackageName: "pkg3"},
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
+			expected: []string{"pkg1", "pkg3"},
 		},
 		{
 			name: "document with generated root packages",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "File-something", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg3",
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "DOCUMENT", PackageName: "document-root"},          // Should be filtered out
+					{PackageSPDXIdentifier: "DocumentRoot-something", PackageName: "doc-root"}, // Should be filtered out
+					{PackageSPDXIdentifier: "File-something", PackageName: "file-pkg"},         // Should be filtered out
+					{PackageSPDXIdentifier: "SPDXRef-pkg3", PackageName: "pkg3"},
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg3"},
+			expected: []string{"pkg1", "pkg3"},
 		},
 		{
-			name: "document with duplicate packages",
+			name: "document with duplicate package names",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg2",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg2", PackageName: "pkg2"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1-dup", PackageName: "pkg1"}, // Duplicate name
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
+			expected: []string{"pkg1", "pkg2"},
 		},
 		{
 			name: "document with mixed packages",
 			document: spdx.Document{
 				Packages: []*spdx.Package{
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1",
-					},
-					{
-						PackageSPDXIdentifier: "", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "DOCUMENT", // Should be filtered out
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg2",
-					},
-					{
-						PackageSPDXIdentifier: "SPDXRef-pkg1", // Duplicate
-					},
-					{
-						PackageSPDXIdentifier: "DocumentRoot-something", // Should be filtered out
-					},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1", PackageName: "pkg1"},
+					{PackageSPDXIdentifier: "", PackageName: "should-be-filtered"},    // Should be filtered out
+					{PackageSPDXIdentifier: "DOCUMENT", PackageName: "document-root"}, // Should be filtered out
+					{PackageSPDXIdentifier: "SPDXRef-pkg2", PackageName: "pkg2"},
+					{PackageSPDXIdentifier: "SPDXRef-pkg1-dup", PackageName: "pkg1"},           // Duplicate name
+					{PackageSPDXIdentifier: "DocumentRoot-something", PackageName: "doc-root"}, // Should be filtered out
 				},
 			},
-			expected: []string{"SPDXRef-pkg1", "SPDXRef-pkg2"},
+			expected: []string{"pkg1", "pkg2"},
 		},
 		{
 			name: "document with only filtered packages",

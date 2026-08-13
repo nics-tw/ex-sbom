@@ -4,41 +4,68 @@
 
 package file
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
 
 const (
-	// Currently the file naming pattern that consumed by the scalibre is limited,
-	// here apply the most acceptble name for cyclonedx sbom file.
-	// as for the spdx format sbom, currently we apply the original file name
-	DefaultName = "bom.json"
+	// DefaultCDXName is the fixed filename used when writing a CycloneDX SBOM for OSV scanning.
+	// The name is significant: osv-scanner detects the SBOM format from it.
+	DefaultCDXName = "bom.json"
+	// DefaultSPDXName is the fixed filename used when writing an SPDX SBOM for OSV scanning.
+	DefaultSPDXName = "sbom.spdx.json"
+
+	// tempDirPrefix marks per-request scan directories so Delete can recognise
+	// and remove them as a whole.
+	tempDirPrefix = "ex-sbom-scan-"
 
 	defaultPermissions = 0644
 )
 
 type (
 	FileInput struct {
-		Name  string
 		IsCDX bool
 		Data  []byte
 	}
 )
 
+// CopyAndCreate writes the SBOM into a unique per-call temp directory and
+// returns the file path. The canonical filename is kept (osv-scanner infers
+// the format from it) while the unique directory isolates concurrent requests
+// from overwriting or deleting each other's files.
 func CopyAndCreate(input FileInput) (string, error) {
 	var name string
 	if input.IsCDX {
-		name = DefaultName
+		name = DefaultCDXName
 	} else {
-		name = input.Name
+		name = DefaultSPDXName
 	}
 
-	if err := os.WriteFile(name, input.Data, defaultPermissions); err != nil {
+	dir, err := os.MkdirTemp("", tempDirPrefix+"*")
+	if err != nil {
 		return "", err
 	}
 
-	return name, nil
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, input.Data, defaultPermissions); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", err
+	}
+
+	return path, nil
 }
 
+// Delete removes the path created by CopyAndCreate. When the file lives in a
+// per-request scan directory the whole directory is removed; any other path
+// keeps the original single-file semantics.
 func Delete(name string) error {
+	dir := filepath.Dir(name)
+	if strings.HasPrefix(filepath.Base(dir), tempDirPrefix) {
+		return os.RemoveAll(dir)
+	}
+
 	if err := os.Remove(name); err != nil {
 		return err
 	}
