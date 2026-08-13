@@ -8,12 +8,15 @@ import "strconv"
 
 // ComponentDiff represents a single component difference between two SBOMs.
 type ComponentDiff struct {
-	Name       string `json:"name"`
-	VersionA   string `json:"version_a,omitempty"`
-	VersionB   string `json:"version_b,omitempty"`
-	VulnsA     int    `json:"vulns_a,omitempty"`
-	VulnsB     int    `json:"vulns_b,omitempty"`
-	LevelB     int    `json:"level_b,omitempty"` // set only when level changed between A and B
+	Name     string `json:"name"`
+	VersionA string `json:"version_a,omitempty"`
+	VersionB string `json:"version_b,omitempty"`
+	VulnsA   int    `json:"vulns_a,omitempty"`
+	VulnsB   int    `json:"vulns_b,omitempty"`
+	// LevelA/LevelB are pointers so level 0 still serializes; both are set on
+	// every changed entry so clients can detect topology moves.
+	LevelA     *int   `json:"level_a,omitempty"`
+	LevelB     *int   `json:"level_b,omitempty"`
 	HasVuln    bool   `json:"has_vuln,omitempty"`
 	HasVulnDep bool   `json:"has_vuln_dep,omitempty"`
 	MaxCvssA   string `json:"max_cvss_a,omitempty"`
@@ -109,13 +112,16 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 		}
 
 		cvssB, epssB, levB, severeB := riskFields(compB)
-		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber {
+		levelB := b.ComponentToLevel[name]
+		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber || levelA != levelB {
 			diff := ComponentDiff{
 				Name:       name,
 				VersionA:   compA.Version,
 				VersionB:   compB.Version,
 				VulnsA:     compA.VulnNumber,
 				VulnsB:     compB.VulnNumber,
+				LevelA:     &levelA,
+				LevelB:     &levelB,
 				HasVuln:    compA.VulnNumber > 0 || compB.VulnNumber > 0,
 				HasVulnDep: compA.ContainsVulnDep || compB.ContainsVulnDep,
 				MaxCvssA:   cvssA,
@@ -126,10 +132,6 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 				MaxLevB:    levB,
 				SevereA:    severeA,
 				SevereB:    severeB,
-			}
-
-			if levelB := b.ComponentToLevel[name]; levelB != levelA {
-				diff.LevelB = levelB
 			}
 
 			getOrCreateLevel(&result, levelA).Changed = append(

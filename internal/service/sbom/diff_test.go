@@ -7,6 +7,7 @@
 package ssbom
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -262,4 +263,52 @@ func TestDiffSBOMs_HasVulnFlagOnChanged(t *testing.T) {
 	// Assert
 	diff := result.ByLevel[1].Changed[0]
 	assert.True(t, diff.HasVuln, "HasVuln should be true when either side has vulns")
+}
+
+func TestDiffSBOMs_ChangedDependencyLevelOnly(t *testing.T) {
+	// Arrange: same version and vuln count, only the dependency level moves.
+	comp := Component{Version: "1.0.0", VulnNumber: 2}
+	sbomA := makeSBOM(map[string]Component{"libfoo": comp}, map[string]int{"libfoo": 2})
+	sbomB := makeSBOM(map[string]Component{"libfoo": comp}, map[string]int{"libfoo": 3})
+
+	// Act
+	result := DiffSBOMs(sbomA, sbomB)
+
+	// Assert: reported as changed under level A, with both levels populated.
+	level2, ok := result.ByLevel[2]
+	assert.True(t, ok, "level-only change must be reported")
+	assert.Len(t, level2.Changed, 1)
+
+	changed := level2.Changed[0]
+	assert.Equal(t, "libfoo", changed.Name)
+	assert.Equal(t, changed.VersionA, changed.VersionB, "version did not change")
+	assert.Equal(t, changed.VulnsA, changed.VulnsB, "vuln count did not change")
+	assert.NotNil(t, changed.LevelA)
+	assert.NotNil(t, changed.LevelB)
+	assert.Equal(t, 2, *changed.LevelA)
+	assert.Equal(t, 3, *changed.LevelB)
+}
+
+func TestDiffSBOMs_ChangedLevelToZeroIsPreserved(t *testing.T) {
+	// Arrange: component moves from level 1 to level 0 (root).
+	comp := Component{Version: "1.0.0"}
+	sbomA := makeSBOM(map[string]Component{"libbar": comp}, map[string]int{"libbar": 1})
+	sbomB := makeSBOM(map[string]Component{"libbar": comp}, map[string]int{"libbar": 0})
+
+	// Act
+	result := DiffSBOMs(sbomA, sbomB)
+
+	// Assert: level 0 must survive both in the struct and in JSON output.
+	level1, ok := result.ByLevel[1]
+	assert.True(t, ok)
+	assert.Len(t, level1.Changed, 1)
+
+	changed := level1.Changed[0]
+	assert.NotNil(t, changed.LevelB)
+	assert.Equal(t, 0, *changed.LevelB)
+
+	data, err := json.Marshal(changed)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), `"level_a":1`)
+	assert.Contains(t, string(data), `"level_b":0`, "level 0 must not be dropped by omitempty")
 }
