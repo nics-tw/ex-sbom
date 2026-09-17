@@ -284,8 +284,8 @@
       search(projectID, q) {
         return this._json(`/projects/${projectID}/search?q=${encodeURIComponent(q)}`);
       },
-      diff(projectID, a, b) {
-        return this._json(`/projects/${projectID}/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+      diff(projectID, a, b, signal) {
+        return this._json(`/projects/${projectID}/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, { signal });
       },
     };
 
@@ -1075,6 +1075,18 @@
           return;
         }
 
+        // Abort any in-flight diff and bind this request to its identity
+        if (this._request) this._request.controller.abort();
+        const req = { controller: new AbortController(), projectID: State.projectID, a, b };
+        this._request = req;
+        // Only render if this is still the latest request and the project +
+        // both selectors still match when the response arrives
+        const isCurrent = () =>
+          this._request === req &&
+          State.projectID === req.projectID &&
+          document.getElementById("diff-select-a").value === req.a &&
+          document.getElementById("diff-select-b").value === req.b;
+
         resultEl.innerHTML = `<div class="flex justify-center py-8">
           <svg class="animate-spin h-8 w-8 text-[#009999]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1082,10 +1094,14 @@
           </svg></div>`;
 
         try {
-          const json = await Api.diff(State.projectID, a, b);
+          const json = await Api.diff(req.projectID, a, b, req.controller.signal);
+          if (!isCurrent()) return;
           this._renderResult(json.data, a, b);
         } catch (e) {
+          if (e.name === "AbortError" || !isCurrent()) return;
           resultEl.innerHTML = `<p class="text-red-500">${esc(e.message)}</p>`;
+        } finally {
+          if (this._request === req) this._request = null;
         }
       },
 
