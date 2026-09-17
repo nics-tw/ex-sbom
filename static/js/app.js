@@ -6,6 +6,7 @@
       uploadedFiles: new Set(),
       activeTab: null,
       language: "en",
+      topologyRequest: null,
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -206,6 +207,15 @@
     // Convenience shorthand
     function t(key, ...args) { return i18n.t(key, ...args); }
 
+    // esc HTML-escapes a value before it is interpolated into innerHTML.
+    // Every dynamic value coming from SBOM content, filenames, versions,
+    // vulnerability data or API errors must go through this.
+    function esc(v) {
+      return String(v ?? "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // API — all HTTP calls in one place
     // ═══════════════════════════════════════════════════════════════════════════
@@ -262,8 +272,8 @@
         return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}`, { method: "DELETE" });
       },
 
-      getTopology(projectID, name) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}/topology`);
+      getTopology(projectID, name, signal) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}/topology`, { signal });
       },
       getComponent(projectID, sbom, comp) {
         return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component?component=${encodeURIComponent(comp)}`);
@@ -289,7 +299,7 @@
           const { projects, current } = json.data;
           const sel = document.getElementById("project-select");
           sel.innerHTML = (projects || [])
-            .map(w => `<option value="${w.ID}"${w.Name === current ? " selected" : ""}>${w.Name}</option>`)
+            .map(w => `<option value="${esc(w.ID)}"${w.Name === current ? " selected" : ""}>${esc(w.Name)}</option>`)
             .join("");
           document.getElementById("project-current").textContent = current ? `(${current})` : "";
           if (autoLoad && sel.value) await this.get(sel.value);
@@ -300,6 +310,10 @@
 
       _apply(json) {
         State.projectID = json.data?.project_id ?? null;
+        if (State.topologyRequest) {
+          State.topologyRequest.controller.abort();
+          State.topologyRequest = null;
+        }
         document.getElementById("upload-status").innerHTML = "";
 
         document.getElementById("file-tabs").innerHTML = "";
@@ -401,6 +415,10 @@
             if (next) {
               this.selectTab(next);
             } else {
+              if (State.topologyRequest) {
+                State.topologyRequest.controller.abort();
+                State.topologyRequest = null;
+              }
               document.getElementById("tab-content").innerHTML =
                 `<div id="no-tabs-message" class="text-gray-500 italic">${t("noFilesUploaded")}</div>`;
               State.activeTab = null;
@@ -466,21 +484,36 @@
       },
 
       async fetchTopology(fileName) {
+        // Abort any in-flight topology request from a previous tab/project
+        if (State.topologyRequest) State.topologyRequest.controller.abort();
+        const req = { controller: new AbortController(), projectID: State.projectID, fileName };
+        State.topologyRequest = req;
+        // Only touch the shared tab content if this request still matches the
+        // current project + active tab when the response arrives
+        const isCurrent = () =>
+          State.topologyRequest === req &&
+          State.projectID === req.projectID &&
+          State.activeTab?.dataset.version === req.fileName;
+
         const content = document.getElementById("tab-content");
         const header = content.querySelector("div:first-child");
         try {
-          const json = await Api.getTopology(State.projectID, fileName);
+          const json = await Api.getTopology(req.projectID, fileName, req.controller.signal);
+          if (!isCurrent()) return;
           if (!json.data) throw new Error("No topology data");
           this._renderTopology(json.data, fileName, header);
         } catch (e) {
+          if (e.name === "AbortError" || !isCurrent()) return;
           console.error("Topology error:", e);
           content.innerHTML = "";
           content.appendChild(header);
           const errEl = document.createElement("div");
           errEl.className = "mt-4 p-4 bg-red-50 text-red-600 rounded-md";
           errEl.innerHTML = `<div class="font-medium">${t("failedToLoadTopology")}</div>
-            <div class="text-sm mt-1">${e.message || t("unknownError")}</div>`;
+            <div class="text-sm mt-1">${esc(e.message) || t("unknownError")}</div>`;
           content.appendChild(errEl);
+        } finally {
+          if (State.topologyRequest === req) State.topologyRequest = null;
         }
       },
 
@@ -579,7 +612,7 @@
                   ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-yellow-500 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>`
                   : `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 01-1 1h-2a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" /></svg>`;
 
-              item.innerHTML = `${icon}<span class="truncate">${comp}</span>`;
+              item.innerHTML = `${icon}<span class="truncate">${esc(comp)}</span>`;
               item.addEventListener("click", e => { e.stopPropagation(); ComponentModal.show(fileName, comp); });
               grid.appendChild(item);
             });
@@ -640,7 +673,7 @@
           msg.className = "mt-2 text-green-600 flex items-center";
           msg.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-          </svg>${t("deletedSuccessfully", fileName)}`;
+          </svg>${t("deletedSuccessfully", esc(fileName))}`;
           status.innerHTML = "";
           status.appendChild(msg);
           setTimeout(() => msg.remove(), 3000);
@@ -748,7 +781,7 @@
           document.getElementById("component-modal-content").innerHTML = `
             <div class="bg-red-50 text-red-800 p-4 rounded-md">
               <p class="font-medium">Error loading component details</p>
-              <p class="mt-2">${e.message || "Unknown error"}</p>
+              <p class="mt-2">${esc(e.message) || "Unknown error"}</p>
             </div>`;
         }
       },
@@ -793,28 +826,28 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
               <div>
                 <h3 class="text-sm font-medium text-gray-500">${t("componentName")}</h3>
-                <p class="mt-2 text-lg">${name || "—"}</p>
+                <p class="mt-2 text-lg">${esc(name) || "—"}</p>
               </div>
               <div>
                 <h3 class="text-sm font-medium text-gray-500">${t("componentLicense")}</h3>
-                <p class="mt-2 text-lg">${licences || "—"}</p>
+                <p class="mt-2 text-lg">${esc(licences) || "—"}</p>
               </div>
             </div>
             <div>
               <h3 class="text-sm font-medium text-gray-500">${t("componentVersion")}</h3>
               <div class="mt-2 flex items-center flex-wrap">
-                <span class="text-lg">${version || "—"}</span>
+                <span class="text-lg">${esc(version) || "—"}</span>
                 ${suggested_fix_version ? `
                   <div class="ml-3 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#009999] mr-1" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd" />
                     </svg>
-                    <span class="text-[#009999] font-medium">${t("suggestUpgradeTo", suggested_fix_version)}</span>
+                    <span class="text-[#009999] font-medium">${t("suggestUpgradeTo", esc(suggested_fix_version))}</span>
                   </div>` : ""}
               </div>
               ${is_breaking_change && suggested_fix_version ? `
                 <div class="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm flex items-start">
-                  ${warnIcon("yellow")}<span class="text-yellow-700">${t("breakingChangeWarning", suggested_fix_version)}</span>
+                  ${warnIcon("yellow")}<span class="text-yellow-700">${t("breakingChangeWarning", esc(suggested_fix_version))}</span>
                 </div>` : ""}
               ${has_severe_vuln ? `
                 <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm flex items-start">
@@ -834,7 +867,7 @@
                 ${path.path.map((p, j) => {
                   const arrow = j > 0 ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 mx-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>` : "";
                   const vuln = p === path.end;
-                  return `${arrow}<span class="px-2 py-1 text-sm rounded ${vuln ? "bg-red-100 text-red-800 font-medium" : "bg-gray-100 text-gray-800"}">${p}</span>`;
+                  return `${arrow}<span class="px-2 py-1 text-sm rounded ${vuln ? "bg-red-100 text-red-800 font-medium" : "bg-gray-100 text-gray-800"}">${esc(p)}</span>`;
                 }).join("")}
               </div>
             </div>`;
@@ -859,12 +892,12 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                     </svg>
-                    <span class="font-medium">${vuln.id || "Unknown"}</span>
+                    <span class="font-medium">${esc(vuln.id) || "Unknown"}</span>
                   </div>
                   <div class="flex items-center">
-                    ${vuln.cvss_score ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${vuln.cvss_score}</span>` : ""}
-                    ${vuln.epss       ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${vuln.epss}</span>` : ""}
-                    ${vuln.lev        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${vuln.lev}</span>` : ""}
+                    ${vuln.cvss_score ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${esc(vuln.cvss_score)}</span>` : ""}
+                    ${vuln.epss       ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${esc(vuln.epss)}</span>` : ""}
+                    ${vuln.lev        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${esc(vuln.lev)}</span>` : ""}
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${sevClass}">${severity}</span>
                     <svg id="vuln-chevron-${i}" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 transform transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -872,10 +905,10 @@
                   </div>
                 </div>
                 <div id="vuln-body-${i}" class="px-4 py-3 border-t border-gray-200 hidden">
-                  ${vuln.summary           ? `<div class="mb-4"><h4 class="text-sm font-medium text-gray-500 mb-1">${t("summary")}</h4><p>${vuln.summary}</p></div>` : ""}
+                  ${vuln.summary           ? `<div class="mb-4"><h4 class="text-sm font-medium text-gray-500 mb-1">${t("summary")}</h4><p>${esc(vuln.summary)}</p></div>` : ""}
                   ${vuln.details           ? `<div class="mb-4"><h4 class="text-sm font-medium text-gray-500 mb-1">${t("details")}</h4><div class="prose prose-sm max-w-none">${_renderMarkdown(vuln.details)}</div></div>` : ""}
-                  ${vuln.suggest_fix_version  ? `<div class="mt-2"><h4 class="text-sm font-medium text-gray-500 mb-1">${t("fixVersion")}</h4><p class="text-green-600 font-medium">${vuln.suggest_fix_version}</p></div>` : ""}
-                  ${vuln.other_fix_versions   ? `<div class="mt-2"><h4 class="text-sm font-medium text-gray-500 mb-1">${t("otherFixVersions")}</h4><p class="text-gray-800">${vuln.other_fix_versions}</p></div>` : ""}
+                  ${vuln.suggest_fix_version  ? `<div class="mt-2"><h4 class="text-sm font-medium text-gray-500 mb-1">${t("fixVersion")}</h4><p class="text-green-600 font-medium">${esc(vuln.suggest_fix_version)}</p></div>` : ""}
+                  ${vuln.other_fix_versions   ? `<div class="mt-2"><h4 class="text-sm font-medium text-gray-500 mb-1">${t("otherFixVersions")}</h4><p class="text-gray-800">${esc(vuln.other_fix_versions)}</p></div>` : ""}
                 </div>
               </div>`;
           });
@@ -917,27 +950,27 @@
           const typeBadge = r.match_type === "component"
             ? `<span class="inline-block text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">component</span>`
             : `<span class="inline-block text-xs bg-red-100 text-red-700 rounded px-1.5 py-0.5">CVE</span>`;
-          const levelLabel = r.level === 0 ? "直接使用之元件" : `第${r.level}級`;
+          const levelLabel = r.level === 0 ? "直接使用之元件" : `第${esc(r.level)}級`;
           const levelBadge = `<span class="inline-block text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 ml-1">${levelLabel}</span>`;
           const icons = (r.has_vuln     ? _warnSVG("red",    "alert")   : "")
                       + (r.has_vuln_dep ? _warnSVG("yellow", "warning") : "");
           const vulnInfo = r.match_type === "vuln"
-            ? `<div class="text-xs text-red-600 mt-0.5">${r.vuln_id}${r.cvss_score ? " · CVSS " + r.cvss_score : ""}</div>
-               <div class="text-xs text-gray-400 truncate">${r.vuln_summary || ""}</div>`
-            : `<div class="text-xs text-gray-400">${r.vuln_count} vuln${r.vuln_count !== 1 ? "s" : ""}</div>`;
+            ? `<div class="text-xs text-red-600 mt-0.5">${esc(r.vuln_id)}${r.cvss_score ? " · CVSS " + esc(r.cvss_score) : ""}</div>
+               <div class="text-xs text-gray-400 truncate">${esc(r.vuln_summary) || ""}</div>`
+            : `<div class="text-xs text-gray-400">${esc(r.vuln_count)} vuln${r.vuln_count !== 1 ? "s" : ""}</div>`;
           // Use data attributes for event delegation (no inline onclick)
-          const safeSbom = r.sbom.replace(/"/g, "&quot;");
-          const safeComp = r.component.replace(/"/g, "&quot;");
+          const safeSbom = esc(r.sbom);
+          const safeComp = esc(r.component);
           return `
             <div class="flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer"
                  data-action="show-component" data-sbom="${safeSbom}" data-component="${safeComp}">
               <div class="mt-0.5 flex gap-1">${typeBadge}${levelBadge}</div>
               <div class="flex-1 min-w-0">
                 <div class="text-sm font-medium text-gray-800">
-                  ${r.component}${icons}
-                  <span class="text-xs text-gray-400 font-normal ml-1">${r.version || ""}</span>
+                  ${safeComp}${icons}
+                  <span class="text-xs text-gray-400 font-normal ml-1">${esc(r.version) || ""}</span>
                 </div>
-                <div class="text-xs text-gray-500">${r.sbom}</div>
+                <div class="text-xs text-gray-500">${safeSbom}</div>
                 ${vulnInfo}
               </div>
             </div>`;
@@ -1020,7 +1053,7 @@
         const names = Array.from(State.uploadedFiles);
         ["diff-select-a", "diff-select-b"].forEach((id, i) => {
           const sel = document.getElementById(id);
-          sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+          sel.innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
           if (names[i]) sel.value = names[i];
         });
       },
@@ -1052,21 +1085,19 @@
           const json = await Api.diff(State.projectID, a, b);
           this._renderResult(json.data, a, b);
         } catch (e) {
-          resultEl.innerHTML = `<p class="text-red-500">${e.message}</p>`;
+          resultEl.innerHTML = `<p class="text-red-500">${esc(e.message)}</p>`;
         }
       },
 
       _versionCell(ver, sbomName, compName) {
         if (!ver || !sbomName) return "";
-        const safeSbom = sbomName.replace(/"/g, "&quot;");
-        const safeComp = compName.replace(/"/g, "&quot;");
         return `<span class="cursor-pointer hover:underline text-[#009999] font-mono text-xs"
-                      data-action="show-component" data-sbom="${safeSbom}" data-component="${safeComp}">${ver}</span>`;
+                      data-action="show-component" data-sbom="${esc(sbomName)}" data-component="${esc(compName)}">${esc(ver)}</span>`;
       },
 
       _diffRow(r, type, sbomA, sbomB) {
         const icons = `${r.has_vuln ? _warnSVG("red", "alert") : ""}${r.has_vuln_dep ? _warnSVG("yellow", "warning") : ""}`;
-        const name = `<span class="font-mono text-xs">${r.name}</span>`;
+        const name = `<span class="font-mono text-xs">${esc(r.name)}</span>`;
 
         if (type === "added") {
           return `<tr>
@@ -1168,7 +1199,7 @@
           const versions = (json.data ?? []).map(v => v.version);
           ["diff-select-a", "diff-select-b"].forEach((id, i) => {
             const sel = document.getElementById(id);
-            sel.innerHTML = versions.map(n => `<option value="${n}">${n}</option>`).join("");
+            sel.innerHTML = versions.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
             if (versions[i]) sel.value = versions[i];
           });
         } catch (e) {
@@ -1244,8 +1275,8 @@
                 <table class="w-full text-sm border-collapse">
                   <thead>
                     <tr class="bg-gray-50 border-b border-gray-200">
-                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2 border-r border-gray-200">${sbomA}</th>
-                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2">${sbomB}</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2 border-r border-gray-200">${esc(sbomA)}</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2">${esc(sbomB)}</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-100">${rows}</tbody>
@@ -1300,7 +1331,7 @@
           this._page = 0;
           this._render(container);
         } catch (e) {
-          container.innerHTML = `<p class="text-red-500 text-sm">載入失敗：${e.message}</p>`;
+          container.innerHTML = `<p class="text-red-500 text-sm">載入失敗：${esc(e.message)}</p>`;
         }
       },
 
@@ -1320,12 +1351,12 @@
           const pad = n => String(n).padStart(2, "0");
           const date = `${_d.getFullYear()}/${pad(_d.getMonth()+1)}/${pad(_d.getDate())} ${pad(_d.getHours())}:${pad(_d.getMinutes())}:${pad(_d.getSeconds())}`;
           return `<tr class="hover:bg-gray-50">
-            <td class="px-4 py-3 text-sm font-medium text-gray-800">${v.version}</td>
+            <td class="px-4 py-3 text-sm font-medium text-gray-800">${esc(v.version)}</td>
             <td class="px-4 py-3 text-sm text-gray-500">${date}</td>
             <td class="px-4 py-3 text-sm">
-              <button class="text-[#009999] hover:underline text-xs mr-3 version-load-btn" data-version="${v.version}">載入分析</button>
-              <button class="text-gray-500 hover:underline text-xs mr-3 version-rename-btn" data-version="${v.version}">重新命名</button>
-              <button class="text-red-400 hover:underline text-xs version-delete-btn" data-version="${v.version}">刪除</button>
+              <button class="text-[#009999] hover:underline text-xs mr-3 version-load-btn" data-version="${esc(v.version)}">載入分析</button>
+              <button class="text-gray-500 hover:underline text-xs mr-3 version-rename-btn" data-version="${esc(v.version)}">重新命名</button>
+              <button class="text-red-400 hover:underline text-xs version-delete-btn" data-version="${esc(v.version)}">刪除</button>
             </td>
           </tr>`;
         }).join("");
@@ -1508,7 +1539,7 @@
 
           const displayName = data.filename || file?.name || "";
           document.getElementById("sbom-preview-title").innerHTML =
-            `預覽結果 <span class="text-gray-400 font-normal text-base">— ${displayName}</span>`;
+            `預覽結果 <span class="text-gray-400 font-normal text-base">— ${esc(displayName)}</span>`;
           document.getElementById("sbom-version-input").value = "";
 
           const commitBtn = document.getElementById("sbom-modal-commit-btn");
@@ -1652,7 +1683,7 @@
             : hasVulnDep
               ? "px-3 py-2 border border-yellow-200 bg-yellow-50 rounded flex items-center cursor-pointer"
               : "px-3 py-2 border border-gray-200 bg-white rounded flex items-center cursor-pointer";
-          item.innerHTML = `${hasVuln ? WARN_SVG("red") : hasVulnDep ? WARN_SVG("yellow") : FILE_SVG}<span class="truncate">${comp}</span>`;
+          item.innerHTML = `${hasVuln ? WARN_SVG("red") : hasVulnDep ? WARN_SVG("yellow") : FILE_SVG}<span class="truncate">${esc(comp)}</span>`;
           item.addEventListener("click", e => {
             e.stopPropagation();
             ComponentModal.showFromLocal(comp, compInfo[comp] || {}, bomResult);
@@ -1720,7 +1751,9 @@
 
     function _renderMarkdown(md) {
       if (!md) return "";
-      return md
+      // escape first: vulnerability details are external input, only the
+      // markup generated below is allowed to remain as HTML
+      return esc(md)
         .replace(/^### (.*$)/gm, '<h3 class="text-lg font-medium mt-3 mb-2">$1</h3>')
         .replace(/^## (.*$)/gm,  '<h2 class="text-xl font-medium mt-4 mb-2">$1</h2>')
         .replace(/^# (.*$)/gm,   '<h1 class="text-2xl font-bold mt-4 mb-3">$1</h1>')
@@ -1728,7 +1761,10 @@
         .replace(/\*(.*?)\*/g,     "<em>$1</em>")
         .replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-100 p-2 rounded my-2 overflow-x-auto text-sm"><code>$1</code></pre>')
         .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 rounded text-sm">$1</code>')
-        .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-blue-600 hover:underline">$1</a>')
+        .replace(/\[(.*?)\]\((.*?)\)/g, (m, text, href) =>
+          /^https?:\/\//i.test(href)
+            ? `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${text}</a>`
+            : text)
         .replace(/^\s*-\s(.*$)/gm, '<li class="ml-4">$1</li>')
         .replace(/^\s*(\n)?([^\n]+)/gm, m => /^<(\/)?(h1|h2|h3|pre|li)/i.test(m) ? m : `<p class="my-2">${m}</p>`)
         .replace(/<p><\/p>/g, "");
