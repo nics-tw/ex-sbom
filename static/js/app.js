@@ -332,14 +332,29 @@
         document.getElementById("project-current").textContent = opt ? `(${opt.text})` : "";
       },
 
+      // Monotonic token: only the latest project selection may apply its response
+      _selectionGen: 0,
+
       async get(id) {
-        try { this._apply(await Api.getProject(id)); }
-        catch (e) { console.error("Failed to get project:", e); }
+        const gen = ++this._selectionGen;
+        try {
+          const json = await Api.getProject(id);
+          // Stale response guard: a newer selection/create/delete happened,
+          // or the selector no longer points at this project
+          if (gen !== this._selectionGen) return;
+          const sel = document.getElementById("project-select");
+          if (sel && sel.value !== String(id)) return;
+          this._apply(json);
+        } catch (e) {
+          if (gen !== this._selectionGen) return;
+          console.error("Failed to get project:", e);
+        }
       },
 
       async create(name) {
         try {
           const json = await Api.createProject(name);
+          this._selectionGen++;
           this._apply(json);
           await this.load(false);
           document.getElementById("project-select").value = json.data.project_id;
@@ -363,6 +378,7 @@
       async delete(id) {
         try {
           await Api.deleteProject(id);
+          this._selectionGen++;
           State.projectID = null;
           await this.load(true);
         } catch (e) {
