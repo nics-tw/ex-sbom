@@ -281,8 +281,8 @@
       getVulnDep(projectID, sbom, comp, signal) {
         return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component/vuln-dep?component=${encodeURIComponent(comp)}`, { signal });
       },
-      search(projectID, q) {
-        return this._json(`/projects/${projectID}/search?q=${encodeURIComponent(q)}`);
+      search(projectID, q, signal) {
+        return this._json(`/projects/${projectID}/search?q=${encodeURIComponent(q)}`, { signal });
       },
       diff(projectID, a, b, signal) {
         return this._json(`/projects/${projectID}/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, { signal });
@@ -321,6 +321,8 @@
           `<div id="no-tabs-message" class="text-gray-500 italic" data-i18n="noFilesUploaded">${t("noFilesUploaded")}</div>`;
         State.uploadedFiles.clear();
         State.activeTab = null;
+        // Stale search input/results from the previous project: abort + reset
+        Search.clear();
 
         // Default to SBOM 分析 tab on project load
         MainTab.show("analysis");
@@ -950,13 +952,34 @@
     // SEARCH — debounced search with event delegation for result clicks
     // ═══════════════════════════════════════════════════════════════════════════
     const Search = {
+      _abort() {
+        if (this._request) {
+          this._request.controller.abort();
+          this._request = null;
+        }
+      },
+
       async run(q) {
         if (!State.projectID) return;
+        // Abort any in-flight search and bind this one to its identity
+        this._abort();
+        const req = { controller: new AbortController(), projectID: State.projectID, q };
+        this._request = req;
+        // Only render if this is still the latest request and the project +
+        // query are unchanged when the response arrives
+        const isCurrent = () =>
+          this._request === req &&
+          State.projectID === req.projectID &&
+          document.getElementById("search-input").value.trim() === req.q;
         try {
-          const json = await Api.search(State.projectID, q);
+          const json = await Api.search(req.projectID, q, req.controller.signal);
+          if (!isCurrent()) return;
           this._renderResults(json.data);
         } catch (e) {
+          if (e.name === "AbortError" || !isCurrent()) return;
           console.error("Search error:", e);
+        } finally {
+          if (this._request === req) this._request = null;
         }
       },
 
@@ -1007,6 +1030,7 @@
       },
 
       clear() {
+        this._abort();
         document.getElementById("search-input").value = "";
         const container = document.getElementById("search-results");
         container.classList.add("hidden");
