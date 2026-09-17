@@ -275,11 +275,11 @@
       getTopology(projectID, name, signal) {
         return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}/topology`, { signal });
       },
-      getComponent(projectID, sbom, comp) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component?component=${encodeURIComponent(comp)}`);
+      getComponent(projectID, sbom, comp, signal) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component?component=${encodeURIComponent(comp)}`, { signal });
       },
-      getVulnDep(projectID, sbom, comp) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component/vuln-dep?component=${encodeURIComponent(comp)}`);
+      getVulnDep(projectID, sbom, comp, signal) {
+        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component/vuln-dep?component=${encodeURIComponent(comp)}`, { signal });
       },
       search(projectID, q) {
         return this._json(`/projects/${projectID}/search?q=${encodeURIComponent(q)}`);
@@ -740,9 +740,10 @@
           </div>`;
         document.body.appendChild(modal);
 
-        document.getElementById("component-modal-close").addEventListener("click", () =>
-          document.getElementById("component-modal").classList.add("hidden")
-        );
+        document.getElementById("component-modal-close").addEventListener("click", () => {
+          this._abort();
+          document.getElementById("component-modal").classList.add("hidden");
+        });
 
         // Event delegation for vuln accordion toggles
         document.getElementById("component-modal-content").addEventListener("click", e => {
@@ -757,8 +758,26 @@
         });
       },
 
+      _abort() {
+        if (this._request) {
+          this._request.controller.abort();
+          this._request = null;
+        }
+      },
+
       async show(sbomName, component) {
         this._ensureModal();
+        // Abort any in-flight detail request and bind this one to its identity
+        this._abort();
+        const req = { controller: new AbortController(), projectID: State.projectID, sbomName, component };
+        this._request = req;
+        // Only render if this is still the latest request, identity matches,
+        // and the modal is still open when the responses arrive
+        const isCurrent = () =>
+          this._request === req &&
+          State.projectID === req.projectID &&
+          !document.getElementById("component-modal").classList.contains("hidden");
+
         document.getElementById("component-modal-title").textContent = component;
         document.getElementById("component-modal").classList.remove("hidden");
         document.getElementById("component-modal-content").innerHTML = `
@@ -772,22 +791,28 @@
 
         try {
           const [compRes, vulnDepRes] = await Promise.all([
-            Api.getComponent(State.projectID, sbomName, component).catch(() => null),
-            Api.getVulnDep(State.projectID, sbomName, component).catch(() => null),
+            Api.getComponent(req.projectID, sbomName, component, req.controller.signal).catch(() => null),
+            Api.getVulnDep(req.projectID, sbomName, component, req.controller.signal).catch(() => null),
           ]);
+          if (!isCurrent()) return;
           if (!compRes?.data) throw new Error("No component data");
           this._renderDetails(compRes.data, vulnDepRes?.data || []);
         } catch (e) {
+          if (!isCurrent()) return;
           document.getElementById("component-modal-content").innerHTML = `
             <div class="bg-red-50 text-red-800 p-4 rounded-md">
               <p class="font-medium">Error loading component details</p>
               <p class="mt-2">${esc(e.message) || "Unknown error"}</p>
             </div>`;
+        } finally {
+          if (this._request === req) this._request = null;
         }
       },
 
       showFromLocal(compKey, compInfo, bomResult) {
         this._ensureModal();
+        // Local render must not be overwritten by a late in-flight response
+        this._abort();
         document.getElementById("component-modal-title").textContent = compInfo.name || compKey;
         document.getElementById("component-modal").classList.remove("hidden");
 
