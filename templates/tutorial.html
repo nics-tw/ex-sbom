@@ -131,12 +131,16 @@
           <li class="text-gray-700" data-i18n="Step3"></li>
           <li class="text-gray-700" data-i18n="Step4"></li>
           <li class="text-gray-700" data-i18n="Step5"></li>
+          <li class="text-gray-700" data-i18n="Step6"></li>
+          <li class="text-gray-700" data-i18n="Step7"></li>
+          <li class="text-gray-700" data-i18n="Step8"></li>
         </ol>
         <div class="mt-4 p-4 bg-gray-100 rounded">
           <p class="text-gray-700" data-i18n="Step5Additional1"></p>
           <p class="text-gray-700" data-i18n="Step5Additional2"></p>
           <p class="text-gray-700" data-i18n="Step5Additional3"></p>
         </div>
+      </div>
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <h2 class="text-xl font-semibold mb-4">CVSS</h2>
         <p class="text-gray-700 preserve-whitespace" data-i18n="CVSSExplain"></p>
@@ -162,16 +166,19 @@
           // tutorial contents
           whyMakeThisTool: "Why we made this tool?",
           reasonParagraph:
-            "SBOMs (Software Bill of Materials) are essential for understanding the components and dependencies of software systems." +
-            "They help in identifying vulnerabilities, ensuring compliance, and managing software supply chain risks with a more precise and detailed view." +
-            " However, this complexed data can be difficult to interpret for many new users."+
-            " Therefore, we designed this tool to provide a visual way to explore and understand the information contained within SBOMs.",
+            "SBOMs (Software Bill of Materials) are essential for understanding the components and dependencies of software systems. " +
+            "They help identify vulnerabilities, support compliance work, and manage software supply chain risk with a more precise view of what is actually included in a product. " +
+            "However, SBOM data can be difficult to interpret, especially when multiple scan results must be compared over time. " +
+            "ex-sbom provides a visual, project-based workflow for importing SBOMs, saving each scan as a version, exploring dependency and vulnerability impact paths, searching across versions, comparing changes, and exporting reports.",
           StepsTitle: "Steps to use this tool",
-          Step1: "On the main page, click the 'Select SBOM' button.",
-          Step2: "Choose the SBOM file you want to upload. Currently, we only support SBOMs in JSON format.",
-          Step3: "Wait for the system to collect and organize the relevant data of the components in the SBOM.",
-          Step4: "Once the system has finished organizing, you will see a list of all components.",
-          Step5: "Click on any component in the list to view its detailed information, including its dependencies, vulnerability information, etc.",
+          Step1: "Create or select a project. Type a name in the 'New project name' field and click 'Switch' to create a new one, or pick an existing project from the dropdown. A project groups related SBOM versions for the same product or system.",
+          Step2: "In the 'SBOM Analysis' tab, click the 'Add Version' button to open the upload dialog.",
+          Step3: "Choose the SBOM file you want to upload (CycloneDX or SPDX, JSON format only) and click 'Preview'. The tool parses the file and scans its components for known vulnerabilities.",
+          Step4: "Give the parsed result a version name and click 'Create Version' to save it. If a file with the same content already exists, you will be notified. All saved versions appear under 'Version History'.",
+          Step5: "Open a saved version and click any component in the dependency graph or list to view detailed information, including dependencies, vulnerability information, licenses, and suggested fix versions.",
+          Step6: "Use the search bar to find a component or CVE across all versions of the project, and quickly locate which versions are affected.",
+          Step7: "Switch to the 'Diff' tab to compare two versions of the project and see which components were added, removed, or changed, along with a vulnerability summary.",
+          Step8: "For any version, you can export a PDF report of its vulnerability findings for sharing or record keeping.",
           Step5Additional1: "Additionally, if a component is displayed in the default gray-white color, it means that the component has no vulnerabilities and does not use any components with known vulnerabilities.",
           Step5Additional2: "If a component is displayed in red, it means that the component itself has vulnerabilities.",
           Step5Additional3: "If a component is displayed in yellow, it means that the component itself does not have vulnerabilities, but it uses another component that has vulnerabilities.",
@@ -198,16 +205,19 @@
           // tutorial contents
           whyMakeThisTool: "為什麼我們要做這個工具？",
           reasonParagraph:
-            "SBOM（軟體物料清單）對於理解軟體系統的元件，以及其之間的依賴關係相當重要。" +
-            "它們以一個更加詳細、且精確的方式協助開發人員識別漏洞、確保合規性以及管理軟體供應鏈風險。" +
-            "然而，這些複雜的數據對許多新用戶來說可能難以解釋。"+
-            "因此，我們設計了這個工具，旨在提供一個視覺化的方式來探索和理解 SBOM 內的資訊。",
+            "SBOM（軟體物料清單）對於理解軟體系統中的元件與相依關係相當重要。" +
+            "它能以更精確的方式協助開發與資安人員識別漏洞、支援合規作業，並管理軟體供應鏈風險。" +
+            "然而，SBOM 資料往往不容易閱讀，尤其當需要比較多次掃描結果、追蹤元件與弱點變化時更是如此。"+
+            "因此，ex-sbom 提供以專案為核心的視覺化流程，協助使用者匯入 SBOM、將每次掃描儲存為版本、探索相依性與弱點影響路徑、跨版本搜尋與比對，並匯出報告。",
           StepsTitle: "使用此工具的步驟",
-          Step1: "在主頁上，點擊「選擇 SBOM」按鈕。",
-          Step2: "選擇您想要上傳的 SBOM 檔案，現階段我們僅支援 json 格式的 SBOM。",
-          Step3: "等候系統搜集並整理 SBOM 內元件的相關資料",
-          Step4: "當系統完成整理後，您將會看到一個包含所有元件的列表。",
-          Step5: "點擊列表中的任一元件，您將會看到該元件的詳細資訊，包括其依賴關係、漏洞資訊等。",
+          Step1: "建立或選擇一個專案。在「New project name」欄位輸入名稱並點擊「Switch」即可建立新專案，或從下拉選單中選擇既有專案。專案可用來彙整同一產品或系統的多個 SBOM 版本。",
+          Step2: "在「SBOM 分析」分頁中，點擊「新增版本」按鈕以開啟上傳視窗。",
+          Step3: "選擇您想要上傳的 SBOM 檔案（支援 CycloneDX 與 SPDX，僅限 JSON 格式），並點擊「預覽」。工具會解析檔案並掃描其中元件是否存在已知漏洞。",
+          Step4: "為解析後的結果命名一個版本名稱，並點擊「建立版本」以儲存。若上傳的檔案內容與既有版本相同，系統會提示您。所有已儲存的版本都會顯示在「版本歷史」中。",
+          Step5: "開啟已儲存的版本後，點擊相依性圖或列表中的任一元件，即可查看該元件的詳細資訊，包括其依賴關係、漏洞資訊、授權（License）以及建議修復版本等。",
+          Step6: "使用搜尋列即可在專案的所有版本中搜尋特定元件或 CVE，並快速定位其出現於哪些版本。",
+          Step7: "切換到「Diff 比對」分頁，即可比較專案中的兩個版本，查看新增、移除或變更的元件，以及漏洞的彙總資訊。",
+          Step8: "針對任一版本，您都可以匯出其漏洞發現的 PDF 報告，方便分享或留存記錄。",
           Step5Additional1: "另外值得注意的是，當元件為預設灰白配色時，代表其元件不存在漏洞，也沒有使用到任何已知存在漏洞的元件。",
           Step5Additional2: "若元件為紅色，則代表其元件本身存在漏洞",
           Step5Additional3: "若元件為黃色，則代表其元件本身並沒有漏洞，但是有使用到的某個元件存在漏洞",

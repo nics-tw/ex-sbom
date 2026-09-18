@@ -1,0 +1,520 @@
+{
+  "info": {
+    "name": "ex-sbom",
+    "description": "# Overview\n\nThis file is the API documentation of the [ex-sbom](https://github.com/nics-tw/ex-sbom) tool.\n\nAll responses are JSON with the shape `{ \"data\": ... }` on success, `{ \"msg\": \"ok\", ... }` for simple acknowledgements, or `{ \"error\": \"...\" }` on failure (the PDF report endpoint returns a binary `application/pdf` body instead).\n\n## Typical workflow\n\n1. **Create project** to obtain a `projectId`.\n2. **Preview SBOM** by uploading a CycloneDX or SPDX (JSON) file — this parses and scans it without saving.\n3. **Create SBOM** using the values returned by Preview to persist it as a named version.\n4. Explore with the **Topology**, **Analysis** (diff / search) and **PDF report** endpoints.\n\n## Collection variables\n\n- `baseUrl` — the server base URL (default `http://localhost:8080`).\n- `projectId` — the numeric project id returned by *Create project*.\n- `sbomName` — the SBOM version name.\n\n> Note: uploading / previewing an SBOM requires internet access, because osv-scanner queries the OSV API for vulnerability data.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Projects",
+      "description": "Manage projects. A project is a named container that groups related SBOM versions.",
+      "item": [
+        {
+          "name": "List projects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects"
+              ]
+            },
+            "description": "Return all projects. Response: `{ \"data\": { \"projects\": [...] } }`"
+          },
+          "response": []
+        },
+        {
+          "name": "Create project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects"
+              ]
+            },
+            "description": "Create a new empty project. Body: `{ \"name\": \"<project name>\" }`. Returns the created project with its id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"my-project\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get project",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}"
+              ]
+            },
+            "description": "Load a project and the list of its currently loaded SBOM versions."
+          },
+          "response": []
+        },
+        {
+          "name": "Rename project",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}"
+              ]
+            },
+            "description": "Rename an existing project. Body: `{ \"name\": \"<new name>\" }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"renamed-project\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete project",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}"
+              ]
+            },
+            "description": "Delete a project and all of its SBOM records."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "SBOMs",
+      "description": "Upload, preview, list, rename and delete SBOM versions within a project.",
+      "item": [
+        {
+          "name": "List loaded versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms"
+              ]
+            },
+            "description": "Return the versions of all SBOMs currently loaded in memory for the project."
+          },
+          "response": []
+        },
+        {
+          "name": "List stored versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/versions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "versions"
+              ]
+            },
+            "description": "Return all stored SBOM versions for the project, newest first."
+          },
+          "response": []
+        },
+        {
+          "name": "Preview SBOM",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "preview"
+              ]
+            },
+            "description": "Parse an uploaded SBOM file (CycloneDX or SPDX, JSON) and return the parsed result WITHOUT saving it. Use `multipart/form-data` with a `file` field. The response includes `bom_result`, `sha256`, `bom_timestamp`, `filename`, `existing_version` (non-empty if a version with the same SHA-256 already exists) and a `summary`. Feed these values into `Create SBOM` to persist the result.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "The SBOM file (CycloneDX or SPDX, JSON only)"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create SBOM",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms"
+              ]
+            },
+            "description": "Persist a previously previewed SBOM under a version name. Body fields: `version`, `bom_result` (the object from Preview), `sha256`, `bom_timestamp`. Returns 409 if the same version name or the same SHA-256 already exists.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": \"v1.0.0\",\n  \"bom_result\": {\n    \"__note__\": \"paste the bom_result object returned by the Preview SBOM endpoint here\"\n  },\n  \"sha256\": \"<sha256 from preview>\",\n  \"bom_timestamp\": \"2026-01-01T00:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Rename SBOM version",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/{{sbomName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "{{sbomName}}"
+              ]
+            },
+            "description": "Rename an existing SBOM version. Path `:name` is the current version; body `{ \"version\": \"<new name>\" }`. Returns 409 if the new name exists.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": \"v1.0.1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete SBOM version",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/{{sbomName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "{{sbomName}}"
+              ]
+            },
+            "description": "Delete an SBOM version from the project and reload the project."
+          },
+          "response": []
+        },
+        {
+          "name": "Download PDF report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/{{sbomName}}/report",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "{{sbomName}}",
+                "report"
+              ]
+            },
+            "description": "Generate and download a PDF report of the vulnerability findings for the given SBOM version."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Analysis",
+      "description": "Cross-version diff and full-text search within a project.",
+      "item": [
+        {
+          "name": "Diff two SBOMs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/diff?a=v1.0.0&b=v1.0.1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "diff"
+              ],
+              "query": [
+                {
+                  "key": "a",
+                  "value": "v1.0.0",
+                  "description": "required, the first SBOM version name"
+                },
+                {
+                  "key": "b",
+                  "value": "v1.0.1",
+                  "description": "required, the second SBOM version name"
+                }
+              ]
+            },
+            "description": "Compare two SBOM versions in the project and return added / removed / changed components with vulnerability summary metrics."
+          },
+          "response": []
+        },
+        {
+          "name": "Search",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/search?q=CVE-2021-44228",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "CVE-2021-44228",
+                  "description": "required, the search query: component name, CVE ID or vulnerability summary"
+                }
+              ]
+            },
+            "description": "Search across all SBOM versions in the project by component name, CVE ID or vulnerability summary."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Topology",
+      "description": "Inspect the dependency graph and component-level details for a specific SBOM version.",
+      "item": [
+        {
+          "name": "List components by level",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/{{sbomName}}/topology",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "{{sbomName}}",
+                "topology"
+              ]
+            },
+            "description": "Return components grouped by dependency depth, including which components have vulnerabilities or vulnerable dependencies."
+          },
+          "response": []
+        },
+        {
+          "name": "Get relations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/{{sbomName}}/topology/relations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "{{sbomName}}",
+                "topology",
+                "relations"
+              ]
+            },
+            "description": "Return the dependency graph as a flat list of root -> sub component pairs (with their levels)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get component detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/{{sbomName}}/topology/component?component=log4j-core@2.14.1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "{{sbomName}}",
+                "topology",
+                "component"
+              ],
+              "query": [
+                {
+                  "key": "component",
+                  "value": "log4j-core@2.14.1",
+                  "description": "required, the component identifier"
+                }
+              ]
+            },
+            "description": "Return detailed information for a single component, including vulnerabilities, licences and suggested fix version."
+          },
+          "response": []
+        },
+        {
+          "name": "Get component vuln dependency",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/sboms/{{sbomName}}/topology/component/vuln-dep?component=log4j-core@2.14.1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "sboms",
+                "{{sbomName}}",
+                "topology",
+                "component",
+                "vuln-dep"
+              ],
+              "query": [
+                {
+                  "key": "component",
+                  "value": "log4j-core@2.14.1",
+                  "description": "required, the component identifier"
+                }
+              ]
+            },
+            "description": "Return the vulnerability dependency paths (impact chain) for a component."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "projectId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "sbomName",
+      "value": "v1.0.0",
+      "type": "string"
+    }
+  ]
+}

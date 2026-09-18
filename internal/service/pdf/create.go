@@ -1,10 +1,11 @@
 package pdf
 
 import (
-	ssbom "ex-sbom/internal/service/sbom"
 	"fmt"
 	"strconv"
 	"time"
+
+	ssbom "ex-sbom/internal/service/sbom"
 
 	"github.com/johnfercher/maroto/v2/pkg/components/line"
 	"github.com/johnfercher/maroto/v2/pkg/components/page"
