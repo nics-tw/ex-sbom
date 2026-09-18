@@ -20,7 +20,7 @@ import (
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 )
 
-func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, string, time.Time) {
+func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, string, time.Time, error) {
 	refToName := getCdxBomRefToName(bom.Components)
 
 	// metadata.component represents the application being described, not a real
@@ -45,13 +45,18 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	dependency := getCdxDep(bom.Dependencies, refToName, rootRef)
 	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName, rootRef)
 
+	componentInfo, err := getCdxComponentInfo(bom.Components, rawData, name)
+	if err != nil {
+		return FormattedSBOM{}, "", time.Time{}, err
+	}
+
 	result := FormattedSBOM{
 		Components:        c,
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getCdxComponentInfo(bom.Components, rawData, name),
+		ComponentInfo:     componentInfo,
 	}
 
 	withVuln := []string{}
@@ -84,7 +89,7 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	sortFormattedSBOM(&result)
 	sha256Hash := HashSBOM(result)
 
-	return result, sha256Hash, bomTimestamp
+	return result, sha256Hash, bomTimestamp, nil
 }
 
 func (s *Service) ProcessCDX(projectID domain.ProjectID, name domain.Version, bom cdx.BOM, rawData []byte) error {
@@ -92,7 +97,10 @@ func (s *Service) ProcessCDX(projectID domain.ProjectID, name domain.Version, bo
 		return fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
 	}
 
-	final, sha256Hash, bomTimestamp := buildCDXResult(bom, rawData, name)
+	final, sha256Hash, bomTimestamp, err := buildCDXResult(bom, rawData, name)
+	if err != nil {
+		return err
+	}
 
 	unlock := s.cache.LockProject(projectID)
 	s.cache.Set(projectID, name, final)
@@ -116,8 +124,7 @@ func (s *Service) PreviewCDX(bom cdx.BOM, rawData []byte) (FormattedSBOM, string
 		return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("invalid BOM format: %s", bom.BOMFormat)
 	}
 
-	final, sha256Hash, bomTimestamp := buildCDXResult(bom, rawData, "preview")
-	return final, sha256Hash, bomTimestamp, nil
+	return buildCDXResult(bom, rawData, "preview")
 }
 
 // nameFromBOMRef extracts a human-readable name from a BOM reference.
@@ -370,7 +377,7 @@ func getCdxDep(input *[]cdx.Dependency, refToName map[string]string, rootRef str
 	return dependency
 }
 
-func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) map[string]Component {
+func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) (map[string]Component, error) {
 	componentInfo := make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -378,8 +385,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		Data:  files,
 	})
 	if err != nil {
-		slog.Error("failed to copy and create file", "error", err)
-		return nil
+		return nil, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
 	}
 
 	defer func() {
@@ -390,7 +396,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 
 	vulnPkgs, err := file.GetScanResult(path)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
-		slog.Error("failed to get scan result", "error", err)
+		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 
 	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
@@ -440,7 +446,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		}
 	}
 
-	return componentInfo
+	return componentInfo, nil
 }
 
 func getCdxLicences(input *cdx.Licenses) string {

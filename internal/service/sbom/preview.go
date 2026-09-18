@@ -25,6 +25,9 @@ var (
 	ErrInvalidSBOMFormat    = errors.New("unrecognized SBOM format")
 	ErrSPDXParseFailed      = errors.New("failed to parse SPDX")
 	ErrCycloneDXParseFailed = errors.New("failed to parse CycloneDX")
+	// ErrScanFailed marks a vulnerability scan that could not run: the result
+	// must never be presented (or saved) as a clean zero-vulnerability analysis.
+	ErrScanFailed = errors.New("vulnerability scan failed")
 )
 
 // Preview parses raw SBOM bytes and returns the result without saving to DB.
@@ -53,7 +56,9 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		if err := decoder.Decode(&bom); err != nil {
 			return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("%w: %w", ErrCycloneDXParseFailed, err)
 		}
-		result, sha256Hash, bomTimestamp, err := s.PreviewCDX(bom, rawData)
+		// Scan the same (possibly downgraded) representation the decoder accepted,
+		// so the scanner cannot reject bytes the parser already validated.
+		result, sha256Hash, bomTimestamp, err := s.PreviewCDX(bom, cdxData)
 		return result, sha256Hash, bomTimestamp, err
 
 	default:

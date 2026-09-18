@@ -264,6 +264,9 @@ func (h *Handler) Preview(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf("%s: %s", msg.ErrParsingSPDX, errCause(err))})
 		case errors.Is(err, ssbom.ErrCycloneDXParseFailed):
 			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf("%s: %s", msg.ErrParsingCycloneDX, errCause(err))})
+		case errors.Is(err, ssbom.ErrScanFailed):
+			// Never present an unscanned SBOM as a clean zero-vulnerability result
+			c.JSON(http.StatusBadGateway, gin.H{msg.RespErr: err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		}
@@ -298,6 +301,11 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
+	// Cap the commit body before JSON binding materializes it in memory.
+	// The parsed representation (components + vulns) can exceed the raw file
+	// size, so allow twice the preview upload limit.
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2*MaxSBOMUploadBytes)
+
 	var body struct {
 		Version      domain.Version      `json:"version"`
 		BomResult    ssbom.FormattedSBOM `json:"bom_result"`
@@ -305,6 +313,12 @@ func (h *Handler) Create(c *gin.Context) {
 		BomTimestamp time.Time           `json:"bom_timestamp"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{msg.RespErr: msg.ErrFileTooLarge})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: msg.ErrBindingJSON})
 		return
 	}

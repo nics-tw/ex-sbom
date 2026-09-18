@@ -30,11 +30,16 @@ const (
 	spdxNone           = "NONE"
 )
 
-func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string) {
+func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string, error) {
 	c := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
 	dependency := getSpdxDep(*document, refToName)
 	dependencyLevel := getSpdxDependencyDepthMap(*document, refToName)
+
+	componentInfo, err := getSpdxComponentInfo(*document, rawData, name)
+	if err != nil {
+		return FormattedSBOM{}, "", err
+	}
 
 	bom := FormattedSBOM{
 		Components:        c,
@@ -42,7 +47,7 @@ func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (Form
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getSpdxComponentInfo(*document, rawData, name),
+		ComponentInfo:     componentInfo,
 	}
 
 	compWithVuln := []string{}
@@ -70,7 +75,7 @@ func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (Form
 	sortFormattedSBOM(&bom)
 	sha256Hash := HashSBOM(bom)
 
-	return bom, sha256Hash
+	return bom, sha256Hash, nil
 }
 
 func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, document *spdx.Document, rawData []byte) error {
@@ -78,7 +83,10 @@ func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, d
 		return nil
 	}
 
-	final, sha256Hash := buildSPDXResult(document, rawData, name)
+	final, sha256Hash, err := buildSPDXResult(document, rawData, name)
+	if err != nil {
+		return err
+	}
 
 	unlock := s.cache.LockProject(projectID)
 	s.cache.Set(projectID, name, final)
@@ -101,8 +109,7 @@ func (s *Service) PreviewSPDX(document *spdx.Document, rawData []byte) (Formatte
 	if document == nil {
 		return FormattedSBOM{}, "", nil
 	}
-	final, sha256Hash := buildSPDXResult(document, rawData, "preview")
-	return final, sha256Hash, nil
+	return buildSPDXResult(document, rawData, "preview")
 }
 
 // getSpdxDependencyDepthMap builds the dependency graph and computes depth levels
@@ -156,9 +163,13 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, nameMap map[string]string) ma
 		if visiting[node] {
 			return
 		}
-		if current, seen := depthMap[node]; !seen || depth > current {
-			depthMap[node] = depth
+		// Memoization: an equal or deeper visit already propagated through this
+		// subtree, so revisiting cannot improve any depth. Without this check,
+		// reconverging branches make the traversal exponential.
+		if current, seen := depthMap[node]; seen && depth <= current {
+			return
 		}
+		depthMap[node] = depth
 		visiting[node] = true
 		for _, neighbor := range graph[node] {
 			dfs(neighbor, depth+1)
@@ -259,7 +270,7 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) map[string]Component {
+func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (map[string]Component, error) {
 	var result = make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -267,9 +278,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		Data:  files,
 	})
 	if err != nil {
-		slog.Error("failed to copy and create file", "error", err)
-
-		return nil
+		return nil, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
 	}
 
 	defer func() {
@@ -280,7 +289,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 
 	vulnPkgs, err := file.GetScanResult(path)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
-		slog.Error("failed to get scan result", "error", err)
+		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 
 	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
@@ -331,7 +340,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 // the implement of the common.DocElementID interface containing three possible ID

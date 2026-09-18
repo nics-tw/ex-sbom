@@ -110,11 +110,12 @@ func main() {
 		}()
 	}
 
-	startServer(server, config.Port)
+	startServer(server, config.BindAddr, config.Port)
 }
 
 type Config struct {
 	Port            string
+	BindAddr        string
 	AutoOpenBrowser bool
 	DBPath          string
 }
@@ -125,6 +126,13 @@ func getConfig() Config {
 		port = "8080"
 	}
 
+	// Local tool: bind loopback only by default so network peers cannot
+	// read or delete stored projects. Set BIND_ADDR to override deliberately.
+	bindAddr := os.Getenv("BIND_ADDR")
+	if bindAddr == "" {
+		bindAddr = "127.0.0.1"
+	}
+
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = defaultDBPath()
@@ -132,6 +140,7 @@ func getConfig() Config {
 
 	return Config{
 		Port:            port,
+		BindAddr:        bindAddr,
 		AutoOpenBrowser: os.Getenv("AUTO_OPEN_BROWSER") != "false",
 		DBPath:          dbPath,
 	}
@@ -171,8 +180,8 @@ func createServer(projectSvc *psvc.Service, sbomSvc *ssbom.Service) *gin.Engine 
 	return r
 }
 
-func startServer(r *gin.Engine, port string) {
-	r.Run(":" + port)
+func startServer(r *gin.Engine, bindAddr, port string) {
+	r.Run(bindAddr + ":" + port)
 }
 
 func openBrowser(url string) error {
