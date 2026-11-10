@@ -63,14 +63,14 @@
             <button
               id="lang-en"
               class="px-2 py-1 rounded font-medium language-btn active-language"
-              onclick="changeLanguage('en')"
+              onclick="setLanguage('en')"
             >
               EN
             </button>
             <button
               id="lang-zh"
               class="px-2 py-1 rounded font-medium language-btn"
-              onclick="changeLanguage('zh')"
+              onclick="setLanguage('zh')"
             >
               正體中文
             </button>
@@ -534,6 +534,19 @@
         const translation =
           translations[currentLanguage][key] || translations["en"][key] || key;
         return formatString(translation, ...args);
+      }
+
+      // Persist an explicit language choice, then apply it. Server-side navigation
+      // reloads the page, so without this the choice is silently dropped and the
+      // browser default takes over again on the next click.
+      function setLanguage(lang) {
+        try {
+          localStorage.setItem("language", lang);
+        } catch (e) {
+          // Storage may be unavailable (private mode, blocked cookies); the choice
+          // then simply does not persist, which is the previous behaviour.
+        }
+        changeLanguage(lang);
       }
 
       // Function to change language
@@ -1436,15 +1449,21 @@
         });
       }
 
-      // Initialize the language based on browser preference
+      // Initialize the language: an explicit choice stored by setLanguage wins over
+      // the browser default, which is only consulted when nothing is stored yet.
       document.addEventListener("DOMContentLoaded", function () {
-        // Check browser language preference
-        const browserLang = navigator.language || navigator.userLanguage;
-        if (browserLang.startsWith("zh")) {
-          changeLanguage("zh");
-        } else {
-          changeLanguage("en");
+        let stored = null;
+        try {
+          stored = localStorage.getItem("language");
+        } catch (e) {
+          // Unavailable storage just means falling back to the browser default.
         }
+        if (stored === "en" || stored === "zh") {
+          changeLanguage(stored);
+          return;
+        }
+        const browserLang = navigator.language || navigator.userLanguage;
+        changeLanguage(browserLang.startsWith("zh") ? "zh" : "en");
       });
     </script>
   </body>
