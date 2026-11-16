@@ -105,6 +105,10 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	if err := h.svc.Update(projectID, body.Name); err != nil {
+		if errors.Is(err, domain.ErrProjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrProjectNotFound})
+			return
+		}
 		if errors.Is(err, domain.ErrDuplicateProjectName) {
 			c.JSON(http.StatusConflict, gin.H{msg.RespErr: msg.ErrDuplicateProjectName})
 			return
@@ -126,6 +130,10 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.svc.Delete(projectID); err != nil {
+		if errors.Is(err, domain.ErrProjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrProjectNotFound})
+			return
+		}
 		slog.Error("Failed to delete project", "id", projectID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return
@@ -140,6 +148,10 @@ func (h *Handler) Delete(c *gin.Context) {
 func (h *Handler) load(c *gin.Context, projectID domain.ProjectID) (gin.H, bool) {
 	names, corrupted, err := h.svc.Load(projectID)
 	if err != nil {
+		if errors.Is(err, domain.ErrProjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrProjectNotFound})
+			return nil, false
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: err.Error()})
 		return nil, false
 	}

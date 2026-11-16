@@ -25,6 +25,7 @@ type stubRepository struct {
 	saveErr           error
 	renameErr         error
 	allVersions       []domain.VersionInfo
+	projectMissing    bool
 }
 
 func (r *stubRepository) CreateProject(_ domain.ProjectName) (domain.ProjectID, error) {
@@ -35,6 +36,9 @@ func (r *stubRepository) UpdateProjectName(_ domain.ProjectID, _ domain.ProjectN
 }
 func (r *stubRepository) DeleteProject(_ domain.ProjectID) error     { return nil }
 func (r *stubRepository) GetProjects() ([]domain.ProjectInfo, error) { return nil, nil }
+func (r *stubRepository) ProjectExists(_ domain.ProjectID) (bool, error) {
+	return !r.projectMissing, nil
+}
 func (r *stubRepository) CreateSBOM(_ domain.ProjectID, _ domain.Version, _ any, _ time.Time, _ string) error {
 	return r.saveErr
 }
@@ -337,6 +341,28 @@ func TestService_SaveParsed_RejectsChecksumMismatch(t *testing.T) {
 	assert.ErrorIs(t, err, ErrSHA256Mismatch)
 	_, found := cache.Get(wsID, "v1")
 	assert.False(t, found, "mismatched payload must not be cached")
+}
+
+func TestService_SaveParsed_MissingProjectReturnsNotFound(t *testing.T) {
+	// Arrange: the target project does not exist (e.g. deleted in another tab
+	// between preview and commit)
+	repo := &checksumTrackingRepo{
+		stubRepository: stubRepository{projectMissing: true},
+		byChecksum:     map[string]domain.Version{},
+	}
+	cache := NewInMemoryCache()
+	svc := NewService(repo, cache)
+	bom := FormattedSBOM{Components: []string{"curl"}}
+
+	// Act
+	err := svc.SaveParsed(wsID, "v1", bom, HashSBOM(bom), time.Time{})
+
+	// Assert: reported as not-found, and the insert is never attempted (it
+	// would otherwise surface as a raw foreign-key violation)
+	assert.ErrorIs(t, err, domain.ErrProjectNotFound)
+	assert.Equal(t, 0, repo.inserts, "no insert may be attempted for a missing project")
+	_, found := cache.Get(wsID, "v1")
+	assert.False(t, found, "nothing may be cached for a missing project")
 }
 
 // ─── Service.ListVersions ─────────────────────────────────────────────────────

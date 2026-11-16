@@ -111,6 +111,11 @@ func (f *fakeRepo) DeleteProject(id domain.ProjectID) error {
 	return nil
 }
 func (f *fakeRepo) GetProjects() ([]domain.ProjectInfo, error) { return nil, nil }
+func (f *fakeRepo) ProjectExists(domain.ProjectID) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return !f.projectGone, nil
+}
 func (f *fakeRepo) DeleteSBOM(domain.ProjectID, domain.Version) error {
 	return nil
 }
@@ -250,9 +255,28 @@ func TestLoadKeepsCacheIntactWhenRepoFails(t *testing.T) {
 	}
 }
 
+// TestLoadMissingProjectReturnsNotFound: loading a project that does not exist
+// must report ErrProjectNotFound instead of an empty-but-successful result.
+func TestLoadMissingProjectReturnsNotFound(t *testing.T) {
+	const projectID domain.ProjectID = 999
+
+	repo := newFakeRepo()
+	repo.projectGone = true
+	projectSvc := New(repo, ssbom.NewInMemoryCache())
+
+	names, corrupted, err := projectSvc.Load(projectID)
+	if !errors.Is(err, domain.ErrProjectNotFound) {
+		t.Fatalf("expected ErrProjectNotFound, got: %v", err)
+	}
+	if names != nil || corrupted != nil {
+		t.Errorf("no versions may be returned for a missing project, got %v / %v", names, corrupted)
+	}
+}
+
 // TestDeleteSaveRace: a save issued while a delete sits between its child- and
 // parent-row deletes must be serialized behind the delete by the per-project
-// lock, then rejected because the project is gone — never interleaved.
+// lock, then rejected as "project not found" because the project is gone —
+// never interleaved, and never surfaced as a raw FK violation.
 func TestDeleteSaveRace(t *testing.T) {
 	const projectID domain.ProjectID = 1
 
@@ -294,8 +318,8 @@ func TestDeleteSaveRace(t *testing.T) {
 	if err := <-deleteDone; err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
-	if err := <-saveDone; !errors.Is(err, errFKViolation) {
-		t.Fatalf("save after delete must fail on the FK, got: %v", err)
+	if err := <-saveDone; !errors.Is(err, domain.ErrProjectNotFound) {
+		t.Fatalf("save after delete must report the project as not found, got: %v", err)
 	}
 
 	if _, ok := cache.Get(projectID, "v1"); ok {

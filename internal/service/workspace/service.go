@@ -45,6 +45,7 @@ func (s *Service) List() ([]domain.ProjectInfo, error) {
 }
 
 // Update renames a project.
+// Returns domain.ErrProjectNotFound if the project does not exist.
 // Returns domain.ErrDuplicateProjectName if another project already uses the name.
 func (s *Service) Update(id domain.ProjectID, name domain.ProjectName) error {
 	s.nameMu.Lock()
@@ -56,10 +57,11 @@ func (s *Service) Update(id domain.ProjectID, name domain.ProjectName) error {
 // The per-project lock serializes Delete against concurrent saves/loads, so a
 // save can never slip between the child- and parent-row deletes.
 // The cache is cleared even when the repository delete fails partway
-// (children removed, parent left behind — DuckDB has no usable transaction
-// support in the GORM driver): the DB rows the cache mirrored are already
-// gone, so keeping cache entries would serve ghost data. The next successful
-// Load or retried Delete re-syncs both sides.
+// (children removed, parent left behind — the two deletes cannot share a
+// transaction, see repository.DeleteProject): the DB rows the cache mirrored
+// are already gone, so keeping cache entries would serve ghost data. The next
+// successful Load or retried Delete re-syncs both sides.
+// Returns domain.ErrProjectNotFound if the project does not exist.
 func (s *Service) Delete(id domain.ProjectID) error {
 	unlock := s.cache.LockProject(id)
 	defer unlock()
@@ -77,9 +79,18 @@ func (s *Service) Delete(id domain.ProjectID) error {
 // leaves it half-populated.
 // The whole read-then-rebuild sequence holds the project lock so a concurrent
 // save cannot be overwritten by a stale DB snapshot.
+// Returns domain.ErrProjectNotFound if the project does not exist.
 func (s *Service) Load(projectID domain.ProjectID) (names, corrupted []domain.Version, err error) {
 	unlock := s.cache.LockProject(projectID)
 	defer unlock()
+
+	exists, err := s.repo.ProjectExists(projectID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !exists {
+		return nil, nil, domain.ErrProjectNotFound
+	}
 
 	records, err := s.repo.GetAllByProject(projectID)
 	if err != nil {

@@ -118,3 +118,35 @@ func TestRenameDeletedVersionReturns404(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), msg.ErrSBOMNotFound)
 }
+
+// missingProjectRepo embeds repository.Repository so only ProjectExists needs
+// a real implementation; any other call (e.g. the insert) would panic, proving
+// a missing project is rejected before anything is written.
+type missingProjectRepo struct {
+	repository.Repository
+}
+
+func (missingProjectRepo) ProjectExists(_ domain.ProjectID) (bool, error) { return false, nil }
+
+func TestCreateOnMissingProjectReturns404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := ssbom.NewService(missingProjectRepo{}, ssbom.NewInMemoryCache())
+	h := New(svc, nil)
+
+	router := gin.New()
+	router.POST("/sboms", func(c *gin.Context) {
+		c.Set(middleware.ProjectIDKey, int64(999))
+		h.Create(c)
+	})
+
+	body := bytes.NewBufferString(`{"version":"v1","bom_result":{},"sha256":"any"}`)
+	req := httptest.NewRequest(http.MethodPost, "/sboms", body)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), msg.ErrProjectNotFound)
+}

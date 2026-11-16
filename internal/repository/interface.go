@@ -16,6 +16,7 @@ type Repository interface {
 	UpdateProjectName(id domain.ProjectID, name domain.ProjectName) error
 	DeleteProject(id domain.ProjectID) error
 	GetProjects() ([]domain.ProjectInfo, error)
+	ProjectExists(id domain.ProjectID) (bool, error)
 	CreateSBOM(projectID domain.ProjectID, version domain.Version, result any, timestamp time.Time, checksum string) error
 	DeleteSBOM(projectID domain.ProjectID, version domain.Version) error
 	RenameVersion(projectID domain.ProjectID, oldVersion, newVersion domain.Version) error

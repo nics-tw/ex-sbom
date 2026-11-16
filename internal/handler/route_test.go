@@ -38,6 +38,7 @@ func (r *noopRepository) DeleteProject(_ domain.ProjectID) error { return nil }
 func (r *noopRepository) GetProjects() ([]domain.ProjectInfo, error) {
 	return []domain.ProjectInfo{}, nil
 }
+func (r *noopRepository) ProjectExists(_ domain.ProjectID) (bool, error) { return true, nil }
 func (r *noopRepository) CreateSBOM(_ domain.ProjectID, _ domain.Version, _ any, _ time.Time, _ string) error {
 	return nil
 }

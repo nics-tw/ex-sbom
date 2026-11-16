@@ -118,10 +118,22 @@ func (s *Service) ListVersions(projectID domain.ProjectID) ([]domain.VersionInfo
 }
 
 // SaveParsed stores a pre-parsed SBOM result into DB and cache without re-parsing the file.
+// Returns domain.ErrProjectNotFound if the project does not exist.
 // Returns *DuplicateSHA256Error if the same SHA-256 already exists for the project.
 func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version, bom FormattedSBOM, sha256Hash string, bomTimestamp time.Time) error {
 	unlock := s.cache.LockProject(projectID)
 	defer unlock()
+
+	// Checked under the project lock (project deletion takes the same lock),
+	// so a missing project is reported as such instead of surfacing later as
+	// a raw foreign-key violation from the insert.
+	exists, err := s.repo.ProjectExists(projectID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrProjectNotFound
+	}
 
 	existing, err := s.repo.FindVersionBySHA256(projectID, sha256Hash)
 	if err != nil && !errors.Is(err, repository.ErrVersionNotFound) {

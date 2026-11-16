@@ -10,6 +10,10 @@ import (
 // name that is already used by another project. Handlers map it to HTTP 409.
 var ErrDuplicateProjectName = errors.New("project name already exists")
 
+// ErrProjectNotFound is returned when an operation targets a project id that
+// does not exist. Handlers map it to HTTP 404.
+var ErrProjectNotFound = errors.New("project not found")
+
 type (
 	ProjectID     = int64  // unique identifier for a project
 	SBOMID        = int64  // unique identifier for an SBOM record

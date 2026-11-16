@@ -328,6 +328,11 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	if err := h.sbomSvc.SaveParsed(projectID, body.Version, body.BomResult, body.SHA256, body.BomTimestamp); err != nil {
+		if errors.Is(err, domain.ErrProjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrProjectNotFound})
+			return
+		}
+
 		var dupErr *ssbom.DuplicateSHA256Error
 		if errors.As(err, &dupErr) {
 			c.JSON(http.StatusConflict, gin.H{msg.RespErr: fmt.Sprintf("相同檔案已存在，版本：%s", dupErr.Version)})

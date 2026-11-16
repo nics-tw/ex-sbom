@@ -196,6 +196,41 @@ func TestDuckDBPersistence(t *testing.T) {
 		assert.True(t, containsProject(stillThere, pid), "project must survive a close/reopen cycle")
 	})
 
+	t.Run("project existence and not-found errors", func(t *testing.T) {
+		// Arrange: an id that was never allocated.
+		const missing domain.ProjectID = 999999
+
+		// Act + Assert: existence lookup distinguishes real from missing ids.
+		exists, err := repo.ProjectExists(pid)
+		require.NoError(t, err)
+		assert.True(t, exists)
+
+		exists, err = repo.ProjectExists(missing)
+		require.NoError(t, err)
+		assert.False(t, exists)
+
+		// Act + Assert: mutating a missing project reports not-found instead
+		// of silently succeeding.
+		assert.ErrorIs(t, repo.UpdateProjectName(missing, "ghost"), domain.ErrProjectNotFound)
+		// Not-found takes precedence over a name conflict.
+		assert.ErrorIs(t, repo.UpdateProjectName(missing, "proj-a"), domain.ErrProjectNotFound)
+		assert.ErrorIs(t, repo.DeleteProject(missing), domain.ErrProjectNotFound)
+	})
+
+	t.Run("rename project that owns SBOM records", func(t *testing.T) {
+		// Arrange: pid still owns v2. DuckDB rewrites an UPDATE of an indexed
+		// column as delete+insert, which trips the sbom_records FK — so this
+		// guards against ever putting a unique index on project_name.
+
+		// Act + Assert
+		require.NoError(t, repo.UpdateProjectName(pid, "proj-a-renamed"))
+		require.NoError(t, repo.UpdateProjectName(pid, "proj-a"))
+
+		entries, err := repo.GetAllByProject(pid)
+		require.NoError(t, err)
+		require.Len(t, entries, 1, "renaming a project must not touch its SBOM records")
+	})
+
 	t.Run("update project name", func(t *testing.T) {
 		// Arrange: a second project to rename.
 		id, err := repo.CreateProject("proj-b")
@@ -230,6 +265,12 @@ func TestDuckDBPersistence(t *testing.T) {
 		final, err := repo.GetProjects()
 		require.NoError(t, err)
 		assert.False(t, containsProject(final, pid), "deleted project must be gone")
+
+		// Act + Assert: a second delete is a not-found, not a silent success.
+		assert.ErrorIs(t, repo.DeleteProject(pid), domain.ErrProjectNotFound)
+		exists, err := repo.ProjectExists(pid)
+		require.NoError(t, err)
+		assert.False(t, exists)
 	})
 }
 
