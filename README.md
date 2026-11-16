@@ -100,6 +100,34 @@ By default, the database file is stored under the platform-native config directo
 
 We use Postman to document our API. You can find the documentation json file in the root directory with name `ex-sbom.postman_collection.json`. You can import this file into Postman to view the API documentation.
 
+### Migrating from the pre-project API
+
+The HTTP API was restructured around projects and versions. The old flat routes were removed without a deprecation period, because the bundled web UI (shipped in the same binary) is the only supported client. Scripts written against the old API need to be updated:
+
+| Old route | New route |
+|-----------|-----------|
+| `POST /sbom/upload` | `POST /projects/:id/sboms/preview` (parse + scan), then `POST /projects/:id/sboms` (save as a version) |
+| `DELETE /sbom/delete` | `DELETE /projects/:id/sboms/:name` |
+| `GET /sbom/report/:name` | `GET /projects/:id/sboms/:name/report` |
+| `GET /topology/get_list_by_level` | `GET /projects/:id/sboms/:name/topology` |
+| `GET /topology/relations` | `GET /projects/:id/sboms/:name/topology/relations` |
+| `GET /topology/component` | `GET /projects/:id/sboms/:name/topology/component` |
+| `GET /topology/get_component_vuln_dep` | `GET /projects/:id/sboms/:name/topology/component/vuln-dep` |
+
+Every SBOM now belongs to a project: list projects with `GET /projects` (a `default` project is created on first start) or create one with `POST /projects`, then use its `id` in the routes above. `:name` is the version name chosen when saving. Requests for a project id that does not exist return `404`.
+
+## Testing
+
+All Go test files carry a build tag, so a bare `go test ./...` runs nothing. Pass the tags explicitly:
+
+```bash
+go build ./...
+go test -tags "unit integration" ./...
+node --test "tests/js/*.test.mjs"   # frontend tests, Node.js 22+, no dependencies
+```
+
+The same commands run in CI (`.github/workflows/ci.yml`) on every pull request.
+
 ## Contributing
 
 As this is an experimental project, we welcome any contributions or suggestions. If you have any ideas or feedback, please feel free to open an issue or submit a pull request.

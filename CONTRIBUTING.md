@@ -75,7 +75,9 @@ Aside from unit tests, we also accept manual testing. Whiling applying manual te
 
 While creating new unit tests or integration test, please remember to at correspondent build tag for the test file, so that it can be run with the `go test` command. For example, if you are creating a unit test for any package, kindly add the `//go:build unit` build tag at the top of the test file, and for integration tests (e.g. tests that open a real DuckDB instance) add the `//go:build integration` build tag instead. This will help us run the tests selectively based on the build tags.
 
-Run unit tests with `go test -tags unit ./...` and integration tests with `go test -tags integration ./...` (or both at once with `go test -tags "unit integration" ./...`).
+Run unit tests with `go test -tags unit ./...` and integration tests with `go test -tags integration ./...` (or both at once with `go test -tags "unit integration" ./...`). Note that a bare `go test ./...` runs no tests at all, because every test file carries a build tag.
+
+Frontend tests for `static/js/app.js` live in `tests/js` and need no dependencies: run them with `node --test "tests/js/*.test.mjs"` (Node.js 22+).
 
 (Note that for your pilot run of the test, make sure you have add the build tag to your local config to ensure the test can be run as expected.)
 

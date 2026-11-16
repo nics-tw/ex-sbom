@@ -99,6 +99,34 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 ## API 文件
 我們使用 Postman 來記錄 API 文件。您可以在根目錄中找到名為 `ex-sbom.postman_collection.json` 的文件。您可以將此文件匯入 Postman 以查看 API 文件。
 
+### 從舊版 API 遷移
+
+HTTP API 已改以「專案 / 版本」為核心重新設計。由於唯一支援的 client 是與後端包在同一個執行檔內的網頁介面，舊的路由已直接移除，沒有過渡期。若您有針對舊 API 撰寫的腳本，請依下表調整：
+
+| 舊路由 | 新路由 |
+|--------|--------|
+| `POST /sbom/upload` | 先 `POST /projects/:id/sboms/preview`（解析與掃描），再 `POST /projects/:id/sboms`（存成版本） |
+| `DELETE /sbom/delete` | `DELETE /projects/:id/sboms/:name` |
+| `GET /sbom/report/:name` | `GET /projects/:id/sboms/:name/report` |
+| `GET /topology/get_list_by_level` | `GET /projects/:id/sboms/:name/topology` |
+| `GET /topology/relations` | `GET /projects/:id/sboms/:name/topology/relations` |
+| `GET /topology/component` | `GET /projects/:id/sboms/:name/topology/component` |
+| `GET /topology/get_component_vuln_dep` | `GET /projects/:id/sboms/:name/topology/component/vuln-dep` |
+
+所有 SBOM 現在都隸屬於某個專案：請先以 `GET /projects` 取得專案清單（首次啟動時會自動建立一個 `default` 專案），或以 `POST /projects` 建立新專案，再將其 `id` 帶入上述路由。`:name` 為儲存時指定的版本名稱。若專案 id 不存在，會回傳 `404`。
+
+## 測試
+
+所有 Go 測試檔都帶有 build tag，直接執行 `go test ./...` 不會跑到任何測試，請明確指定 tag：
+
+```bash
+go build ./...
+go test -tags "unit integration" ./...
+node --test "tests/js/*.test.mjs"   # 前端測試，需 Node.js 22 以上，無額外相依套件
+```
+
+CI（`.github/workflows/ci.yml`）會在每個 pull request 執行相同的指令。
+
 ## 貢獻
 如果您想要對此專案提出任何形式的貢獻（例如：錯誤回報、提出 PR 等等），請參考 [CONTRIBUTING.md](CONTRIBUTING.md) 文件以了解如何開始。
 
