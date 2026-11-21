@@ -23,9 +23,19 @@ var ErrVersionExists = errors.New("version already exists")
 // ErrVersionNotFound is returned by DeleteSBOM when no matching version exists.
 var ErrVersionNotFound = errors.New("version not found")
 
+const activeProjectSBOMs = "project_id IN (SELECT id FROM projects WHERE deleted_at IS NULL)"
+
 // CreateSBOM inserts a processed SBOM result into the sbom_records table.
 // Returns ErrVersionExists if the same (project_id, version) already exists.
 func (r *SBOMRepository) CreateSBOM(projectID domain.ProjectID, version domain.Version, result any, timestamp time.Time, checksum string) error {
+	exists, err := r.ProjectExists(projectID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return domain.ErrProjectNotFound
+	}
+
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
 		return err
@@ -74,6 +84,7 @@ func (r *SBOMRepository) RenameVersion(projectID domain.ProjectID, oldVersion, n
 				"bom_result_sha256, bom_timestamp, created_at, updated_at",
 			).
 			Where("project_id = ? AND version = ?", projectID, oldVersion).
+			Where(activeProjectSBOMs).
 			First(&rec).Error
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -106,7 +117,8 @@ func (r *SBOMRepository) RenameVersion(projectID domain.ProjectID, oldVersion, n
 // DeleteSBOM hard-deletes the record for the given project + version.
 // Returns ErrVersionNotFound if no matching record exists.
 func (r *SBOMRepository) DeleteSBOM(projectID domain.ProjectID, version domain.Version) error {
-	db := r.db.Where("project_id = ? AND version = ?", projectID, version).Delete(&model.SBOMRecordModel{})
+	db := r.db.Where("project_id = ? AND version = ?", projectID, version).
+		Where(activeProjectSBOMs).Delete(&model.SBOMRecordModel{})
 	if db.Error != nil {
 		return db.Error
 	}
@@ -124,6 +136,7 @@ func (r *SBOMRepository) GetAllVersions(projectID domain.ProjectID) ([]domain.Ve
 	err := r.db.Model(&model.SBOMRecordModel{}).
 		Select("version, created_at").
 		Where("project_id = ?", projectID).
+		Where(activeProjectSBOMs).
 		Order("created_at desc").
 		Scan(&rows).Error
 	if err != nil {
@@ -138,6 +151,7 @@ func (r *SBOMRepository) GetAllVersions(projectID domain.ProjectID) ([]domain.Ve
 func (r *SBOMRepository) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) {
 	var project model.ProjectModel
 	err := r.db.
+		Where("deleted_at IS NULL").
 		Order("created_at ASC").
 		First(&project).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -161,6 +175,7 @@ func (r *SBOMRepository) FindVersionBySHA256(projectID domain.ProjectID, checksu
 	err := r.db.Model(&model.SBOMRecordModel{}).
 		Select("version").
 		Where("project_id = ? AND bom_result_sha256 = ?", projectID, checksum).
+		Where(activeProjectSBOMs).
 		Limit(1).
 		Scan(&rows).Error
 	if err != nil {
@@ -185,6 +200,7 @@ func (r *SBOMRepository) GetAllByProject(projectID domain.ProjectID) ([]domain.S
 	err := r.db.Model(&model.SBOMRecordModel{}).
 		Select("version, CAST(bom_result_json AS VARCHAR) AS bom_result_json, bom_result_sha256").
 		Where("project_id = ?", projectID).
+		Where(activeProjectSBOMs).
 		Order("created_at ASC").
 		Scan(&rows).Error
 	if err != nil {

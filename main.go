@@ -11,6 +11,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,6 +28,7 @@ import (
 	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
 	psvc "ex-sbom/internal/service/workspace"
+	"ex-sbom/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,7 +37,7 @@ import (
 var templates embed.FS
 
 //go:embed static/img/favicon.ico
-var favicon embed.FS
+var favicon []byte
 
 //go:embed static/img/apple-touch-icon.png
 var image embed.FS
@@ -68,6 +70,10 @@ func defaultDBPath() string {
 
 func main() {
 	config := getConfig()
+	if !isLoopbackBind(config.BindAddr) {
+		slog.Error("BIND_ADDR must be a loopback IP", "address", util.LogSafe(config.BindAddr))
+		os.Exit(1)
+	}
 
 	dbDir := filepath.Dir(config.DBPath)
 	if err := os.MkdirAll(dbDir, 0o755); err != nil {
@@ -126,8 +132,6 @@ func getConfig() Config {
 		port = "8080"
 	}
 
-	// Local tool: bind loopback only by default so network peers cannot
-	// read or delete stored projects. Set BIND_ADDR to override deliberately.
 	bindAddr := os.Getenv("BIND_ADDR")
 	if bindAddr == "" {
 		bindAddr = "127.0.0.1"
@@ -147,23 +151,34 @@ func getConfig() Config {
 }
 
 func (c Config) URL() string {
-	return "http://localhost:" + c.Port
+	return "http://" + net.JoinHostPort(c.BindAddr, c.Port)
+}
+
+func isLoopbackBind(addr string) bool {
+	return net.ParseIP(addr).IsLoopback()
 }
 
 func loadInitialData(repo repository.Repository, cache ssbom.Cache) {
-	projectID, records, err := repo.GetLatestAll()
+	projects, err := repo.GetProjects()
 	if err != nil {
-		slog.Error("Failed to load SBOMs from DB", "error", err)
+		slog.Error("Failed to list projects from DB", "error", err)
 		return
 	}
-	for _, rec := range records {
-		var formatted ssbom.FormattedSBOM
-		if err := json.Unmarshal(rec.BomResult, &formatted); err != nil {
-			slog.Error("Failed to unmarshal SBOM from DB", "version", rec.Version, "error", err)
+	for _, project := range projects {
+		records, err := repo.GetAllByProject(project.ID)
+		if err != nil {
+			slog.Error("Failed to load project SBOMs from DB", "projectID", project.ID, "error", err)
 			continue
 		}
-		cache.Set(projectID, rec.Version, formatted)
-		slog.Info("Loaded SBOM from DB", "version", rec.Version)
+		for _, rec := range records {
+			var formatted ssbom.FormattedSBOM
+			if err := json.Unmarshal(rec.BomResult, &formatted); err != nil {
+				slog.Error("Failed to unmarshal SBOM from DB", "projectID", project.ID, "version", util.LogSafe(rec.Version), "error", err)
+				continue
+			}
+			cache.Set(project.ID, rec.Version, formatted)
+			slog.Info("Loaded SBOM from DB", "projectID", project.ID, "version", util.LogSafe(rec.Version))
+		}
 	}
 }
 
@@ -181,7 +196,7 @@ func createServer(projectSvc *psvc.Service, sbomSvc *ssbom.Service) *gin.Engine 
 }
 
 func startServer(r *gin.Engine, bindAddr, port string) {
-	r.Run(bindAddr + ":" + port)
+	r.Run(net.JoinHostPort(bindAddr, port))
 }
 
 func openBrowser(url string) error {
@@ -236,10 +251,8 @@ func setupSSR(r *gin.Engine) {
 		c.HTML(http.StatusOK, "tutorial.html", nil)
 	})
 
-	faviconFS, _ := fs.Sub(favicon, "static/img")
-	faviconHandler := http.FileServer(http.FS(faviconFS))
 	r.GET("/favicon.ico", func(c *gin.Context) {
-		faviconHandler.ServeHTTP(c.Writer, c.Request)
+		c.Data(http.StatusOK, "image/png", favicon)
 	})
 
 	touchIconFS, _ := fs.Sub(image, "static/img")

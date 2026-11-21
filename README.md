@@ -87,7 +87,7 @@ The following environment variables can be used to configure the tool:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8080` | Port the local web server listens on. |
-| `BIND_ADDR` | `127.0.0.1` | Address the server binds to. The default keeps the app local-only; set explicitly (e.g. `0.0.0.0`) only if you deliberately want network access. |
+| `BIND_ADDR` | `127.0.0.1` | Loopback IP address, such as `127.0.0.1` or `::1`. Other addresses are rejected. |
 | `AUTO_OPEN_BROWSER` | `true` | Set to `false` to prevent automatically opening the browser on startup. |
 | `DB_PATH` | OS-specific (see below) | Path to the DuckDB database file. |
 
@@ -95,6 +95,8 @@ By default, the database file is stored under the platform-native config directo
 - macOS: `~/Library/Application Support/ex-sbom/data.duckdb`
 - Linux: `~/.config/ex-sbom/data.duckdb`
 - Windows: `%AppData%\ex-sbom\data.duckdb`
+
+Deleting a project hides it and its SBOMs from the app; their rows remain in DuckDB, and the app has no restore action.
 
 ## API documentation
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/model"
@@ -21,7 +22,7 @@ import (
 func (r *SBOMRepository) CreateProject(name domain.ProjectName) (domain.ProjectID, error) {
 	var existing model.ProjectModel
 	err := r.db.
-		Where("project_name = ?", name).
+		Where("project_name = ? AND deleted_at IS NULL", name).
 		First(&existing).Error
 	if err == nil {
 		return 0, domain.ErrDuplicateProjectName
@@ -49,7 +50,7 @@ func (r *SBOMRepository) CreateProject(name domain.ProjectName) (domain.ProjectI
 func (r *SBOMRepository) ProjectExists(id domain.ProjectID) (bool, error) {
 	var count int64
 	if err := r.db.Model(&model.ProjectModel{}).
-		Where("id = ?", id).
+		Where("id = ? AND deleted_at IS NULL", id).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -73,7 +74,7 @@ func (r *SBOMRepository) UpdateProjectName(id domain.ProjectID, name domain.Proj
 
 	var existing model.ProjectModel
 	err = r.db.
-		Where("project_name = ? AND id <> ?", name, id).
+		Where("project_name = ? AND id <> ? AND deleted_at IS NULL", name, id).
 		First(&existing).Error
 	if err == nil {
 		return domain.ErrDuplicateProjectName
@@ -83,7 +84,7 @@ func (r *SBOMRepository) UpdateProjectName(id domain.ProjectID, name domain.Proj
 	}
 
 	db := r.db.Model(&model.ProjectModel{}).
-		Where("id = ?", id).
+		Where("id = ? AND deleted_at IS NULL", id).
 		Update("project_name", name)
 	if err := db.Error; err != nil {
 		if isDuplicateKey(err) {
@@ -106,21 +107,15 @@ func isDuplicateKey(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "duplicate key")
 }
 
-// DeleteProject hard-deletes a project and all its sbom_records.
+// DeleteProject hides a project and its SBOMs with one atomic row update.
 // Returns domain.ErrProjectNotFound if the project does not exist.
-// DuckDB does not support ON DELETE CASCADE, so child rows are removed
-// explicitly before the parent. The two deletes are deliberately NOT wrapped
-// in a transaction: DuckDB checks foreign keys eagerly, so deleting the
-// children and then the parent inside one transaction fails with "still
-// referenced by a foreign key in a different table" (the child deletes are
-// not visible to the constraint check until commit). The non-atomic failure
-// mode is benign: children gone, parent remains → retry succeeds.
+// DuckDB rejects child-then-parent deletes in one transaction while an FK
+// exists. Retaining the child rows makes a failed delete non-destructive and
+// keeps the project recoverable without weakening referential integrity.
 func (r *SBOMRepository) DeleteProject(id domain.ProjectID) error {
-	if err := r.db.Where("project_id = ?", id).Delete(&model.SBOMRecordModel{}).Error; err != nil {
-		return fmt.Errorf("delete sbom_records for project %d: %w", id, err)
-	}
-
-	db := r.db.Where("id = ?", id).Delete(&model.ProjectModel{})
+	db := r.db.Model(&model.ProjectModel{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Update("deleted_at", time.Now().UTC())
 	if db.Error != nil {
 		return fmt.Errorf("delete project %d: %w", id, db.Error)
 	}
@@ -135,6 +130,7 @@ func (r *SBOMRepository) DeleteProject(id domain.ProjectID) error {
 func (r *SBOMRepository) GetProjects() ([]domain.ProjectInfo, error) {
 	var rows []model.ProjectModel
 	if err := r.db.
+		Where("deleted_at IS NULL").
 		Order("created_at ASC").
 		Find(&rows).Error; err != nil {
 

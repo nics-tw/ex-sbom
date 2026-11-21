@@ -49,11 +49,11 @@ func TestSetupSSR(t *testing.T) {
 			description:    "Should serve tutorial.html template",
 		},
 		{
-			name:           "favicon route serves ICO",
+			name:           "favicon route serves PNG",
 			method:         "GET",
 			path:           "/favicon.ico",
 			expectedStatus: http.StatusOK,
-			expectedType:   "image/x-icon",
+			expectedType:   "image/png",
 			description:    "Should serve favicon.ico file",
 		},
 		{
@@ -165,7 +165,7 @@ func TestSetupSSR_StaticFileHeaders(t *testing.T) {
 		path         string
 		expectedType string
 	}{
-		{"/favicon.ico", "image/x-icon"},
+		{"/favicon.ico", "image/png"},
 		{"/apple-touch-icon.png", "image/png"},
 		{"/apple-touch-icon-precomposed.png", "image/png"},
 	}
@@ -336,13 +336,24 @@ func TestCreateServer(t *testing.T) {
 
 func TestURL(t *testing.T) {
 	config := Config{
-		Port: "8080",
+		Port:     "8080",
+		BindAddr: "127.0.0.1",
 	}
 
-	expectedURL := "http://localhost:8080"
+	expectedURL := "http://127.0.0.1:8080"
 	assert.Equal(t, expectedURL, config.URL(), "URL should match expected format")
 
 	config.Port = "3000"
-	expectedURL = "http://localhost:3000"
+	config.BindAddr = "::1"
+	expectedURL = "http://[::1]:3000"
 	assert.Equal(t, expectedURL, config.URL(), "URL should update with new port")
+}
+
+func TestIsLoopbackBind(t *testing.T) {
+	for _, addr := range []string{"127.0.0.1", "127.0.0.2", "::1"} {
+		assert.True(t, isLoopbackBind(addr), addr)
+	}
+	for _, addr := range []string{"0.0.0.0", "::", "192.0.2.1", "localhost"} {
+		assert.False(t, isLoopbackBind(addr), addr)
+	}
 }

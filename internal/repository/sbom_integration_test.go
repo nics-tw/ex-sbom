@@ -7,6 +7,7 @@
 package repository
 
 import (
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -15,8 +16,11 @@ import (
 	"ex-sbom/internal/db"
 	"ex-sbom/internal/domain"
 
+	gorm_duckdb "github.com/alifiroozi80/duckdb"
+	_ "github.com/marcboeker/go-duckdb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 // openRepo initializes a real DuckDB at path (running all goose migrations) and
@@ -167,6 +171,18 @@ func TestDuckDBPersistence(t *testing.T) {
 			"renaming a deleted/stale version must return ErrVersionNotFound")
 	})
 
+	t.Run("rename to an existing version rolls back", func(t *testing.T) {
+		require.NoError(t, repo.CreateSBOM(pid, "v3", result, ts, "sha-v3"))
+		assert.ErrorIs(t, repo.RenameVersion(pid, "v2", "v3"), ErrVersionExists)
+
+		entries, err := repo.GetAllByProject(pid)
+		require.NoError(t, err)
+		require.Len(t, entries, 2)
+		assert.Equal(t, domain.Version("v2"), entries[0].Version)
+		assert.Equal(t, domain.Version("v3"), entries[1].Version)
+		require.NoError(t, repo.DeleteSBOM(pid, "v3"))
+	})
+
 	t.Run("lookup by unknown checksum returns ErrVersionNotFound", func(t *testing.T) {
 		// Arrange: a checksum that was never stored.
 
@@ -178,6 +194,9 @@ func TestDuckDBPersistence(t *testing.T) {
 	})
 
 	t.Run("data persists across close and reopen", func(t *testing.T) {
+		otherID, err := repo.CreateProject("reopen-project")
+		require.NoError(t, err)
+		require.NoError(t, repo.CreateSBOM(otherID, "other-v1", result, ts, "sha-other"))
 		// Arrange: close the current DB and reopen the same file.
 		db.Close()
 		repo = openRepo(t, path)
@@ -190,6 +209,10 @@ func TestDuckDBPersistence(t *testing.T) {
 		require.Len(t, reopened, 1, "SBOM must survive a close/reopen cycle")
 		assert.Equal(t, "v2", reopened[0].Version)
 		assert.Equal(t, "sha-v1", reopened[0].SHA256)
+		otherEntries, err := repo.GetAllByProject(otherID)
+		require.NoError(t, err)
+		require.Len(t, otherEntries, 1)
+		assert.Equal(t, domain.Version("other-v1"), otherEntries[0].Version)
 
 		stillThere, err := repo.GetProjects()
 		require.NoError(t, err)
@@ -248,6 +271,39 @@ func TestDuckDBPersistence(t *testing.T) {
 		assert.Equal(t, "proj-b-renamed", projectName(after, pidB))
 	})
 
+	t.Run("logical delete hides old ID and permits name reuse", func(t *testing.T) {
+		oldID, err := repo.CreateProject("reusable")
+		require.NoError(t, err)
+		require.NoError(t, repo.CreateSBOM(oldID, "stored-v1", result, ts, "sha-stored"))
+		require.NoError(t, repo.DeleteProject(oldID))
+
+		exists, err := repo.ProjectExists(oldID)
+		require.NoError(t, err)
+		assert.False(t, exists)
+		projects, err := repo.GetProjects()
+		require.NoError(t, err)
+		assert.False(t, containsProject(projects, oldID))
+		entries, err := repo.GetAllByProject(oldID)
+		require.NoError(t, err)
+		assert.Empty(t, entries)
+		versions, err := repo.GetAllVersions(oldID)
+		require.NoError(t, err)
+		assert.Empty(t, versions)
+		_, err = repo.FindVersionBySHA256(oldID, "sha-stored")
+		assert.ErrorIs(t, err, ErrVersionNotFound)
+		assert.ErrorIs(t, repo.RenameVersion(oldID, "stored-v1", "stored-v2"), ErrVersionNotFound)
+		assert.ErrorIs(t, repo.DeleteSBOM(oldID, "stored-v1"), ErrVersionNotFound)
+		assert.ErrorIs(t, repo.CreateSBOM(oldID, "new-v1", result, ts, "sha-new"), domain.ErrProjectNotFound)
+		assert.ErrorIs(t, repo.UpdateProjectName(oldID, "still-old"), domain.ErrProjectNotFound)
+
+		var retained int
+		require.NoError(t, db.DB.QueryRow("SELECT COUNT(*) FROM sbom_records WHERE project_id = ?", oldID).Scan(&retained))
+		assert.Equal(t, 1, retained, "deleted project's committed SBOM remains recoverable")
+		newID, err := repo.CreateProject("reusable")
+		require.NoError(t, err)
+		assert.NotEqual(t, oldID, newID)
+	})
+
 	t.Run("delete SBOM then project", func(t *testing.T) {
 		// Arrange: v2 exists under pid.
 
@@ -272,6 +328,30 @@ func TestDuckDBPersistence(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, exists)
 	})
+}
+
+func TestProjectDeleteFailedWritePreservesSBOM(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "read-only.duckdb")
+	repo := openRepo(t, path)
+	pid, err := repo.CreateProject("read-only-project")
+	require.NoError(t, err)
+	require.NoError(t, repo.CreateSBOM(pid, "v1", map[string]any{"components": []string{"libx"}}, time.Time{}, "sha-v1"))
+	db.Close()
+
+	readOnlyDB, err := sql.Open("duckdb", path+"?access_mode=READ_ONLY")
+	require.NoError(t, err)
+	defer readOnlyDB.Close()
+	readOnlyGorm, err := gorm.Open(gorm_duckdb.New(gorm_duckdb.Config{Conn: readOnlyDB}), &gorm.Config{})
+	require.NoError(t, err)
+	readOnlyRepo := NewSBOMRepository(readOnlyGorm)
+	require.Error(t, readOnlyRepo.DeleteProject(pid))
+
+	var retained int
+	require.NoError(t, readOnlyDB.QueryRow("SELECT COUNT(*) FROM sbom_records WHERE project_id = ?", pid).Scan(&retained))
+	assert.Equal(t, 1, retained)
+	var active int
+	require.NoError(t, readOnlyDB.QueryRow("SELECT COUNT(*) FROM projects WHERE id = ? AND deleted_at IS NULL", pid).Scan(&active))
+	assert.Equal(t, 1, active)
 }
 
 func containsProject(projects []domain.ProjectInfo, id domain.ProjectID) bool {

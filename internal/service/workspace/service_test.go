@@ -90,23 +90,19 @@ func (f *fakeRepo) UpdateProjectName(domain.ProjectID, domain.ProjectName) error
 	return nil
 }
 func (f *fakeRepo) DeleteProject(id domain.ProjectID) error {
-	// children first, matching the real repository's delete order
-	f.mu.Lock()
-	delete(f.records, id)
-	f.mu.Unlock()
-
-	// expose the moment between the child delete and the parent delete
+	// Pause before the single atomic state change.
 	if f.deleteStarted != nil {
 		f.deleteStarted <- struct{}{}
 		<-f.deleteRelease
 	}
 
 	if f.deleteErr != nil {
-		return f.deleteErr // parent delete failed: children already gone
+		return f.deleteErr
 	}
 
 	f.mu.Lock()
 	f.projectGone = true
+	delete(f.records, id)
 	f.mu.Unlock()
 	return nil
 }
@@ -330,10 +326,9 @@ func TestDeleteSaveRace(t *testing.T) {
 	}
 }
 
-// TestDeletePartialFailureClearsCache: when the parent-row delete fails after
-// the child rows are already gone, the cache must not keep serving SBOMs whose
-// DB rows no longer exist.
-func TestDeletePartialFailureClearsCache(t *testing.T) {
+// TestDeleteFailurePreservesCache checks that a failed logical delete
+// retains both committed rows and their cached result.
+func TestDeleteFailurePreservesCache(t *testing.T) {
 	const projectID domain.ProjectID = 1
 
 	repo := newFakeRepo()
@@ -348,10 +343,13 @@ func TestDeletePartialFailureClearsCache(t *testing.T) {
 
 	err := projectSvc.Delete(projectID)
 	if !errors.Is(err, errFakeDB) {
-		t.Fatalf("expected the repo error to propagate, got: %v", err)
+		t.Fatalf("expected repo error to propagate, got: %v", err)
 	}
-
-	if _, ok := cache.Get(projectID, "v1"); ok {
-		t.Error("cache must be cleared even on partial delete: the child rows it mirrored are gone")
+	if _, ok := cache.Get(projectID, "v1"); !ok {
+		t.Error("cache must retain the SBOM after a failed delete")
+	}
+	records, err := repo.GetAllByProject(projectID)
+	if err != nil || len(records) != 1 {
+		t.Errorf("failed delete must retain the committed SBOM, records=%v err=%v", records, err)
 	}
 }

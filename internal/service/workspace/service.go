@@ -53,23 +53,18 @@ func (s *Service) Update(id domain.ProjectID, name domain.ProjectName) error {
 	return s.repo.UpdateProjectName(id, name)
 }
 
-// Delete removes the project and all its sbom_records, then clears the in-memory cache.
-// The per-project lock serializes Delete against concurrent saves/loads, so a
-// save can never slip between the child- and parent-row deletes.
-// The cache is cleared even when the repository delete fails partway
-// (children removed, parent left behind — the two deletes cannot share a
-// transaction, see repository.DeleteProject): the DB rows the cache mirrored
-// are already gone, so keeping cache entries would serve ghost data. The next
-// successful Load or retried Delete re-syncs both sides.
+// Delete hides the project and its SBOMs, then clears the in-memory cache.
+// The per-project lock serializes Delete against concurrent saves/loads.
 // Returns domain.ErrProjectNotFound if the project does not exist.
 func (s *Service) Delete(id domain.ProjectID) error {
 	unlock := s.cache.LockProject(id)
 	defer unlock()
 
-	err := s.repo.DeleteProject(id)
+	if err := s.repo.DeleteProject(id); err != nil {
+		return err
+	}
 	s.cache.DeleteProject(id)
-
-	return err
+	return nil
 }
 
 // Load fetches the latest SBOMs for a project from DB, populates the

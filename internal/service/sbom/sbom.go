@@ -307,6 +307,9 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 	if vuln, ok := vulnMap[name]; ok {
 		var vulns []Vuln
 		for _, v := range vuln.Vulnerabilities {
+			if v == nil {
+				continue
+			}
 			allFixVers := getAllFixVersions(v)
 			suggestFix := findNearestVersions(version, allFixVers)
 			otherFixVer := getDiff(allFixVers, suggestFix)
@@ -315,11 +318,11 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 				ID:                getCVEFromAliases(v.Aliases),
 				Summary:           v.Summary,
 				Details:           v.Details,
-				CVSSScore:         getCVSS(v.ID, vuln.Groups),
+				CVSSScore:         getCVSS(v.Id, vuln.Groups),
 				SuggestFixVersion: getVersionString(suggestFix),
 				OtherFixVersions:  getVersionString(otherFixVer),
 
-				FixVersions: getAllFixVersions(v),
+				FixVersions: allFixVers,
 			})
 		}
 
@@ -364,14 +367,14 @@ func getVersionString(strs []string) string {
 	return version.String()
 }
 
-func getAllFixVersions(v osvschema.Vulnerability) []string {
+func getAllFixVersions(v *osvschema.Vulnerability) []string {
 	var fixVersions []string
 
-	for _, affected := range v.Affected {
-		for _, r := range affected.Ranges {
-			for _, e := range r.Events {
-				if len(e.Fixed) > 0 && !slices.Contains(fixVersions, e.Fixed) {
-					fixVersions = append(fixVersions, e.Fixed)
+	for _, affected := range v.GetAffected() {
+		for _, r := range affected.GetRanges() {
+			for _, e := range r.GetEvents() {
+				if e.GetFixed() != "" && !slices.Contains(fixVersions, e.GetFixed()) {
+					fixVersions = append(fixVersions, e.GetFixed())
 				}
 			}
 		}

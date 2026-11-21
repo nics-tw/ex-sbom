@@ -97,7 +97,7 @@ func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, d
 
 	slog.Info(
 		"Process SPDX-formatted SBOM successfully",
-		"name", name,
+		"name", util.LogSafe(name),
 		"numbers of components", len(final.Components),
 		"total levels", fmt.Sprintf("%d", len(final.DependencyLevel)),
 	)
@@ -251,14 +251,14 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 
 			nameA, ok := nameMap[getRefIDStr(r.RefA)]
 			if !ok {
-				slog.Error("failed to get name from refA", "refA", refA)
+				slog.Error("failed to get name from refA", "refA", util.LogSafe(refA))
 
 				continue
 			}
 
 			nameB, ok := nameMap[getRefIDStr(r.RefB)]
 			if !ok {
-				slog.Error("failed to get name from refB", "refB", refB)
+				slog.Error("failed to get name from refB", "refB", util.LogSafe(refB))
 
 				continue
 			}
@@ -283,7 +283,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (m
 
 	defer func() {
 		if err := file.Delete(path); err != nil {
-			slog.Error("failed to delete file", "error", err, "filename", filename, "path", path)
+			slog.Error("failed to delete file", "error", err, "filename", util.LogSafe(filename), "path", path)
 		}
 	}()
 
@@ -322,14 +322,14 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (m
 	}
 
 	if len(firstInfos) == 0 {
-		slog.Info("no lev info found for the components", "name", filename)
+		slog.Info("no lev info found for the components", "name", util.LogSafe(filename))
 	}
 
 	for name, info := range result {
 		updated := false
 		for i, v := range info.Vulns {
 			if data, found := firstInfos[v.ID]; found {
-				slog.Info("found lev info", "cve", v.ID, "lev", data.LEV, "epss", data.EPSS)
+				slog.Info("found lev info", "cve", util.LogSafe(v.ID), "lev", data.LEV, "epss", util.LogSafe(data.EPSS))
 				info.Vulns[i].EPSS = fmt.Sprintf("%.6f", data.EPSSNum)
 				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
 				updated = true
@@ -347,7 +347,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (m
 // in these case we only apply the one that only exists as the unique ID for the purpose of handy mapping
 func getRefIDStr(input common.DocElementID) string {
 	if len(input.DocumentRefID) > 0 {
-		return input.DocumentRefID
+		return string(input.DocumentRefID)
 	} else if len(input.ElementRefID) > 0 {
 		return string(input.ElementRefID)
 	} else if len(input.SpecialID) > 0 {

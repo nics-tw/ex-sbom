@@ -5,6 +5,11 @@
 package sbom
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,14 +37,19 @@ const MaxSBOMUploadBytes int64 = 50 << 20 // 50 MiB
 type Handler struct {
 	sbomSvc    *ssbom.Service
 	projectSvc *psvc.Service
+	previewKey [sha256.Size]byte
 }
 
 // New creates a new SBOM Handler.
 func New(sbomSvc *ssbom.Service, projectSvc *psvc.Service) *Handler {
-	return &Handler{
+	h := &Handler{
 		sbomSvc:    sbomSvc,
 		projectSvc: projectSvc,
 	}
+	if _, err := rand.Read(h.previewKey[:]); err != nil {
+		panic(fmt.Errorf("generate preview token key: %w", err))
+	}
+	return h
 }
 
 // List returns the versions of all currently loaded SBOMs for a project.
@@ -279,11 +289,18 @@ func (h *Handler) Preview(c *gin.Context) {
 		slog.Error("Failed to check duplicate SHA-256", "error", err)
 		existingVersion = ""
 	}
+	previewToken, err := h.previewToken(projectID, sha256Hash, bomTimestamp)
+	if err != nil {
+		slog.Error("Failed to sign SBOM preview", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: "failed to sign SBOM preview"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{
 		"bom_result":       bomResult,
 		"sha256":           sha256Hash,
 		"bom_timestamp":    bomTimestamp,
+		"preview_token":    previewToken,
 		"filename":         baseName,
 		"existing_version": existingVersion,
 		"summary": gin.H{
@@ -311,6 +328,7 @@ func (h *Handler) Create(c *gin.Context) {
 		BomResult    ssbom.FormattedSBOM `json:"bom_result"`
 		SHA256       domain.SHA256       `json:"sha256"`
 		BomTimestamp time.Time           `json:"bom_timestamp"`
+		PreviewToken string              `json:"preview_token"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		var maxBytesErr *http.MaxBytesError
@@ -324,6 +342,10 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 	if body.Version == "" {
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "version")})
+		return
+	}
+	if !h.validPreviewToken(body.PreviewToken, projectID, body.SHA256, body.BomTimestamp) {
+		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: "invalid preview token; preview the SBOM again"})
 		return
 	}
 
@@ -399,4 +421,32 @@ func errCause(err error) string {
 		}
 	}
 	return err.Error()
+}
+
+type previewClaim struct {
+	ProjectID    domain.ProjectID `json:"project_id"`
+	SHA256       domain.SHA256    `json:"sha256"`
+	BomTimestamp time.Time        `json:"bom_timestamp"`
+}
+
+func (h *Handler) previewToken(projectID domain.ProjectID, checksum domain.SHA256, timestamp time.Time) (string, error) {
+	claim, err := json.Marshal(previewClaim{
+		ProjectID:    projectID,
+		SHA256:       checksum,
+		BomTimestamp: timestamp,
+	})
+	if err != nil {
+		return "", err
+	}
+	mac := hmac.New(sha256.New, h.previewKey[:])
+	_, _ = mac.Write(claim)
+	return hex.EncodeToString(mac.Sum(nil)), nil
+}
+
+func (h *Handler) validPreviewToken(token string, projectID domain.ProjectID, checksum domain.SHA256, timestamp time.Time) bool {
+	if len(token) != 2*sha256.Size {
+		return false
+	}
+	expected, err := h.previewToken(projectID, checksum, timestamp)
+	return err == nil && hmac.Equal([]byte(token), []byte(expected))
 }

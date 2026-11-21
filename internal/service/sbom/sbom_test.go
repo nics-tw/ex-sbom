@@ -482,22 +482,22 @@ func TestGetReverseDep(t *testing.T) {
 func TestGetAllFixVersions(t *testing.T) {
 	tests := []struct {
 		name     string
-		vuln     osvschema.Vulnerability
+		vuln     *osvschema.Vulnerability
 		expected []string
 	}{
 		{
 			name:     "empty vulnerability",
-			vuln:     osvschema.Vulnerability{},
+			vuln:     &osvschema.Vulnerability{},
 			expected: []string{},
 		},
 		{
 			name: "single fixed version",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 								},
 							},
@@ -509,12 +509,12 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "multiple fixed versions",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 									{Fixed: "2.0.0"},
 								},
@@ -527,12 +527,12 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "duplicate fixed versions",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 									{Fixed: "1.2.3"}, // Duplicate
 								},
@@ -545,21 +545,21 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "multiple affected packages with different fixed versions",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 								},
 							},
 						},
 					},
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "4.5.6"},
 								},
 							},
@@ -571,17 +571,17 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "complex nested structure",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 								},
 							},
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "2.3.4"},
 									{Fixed: ""}, // Empty fixed version
 								},
@@ -589,9 +589,9 @@ func TestGetAllFixVersions(t *testing.T) {
 						},
 					},
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "3.4.5"},
 									{Fixed: "1.2.3"}, // Duplicate across packages
 								},
@@ -656,17 +656,17 @@ func TestGetVulns(t *testing.T) {
 	// Setup test data
 	mockVulnMap := map[string]models.PackageVulns{
 		"package1": {
-			Vulnerabilities: []osvschema.Vulnerability{
+			Vulnerabilities: []*osvschema.Vulnerability{
 				{
-					ID:      "CVE-2023-1234",
+					Id:      "CVE-2023-1234",
 					Summary: "Test vulnerability 1",
 					Details: "Details for test vulnerability 1",
 					Aliases: []string{"CVE-2023-1234", "GHSA-1234"},
-					Affected: []osvschema.Affected{
+					Affected: []*osvschema.Affected{
 						{
-							Ranges: []osvschema.Range{
+							Ranges: []*osvschema.Range{
 								{
-									Events: []osvschema.Event{
+									Events: []*osvschema.Event{
 										{Fixed: "1.2.4"},
 										{Fixed: "2.0.0"},
 									},
@@ -684,17 +684,17 @@ func TestGetVulns(t *testing.T) {
 			},
 		},
 		"package2": {
-			Vulnerabilities: []osvschema.Vulnerability{
+			Vulnerabilities: []*osvschema.Vulnerability{
 				{
-					ID:      "CVE-2023-5678",
+					Id:      "CVE-2023-5678",
 					Summary: "Test vulnerability 2",
 					Details: "Details for test vulnerability 2",
 					Aliases: []string{"CVE-2023-5678", "GHSA-5678"},
-					Affected: []osvschema.Affected{
+					Affected: []*osvschema.Affected{
 						{
-							Ranges: []osvschema.Range{
+							Ranges: []*osvschema.Range{
 								{
-									Events: []osvschema.Event{
+									Events: []*osvschema.Event{
 										{Fixed: "2.3.0"},
 									},
 								},
@@ -703,15 +703,15 @@ func TestGetVulns(t *testing.T) {
 					},
 				},
 				{
-					ID:      "CVE-2023-9012",
+					Id:      "CVE-2023-9012",
 					Summary: "Test vulnerability 3",
 					Details: "Details for test vulnerability 3",
 					Aliases: []string{"CVE-2023-9012", "GHSA-9012"},
-					Affected: []osvschema.Affected{
+					Affected: []*osvschema.Affected{
 						{
-							Ranges: []osvschema.Range{
+							Ranges: []*osvschema.Range{
 								{
-									Events: []osvschema.Event{
+									Events: []*osvschema.Event{
 										{Fixed: "3.0.0"},
 										{Fixed: "2.5.0"},
 									},
@@ -733,7 +733,7 @@ func TestGetVulns(t *testing.T) {
 			},
 		},
 		"package3": {
-			Vulnerabilities: []osvschema.Vulnerability{},
+			Vulnerabilities: []*osvschema.Vulnerability{},
 			Groups:          []models.GroupInfo{},
 		},
 	}
@@ -823,19 +823,19 @@ func TestGetVulnNumber(t *testing.T) {
 	// Setup test data
 	mockVulnMap := map[string]models.PackageVulns{
 		"package1": {
-			Vulnerabilities: []osvschema.Vulnerability{
-				{ID: "CVE-2023-1111"},
-				{ID: "CVE-2023-2222"},
-				{ID: "CVE-2023-3333"},
+			Vulnerabilities: []*osvschema.Vulnerability{
+				{Id: "CVE-2023-1111"},
+				{Id: "CVE-2023-2222"},
+				{Id: "CVE-2023-3333"},
 			},
 		},
 		"package2": {
-			Vulnerabilities: []osvschema.Vulnerability{
-				{ID: "CVE-2023-4444"},
+			Vulnerabilities: []*osvschema.Vulnerability{
+				{Id: "CVE-2023-4444"},
 			},
 		},
 		"package3": {
-			Vulnerabilities: []osvschema.Vulnerability{},
+			Vulnerabilities: []*osvschema.Vulnerability{},
 		},
 	}
 

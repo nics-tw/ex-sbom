@@ -87,7 +87,7 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 | 變數 | 預設值 | 說明 |
 |------|--------|------|
 | `PORT` | `8080` | 本地網頁伺服器監聽的連接埠。 |
-| `BIND_ADDR` | `127.0.0.1` | 伺服器綁定的位址。預設僅限本機存取;除非刻意要開放網路存取,否則不要改為 `0.0.0.0`。 |
+| `BIND_ADDR` | `127.0.0.1` | 僅接受本機 loopback IP，例如 `127.0.0.1` 或 `::1`。其他位址會被拒絕。 |
 | `AUTO_OPEN_BROWSER` | `true` | 設為 `false` 可在啟動時不自動開啟瀏覽器。 |
 | `DB_PATH` | 依作業系統而定（見下方） | DuckDB 資料庫檔案的路徑。 |
 
@@ -95,6 +95,8 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 - macOS：`~/Library/Application Support/ex-sbom/data.duckdb`
 - Linux：`~/.config/ex-sbom/data.duckdb`
 - Windows：`%AppData%\ex-sbom\data.duckdb`
+
+刪除專案後，應用程式會隱藏該專案及其 SBOM；資料列仍保留在 DuckDB 檔案中，但應用程式沒有還原功能。
 
 ## API 文件
 我們使用 Postman 來記錄 API 文件。您可以在根目錄中找到名為 `ex-sbom.postman_collection.json` 的文件。您可以將此文件匯入 Postman 以查看 API 文件。

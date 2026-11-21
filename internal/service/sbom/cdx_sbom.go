@@ -111,7 +111,7 @@ func (s *Service) ProcessCDX(projectID domain.ProjectID, name domain.Version, bo
 
 	slog.Info(
 		"Process CycloneDX-formatted SBOM successfully",
-		"name", name,
+		"name", util.LogSafe(name),
 		"numbers of components", len(final.Components),
 		"total levels", fmt.Sprintf("%d", len(final.DependencyLevel)),
 	)
@@ -305,7 +305,7 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 	for node, level := range levelMap {
 		name, ok := refToName[node]
 		if !ok {
-			slog.Warn("unresolved BOMRef in dependency graph", "ref", node)
+			slog.Warn("unresolved BOMRef in dependency graph", "ref", util.LogSafe(node))
 			continue
 		}
 		result[level] = append(result[level], name)
@@ -315,7 +315,7 @@ func getCdxDependencyDepthMap(sbom cdx.BOM, allComponents []string, refToName ma
 		if !visited[ref] {
 			name, ok := refToName[ref]
 			if !ok {
-				slog.Warn("unresolved isolated BOMRef", "ref", ref)
+				slog.Warn("unresolved isolated BOMRef", "ref", util.LogSafe(ref))
 				continue
 			}
 			result[0] = append(result[0], name)
@@ -357,7 +357,7 @@ func getCdxDep(input *[]cdx.Dependency, refToName map[string]string, rootRef str
 
 		refName, ok := refToName[d.Ref]
 		if !ok {
-			slog.Warn("unresolved BOMRef in dependency list", "ref", d.Ref)
+			slog.Warn("unresolved BOMRef in dependency list", "ref", util.LogSafe(d.Ref))
 			continue
 		}
 
@@ -365,7 +365,7 @@ func getCdxDep(input *[]cdx.Dependency, refToName map[string]string, rootRef str
 		for _, dep := range *d.Dependencies {
 			depName, ok := refToName[dep]
 			if !ok {
-				slog.Warn("unresolved dependency BOMRef", "dep", dep)
+				slog.Warn("unresolved dependency BOMRef", "dep", util.LogSafe(dep))
 				continue
 			}
 			deps = append(deps, depName)
@@ -390,7 +390,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 
 	defer func() {
 		if err := file.Delete(path); err != nil {
-			slog.Error("failed to delete file", "error", err, "filename", filename, "path", path)
+			slog.Error("failed to delete file", "error", err, "filename", util.LogSafe(filename), "path", path)
 		}
 	}()
 
@@ -428,14 +428,14 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 	}
 
 	if len(firstInfos) == 0 {
-		slog.Info("no lev info found for the components", "name", filename)
+		slog.Info("no lev info found for the components", "name", util.LogSafe(filename))
 	}
 
 	for name, info := range componentInfo {
 		updated := false
 		for i, v := range info.Vulns {
 			if data, found := firstInfos[v.ID]; found {
-				slog.Info("found lev info", "cve", v.ID, "lev", data.LEV, "epss", data.EPSS)
+				slog.Info("found lev info", "cve", util.LogSafe(v.ID), "lev", data.LEV, "epss", util.LogSafe(data.EPSS))
 				info.Vulns[i].EPSS = fmt.Sprintf("%.6f", data.EPSSNum)
 				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
 				updated = true

@@ -72,7 +72,7 @@
           projectRename: "Rename",
           projectDelete: "Delete",
           projectRenamePrompt: "Enter new project name:",
-          projectDeleteConfirm: "Delete this project and all its SBOMs? This cannot be undone.",
+          projectDeleteConfirm: "Delete this project from the app? Its SBOMs will remain in the database.",
           diffFiles: "Diff Files",
           diffSbomTitle: "Compare SBOMs",
           diffSbomA: "SBOM A (before)",
@@ -154,7 +154,7 @@
           projectRename: "重新命名",
           projectDelete: "刪除",
           projectRenamePrompt: "輸入新的專案名稱：",
-          projectDeleteConfirm: "確定刪除此專案及所有 SBOM？此操作無法復原。",
+          projectDeleteConfirm: "確定從應用程式刪除此專案？SBOM 資料仍保留在資料庫。",
           diffFiles: "Diff 檔案",
           diffSbomTitle: "比較 SBOM",
           diffSbomA: "SBOM A（舊版）",
@@ -251,11 +251,11 @@
         return fetch(`/projects/${projectID}/sboms/preview`, { method: "POST", body: form });
       },
 
-      commitSBOM(projectID, version, bomResult, sha256, bomTimestamp) {
+      commitSBOM(projectID, version, bomResult, sha256, bomTimestamp, previewToken) {
         return fetch(`/projects/${projectID}/sboms`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version, bom_result: bomResult, sha256, bom_timestamp: bomTimestamp }),
+          body: JSON.stringify({ version, bom_result: bomResult, sha256, bom_timestamp: bomTimestamp, preview_token: previewToken }),
         });
       },
       listVersions(projectID) {
@@ -293,16 +293,27 @@
     // PROJECT — project CRUD + UI state sync
     // ═══════════════════════════════════════════════════════════════════════════
     const Project = {
-      async load(autoLoad = true) {
+      async load(autoLoad = true, selectID = null) {
+        const request = ++this._listGen;
+        const selection = this._selectionGen;
         try {
           const json = await Api.getProjects();
+          if (request !== this._listGen) return;
           const { projects, current } = json.data;
           const sel = document.getElementById("project-select");
+          const preferred = selection === this._selectionGen && selectID !== null
+            ? String(selectID) : sel.value;
+          const selected = (projects || []).some(w => String(w.ID) === preferred)
+            ? preferred : String((projects || []).find(w => w.Name === current)?.ID ?? projects?.[0]?.ID ?? "");
           sel.innerHTML = (projects || [])
-            .map(w => `<option value="${esc(w.ID)}"${w.Name === current ? " selected" : ""}>${esc(w.Name)}</option>`)
+            .map(w => `<option value="${esc(w.ID)}"${String(w.ID) === selected ? " selected" : ""}>${esc(w.Name)}</option>`)
             .join("");
-          document.getElementById("project-current").textContent = current ? `(${current})` : "";
-          if (autoLoad && sel.value) await this.get(sel.value);
+          const name = (projects || []).find(w => String(w.ID) === String(State.projectID))?.Name;
+          document.getElementById("project-current").textContent = name ? `(${name})` : "";
+          if (autoLoad && selection === this._selectionGen) {
+            if (sel.value) await this.get(sel.value);
+            else this._apply({ data: { project_id: null } });
+          }
         } catch (e) {
           console.error("Failed to load projects:", e);
         }
@@ -329,14 +340,16 @@
 
         const sel = document.getElementById("project-select");
         const opt = sel.options[sel.selectedIndex];
-        document.getElementById("project-current").textContent = opt ? `(${opt.text})` : "";
+        document.getElementById("project-current").textContent = State.projectID && opt ? `(${opt.text})` : "";
       },
 
       // Monotonic token: only the latest project selection may apply its response
       _selectionGen: 0,
+      _listGen: 0,
 
       async get(id) {
         const gen = ++this._selectionGen;
+        this._apply({ data: { project_id: null } });
         try {
           const json = await Api.getProject(id);
           // Stale response guard: a newer selection/create/delete happened,
@@ -352,12 +365,11 @@
       },
 
       async create(name) {
+        const selection = this._selectionGen;
         try {
           const json = await Api.createProject(name);
-          this._selectionGen++;
-          this._apply(json);
-          await this.load(false);
-          document.getElementById("project-select").value = json.data.project_id;
+          const stillSelected = selection === this._selectionGen;
+          await this.load(stillSelected, stillSelected ? json.data.project_id : null);
         } catch (e) {
           console.error("Failed to create project:", e);
           alert(e.message || "Failed to create project");
@@ -368,7 +380,6 @@
         try {
           await Api.renameProject(id, name);
           await this.load(false);
-          document.getElementById("project-select").value = id;
         } catch (e) {
           console.error("Failed to rename project:", e);
           alert(e.message || "Failed to rename project");
@@ -378,9 +389,13 @@
       async delete(id) {
         try {
           await Api.deleteProject(id);
-          this._selectionGen++;
-          State.projectID = null;
-          await this.load(true);
+          const sel = document.getElementById("project-select");
+          const deletedSelection = String(sel.value || State.projectID) === String(id);
+          if (deletedSelection) {
+            this._selectionGen++;
+            this._apply({ data: { project_id: null } });
+          }
+          await this.load(deletedSelection);
         } catch (e) {
           console.error("Failed to delete project:", e);
           alert(e.message || "Failed to delete project");
@@ -416,6 +431,7 @@
         </svg>`;
 
         const label = document.createElement("span");
+        label.className = "sbom-tab-label";
         label.textContent = fileName;
 
         const closeBtn = document.createElement("span");
@@ -425,7 +441,7 @@
         </svg>`;
         closeBtn.addEventListener("click", e => {
           e.stopPropagation();
-          State.uploadedFiles.delete(fileName);
+          State.uploadedFiles.delete(tab.dataset.version);
           const wasActive = tab.classList.contains("tab-active");
           tab.remove();
           if (wasActive) {
@@ -707,12 +723,13 @@
         const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.version === oldVersion);
         if (!tabEl) return;
         tabEl.dataset.version = newVersion;
-        const label = tabEl.querySelector("span:not(.leading-none)");
+        const label = tabEl.querySelector(".sbom-tab-label");
         if (label) label.textContent = newVersion;
         if (State.uploadedFiles.has(oldVersion)) {
           State.uploadedFiles.delete(oldVersion);
           State.uploadedFiles.add(newVersion);
         }
+        if (State.activeTab === tabEl) this.selectTab(tabEl);
       },
 
       removeTab(version) {
@@ -1397,26 +1414,51 @@
     const VersionHistory = {
       _page: 0,
       _versions: [],
+      _projectID: null,
+      _loadSeq: 0,
       PAGE_SIZE: 10,
+
+      invalidate() {
+        this._loadSeq++;
+        this._projectID = null;
+        this._versions = [];
+        document.getElementById("version-history-list").innerHTML =
+          `<p class="text-gray-400 italic text-sm">載入中...</p>`;
+      },
 
       async load() {
         const container = document.getElementById("version-history-list");
-        if (!State.projectID) {
+        const projectID = State.projectID;
+        this.invalidate();
+        const seq = this._loadSeq;
+        if (!projectID) {
           container.innerHTML = `<p class="text-gray-400 italic text-sm">尚未選擇專案</p>`;
           return;
         }
 
         try {
-          const json = await Api.listVersions(State.projectID);
+          const json = await Api.listVersions(projectID);
+          if (seq !== this._loadSeq || State.projectID !== projectID) return;
+          this._projectID = projectID;
           this._versions = json.data ?? [];
           this._page = 0;
           this._render(container);
         } catch (e) {
-          container.innerHTML = `<p class="text-red-500 text-sm">載入失敗：${esc(e.message)}</p>`;
+          if (seq === this._loadSeq && State.projectID === projectID) {
+            container.innerHTML = `<p class="text-red-500 text-sm">載入失敗：${esc(e.message)}</p>`;
+          }
         }
       },
 
       _render(container) {
+        const projectID = this._projectID;
+        const seq = this._loadSeq;
+        const isCurrent = () => this._loadSeq === seq &&
+          this._projectID === projectID && State.projectID === projectID;
+        const refreshIfSelected = () => {
+          if (State.projectID === projectID &&
+              document.getElementById("project-select").value === String(projectID)) this.load();
+        };
         const versions = this._versions;
         if (versions.length === 0) {
           container.innerHTML = `<p class="text-gray-400 italic text-sm">尚無版本記錄，請至「SBOM 分析」上傳檔案。</p>`;
@@ -1463,6 +1505,7 @@
 
         container.querySelectorAll(".version-load-btn").forEach(btn => {
           btn.addEventListener("click", () => {
+            if (!isCurrent()) return;
             const version = btn.dataset.version;
             MainTab.show("analysis");
             Sbom.addTab(version, true);
@@ -1471,11 +1514,13 @@
 
         container.querySelectorAll(".version-rename-btn").forEach(btn => {
           btn.addEventListener("click", async () => {
+            if (!isCurrent()) return;
             const oldName = btn.dataset.version;
             const newName = prompt("輸入新的版本名稱：", oldName);
             if (!newName || newName.trim() === oldName) return;
             try {
-              const json = await Api.renameSBOM(State.projectID, oldName, newName.trim());
+              const json = await Api.renameSBOM(projectID, oldName, newName.trim());
+              if (!isCurrent()) { refreshIfSelected(); return; }
               if (json?.data?.version) {
                 const entry = this._versions.find(v => v.version === oldName);
                 if (entry) entry.version = newName.trim();
@@ -1483,17 +1528,19 @@
                 Sbom.renameTab(oldName, newName.trim());
               }
             } catch (e) {
-              alert(`重新命名失敗：${e.message}`);
+              if (isCurrent()) alert(`重新命名失敗：${e.message}`);
             }
           });
         });
 
         container.querySelectorAll(".version-delete-btn").forEach(btn => {
           btn.addEventListener("click", async () => {
+            if (!isCurrent()) return;
             const version = btn.dataset.version;
             if (!confirm(`確定要刪除版本「${version}」？`)) return;
             try {
-              await Api.deleteSBOM(State.projectID, version);
+              await Api.deleteSBOM(projectID, version);
+              if (!isCurrent()) { refreshIfSelected(); return; }
               // Remove from in-memory list and re-render without a network round-trip
               this._versions = this._versions.filter(v => v.version !== version);
               if (this._page >= Math.ceil(this._versions.length / this.PAGE_SIZE)) {
@@ -1503,16 +1550,18 @@
               // Also remove the tab from 選擇 SBOM 版本 if it is open
               Sbom.removeTab(version);
             } catch (e) {
-              alert(`刪除失敗：${e.message}`);
+              if (isCurrent()) alert(`刪除失敗：${e.message}`);
             }
           });
         });
 
         container.querySelector(".pager-prev")?.addEventListener("click", () => {
+          if (!isCurrent()) return;
           this._page--;
           this._render(container);
         });
         container.querySelector(".pager-next")?.addEventListener("click", () => {
+          if (!isCurrent()) return;
           this._page++;
           this._render(container);
         });
@@ -1525,6 +1574,7 @@
       _bomResult: null,
       _sha256: null,
       _bomTimestamp: null,
+      _previewToken: null,
       _existingVersion: null,
       // identity captured when the preview request is fired; commit and the
       // preview response are only honoured while they still match
@@ -1533,9 +1583,15 @@
       _previewSeq: 0,
 
       open() {
+        this._previewSeq++;
+        const previewBtn = document.getElementById("sbom-modal-preview-btn");
+        previewBtn.disabled = false;
+        previewBtn.textContent = "預覽";
+        document.getElementById("sbom-modal-commit-btn").textContent = "建立版本";
         this._bomResult = null;
         this._sha256 = null;
         this._bomTimestamp = null;
+        this._previewToken = null;
         this._existingVersion = null;
         this._projectID = null;
         this._file = null;
@@ -1549,9 +1605,11 @@
 
       close() {
         document.getElementById("sbom-modal").classList.add("hidden");
+        this._previewSeq++;
         document.getElementById("sbom-file-input").value = "";
         this._bomResult = null;
         this._sha256 = null;
+        this._previewToken = null;
         this._existingVersion = null;
         this._projectID = null;
         this._file = null;
@@ -1582,6 +1640,7 @@
         const projectID = State.projectID;
         const file = fileInput.files[0];
         const seq = ++this._previewSeq;
+        const isCurrent = () => seq === this._previewSeq;
 
         try {
           const resp = await Api.previewSBOM(projectID, file);
@@ -1589,7 +1648,7 @@
 
           // a newer preview was fired, or project/file changed while in flight:
           // this response no longer describes the current selection — drop it
-          if (seq !== this._previewSeq) return;
+          if (!isCurrent()) return;
           if (State.projectID !== projectID || fileInput.files[0] !== file) {
             errEl.textContent = "專案或檔案已變更，請重新預覽";
             errEl.classList.remove("hidden");
@@ -1606,6 +1665,7 @@
           this._bomResult = data.bom_result;
           this._sha256 = data.sha256;
           this._bomTimestamp = data.bom_timestamp;
+          this._previewToken = data.preview_token;
           this._existingVersion = data.existing_version || "";
           this._projectID = projectID;
           this._file = file;
@@ -1640,11 +1700,14 @@
           document.getElementById("sbom-modal-step1").classList.add("hidden");
           document.getElementById("sbom-modal-step2").classList.remove("hidden");
         } catch (e) {
+          if (!isCurrent() || State.projectID !== projectID) return;
           errEl.textContent = e.message || "預覽失敗";
           errEl.classList.remove("hidden");
         } finally {
-          previewBtn.disabled = false;
-          previewBtn.textContent = "預覽";
+          if (isCurrent()) {
+            previewBtn.disabled = false;
+            previewBtn.textContent = "預覽";
+          }
         }
       },
 
@@ -1661,7 +1724,7 @@
 
         // the preview result is only valid for the project it was scanned
         // against; refuse to commit if the user switched project meanwhile
-        if (!this._bomResult || this._projectID == null) {
+        if (!this._bomResult || !this._previewToken || this._projectID == null) {
           errEl.textContent = "預覽資料已失效，請重新預覽";
           errEl.classList.remove("hidden");
           return;
@@ -1673,12 +1736,18 @@
         }
 
         const commitBtn = document.getElementById("sbom-modal-commit-btn");
+        const projectID = this._projectID;
+        const seq = this._previewSeq;
+        const selection = Project._selectionGen;
+        const isCurrent = () => State.projectID === projectID && this._previewSeq === seq &&
+          Project._selectionGen === selection;
         commitBtn.disabled = true;
         commitBtn.textContent = "建立中...";
 
         try {
-          const resp = await Api.commitSBOM(this._projectID, version, this._bomResult, this._sha256, this._bomTimestamp);
+          const resp = await Api.commitSBOM(projectID, version, this._bomResult, this._sha256, this._bomTimestamp, this._previewToken);
           const json = await resp.json();
+          if (!isCurrent()) return;
           if (resp.status === 409 || !resp.ok) {
             errEl.textContent = json.error || "建立失敗";
             errEl.classList.remove("hidden");
@@ -1689,11 +1758,14 @@
           Sbom.addTab(version);
           VersionHistory.load();
         } catch (e) {
+          if (!isCurrent()) return;
           errEl.textContent = e.message || "建立失敗";
           errEl.classList.remove("hidden");
         } finally {
-          commitBtn.disabled = false;
-          commitBtn.textContent = "建立版本";
+          if (this._previewSeq === seq) {
+            commitBtn.disabled = false;
+            commitBtn.textContent = "建立版本";
+          }
         }
       },
 

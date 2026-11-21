@@ -8,18 +8,17 @@ package sbom
 
 import (
 	"bytes"
-	"mime/multipart"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
-	"fmt"
-
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/handler/middleware"
 	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
 	"ex-sbom/util/msg"
+	"fmt"
+	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -140,7 +139,9 @@ func TestCreateOnMissingProjectReturns404(t *testing.T) {
 		h.Create(c)
 	})
 
-	body := bytes.NewBufferString(`{"version":"v1","bom_result":{},"sha256":"any"}`)
+	token, err := h.previewToken(999, "any", time.Time{})
+	assert.NoError(t, err)
+	body := bytes.NewBufferString(fmt.Sprintf(`{"version":"v1","bom_result":{},"sha256":"any","preview_token":%q}`, token))
 	req := httptest.NewRequest(http.MethodPost, "/sboms", body)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -149,4 +150,37 @@ func TestCreateOnMissingProjectReturns404(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), msg.ErrProjectNotFound)
+}
+
+func TestPreviewTokenBinding(t *testing.T) {
+	h := New(nil, nil)
+	timestamp := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	token, err := h.previewToken(7, "checksum", timestamp)
+	assert.NoError(t, err)
+	assert.True(t, h.validPreviewToken(token, 7, "checksum", timestamp))
+	assert.False(t, h.validPreviewToken(token, 8, "checksum", timestamp))
+	assert.False(t, h.validPreviewToken(token, 7, "changed", timestamp))
+	assert.False(t, h.validPreviewToken(token, 7, "checksum", timestamp.Add(time.Second)))
+	assert.False(t, h.validPreviewToken("invalid", 7, "checksum", timestamp))
+}
+
+func TestCreateRejectsMissingOrInvalidPreviewToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := New(ssbom.NewService(missingProjectRepo{}, ssbom.NewInMemoryCache()), nil)
+	otherProjectToken, err := h.previewToken(2, "any", time.Time{})
+	assert.NoError(t, err)
+	router := gin.New()
+	router.POST("/sboms", func(c *gin.Context) {
+		c.Set(middleware.ProjectIDKey, int64(1))
+		h.Create(c)
+	})
+	for _, token := range []string{"", "invalid", otherProjectToken} {
+		body := fmt.Sprintf(`{"version":"v1","bom_result":{},"sha256":"any","preview_token":%q}`, token)
+		req := httptest.NewRequest(http.MethodPost, "/sboms", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid preview token")
+	}
 }

@@ -193,7 +193,7 @@
                 "preview"
               ]
             },
-            "description": "Parse an uploaded SBOM file (CycloneDX or SPDX, JSON) and return the parsed result WITHOUT saving it. Use `multipart/form-data` with a `file` field. The response includes `bom_result`, `sha256`, `bom_timestamp`, `filename`, `existing_version` (non-empty if a version with the same SHA-256 already exists) and a `summary`. Feed these values into `Create SBOM` to persist the result.",
+            "description": "Parse an uploaded SBOM file (CycloneDX or SPDX, JSON) and return the parsed result WITHOUT saving it. Use `multipart/form-data` with a `file` field. The response includes `bom_result`, `sha256`, `bom_timestamp`, `preview_token`, `filename`, `existing_version` (non-empty if a version with the same SHA-256 already exists) and a `summary`. Feed these values into `Create SBOM` to persist the result.",
             "body": {
               "mode": "formdata",
               "formdata": [
@@ -229,10 +229,10 @@
                 "sboms"
               ]
             },
-            "description": "Persist a previously previewed SBOM under a version name. Body fields: `version`, `bom_result` (the object from Preview), `sha256`, `bom_timestamp`. Returns 409 if the same version name or the same SHA-256 already exists.",
+            "description": "Persist a previously previewed SBOM under a version name. Body fields: `version`, `bom_result` (the object from Preview), `sha256`, `bom_timestamp`, required `preview_token` copied from Preview. Missing or invalid tokens return 400; preview again after a server restart. Returns 409 if the same version name or the same SHA-256 already exists.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"version\": \"v1.0.0\",\n  \"bom_result\": {\n    \"__note__\": \"paste the bom_result object returned by the Preview SBOM endpoint here\"\n  },\n  \"sha256\": \"<sha256 from preview>\",\n  \"bom_timestamp\": \"2026-01-01T00:00:00Z\"\n}",
+              "raw": "{\n  \"version\": \"v1.0.0\",\n  \"bom_result\": {\n    \"__note__\": \"paste the bom_result object returned by the Preview SBOM endpoint here\"\n  },\n  \"sha256\": \"<sha256 from preview>\",\n  \"bom_timestamp\": \"2026-01-01T00:00:00Z\",\n  \"preview_token\": \"<preview_token from preview>\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
