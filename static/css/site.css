@@ -257,6 +257,11 @@ body .site-main:focus-visible {
   background: white;
 }
 
+.sbom-filename {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 .sbom-dialog::backdrop {
   background: rgb(0 0 0 / 40%);
 }
