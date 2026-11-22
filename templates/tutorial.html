@@ -68,14 +68,12 @@
             <button
               id="lang-en"
               class="px-2 py-1 rounded font-medium language-btn active-language"
-              onclick="changeLanguage('en')"
             >
               EN
             </button>
             <button
               id="lang-zh"
               class="px-2 py-1 rounded font-medium language-btn"
-              onclick="changeLanguage('zh')"
             >
               正體中文
             </button>
@@ -155,6 +153,7 @@
       </div>
     </div>
 
+    <script src="/static/js/language.js"></script>
     <script>
       // Language translations
       const translations = {
@@ -238,35 +237,14 @@
         },
       };
 
-      // Current language
-      let currentLanguage = "en";
-
-      // Function to change language
       function changeLanguage(lang) {
-        currentLanguage = lang;
-        document
-          .getElementById("lang-en")
-          .classList.toggle("active-language", lang === "en");
-        document
-          .getElementById("lang-zh")
-          .classList.toggle("active-language", lang === "zh");
-
-        // Update all text elements with data-i18n attribute
         document.querySelectorAll("[data-i18n]").forEach((el) => {
           const key = el.getAttribute("data-i18n");
-          el.textContent = translations[currentLanguage][key] || key;
+          el.textContent = translations[lang][key] || key;
         });
       }
 
-      // Initialize the language based on browser preference
-      document.addEventListener("DOMContentLoaded", function () {
-        const browserLang = navigator.language || navigator.userLanguage;
-        if (browserLang.startsWith("zh")) {
-          changeLanguage("zh");
-        } else {
-          changeLanguage("en");
-        }
-      });
+      document.addEventListener("DOMContentLoaded", () => bindLanguageSwitcher(changeLanguage));
     </script>
   </body>
 </html>
