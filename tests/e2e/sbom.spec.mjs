@@ -132,6 +132,40 @@ test("upload dialog keeps keyboard focus and returns it when dismissed", async (
   await expect(trigger).toBeFocused();
 });
 
+test("keeps long upload filenames readable with enlarged text", async ({ page, service }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(service.url);
+  // Match the dialog's layout utilities without loading Tailwind from the CDN.
+  await page.addStyleTag({ content: `
+    #sbom-modal .flex { display: flex; }
+    #sbom-modal .gap-3 { gap: .75rem; }
+    #sbom-modal .p-6 { padding: 1.5rem; }
+    #sbom-modal .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #sbom-filename-display { font-size: 28px; }
+  ` });
+  const payload = {
+    ...sbom("fixture-library", "1.0.0"),
+    name: "合成資料-sbom-components-2026-11-23-release.json",
+  };
+  const dialog = page.locator("#sbom-modal");
+  const filename = dialog.locator("#sbom-filename-display");
+
+  for (const language of ["en", "zh"]) {
+    await page.locator("#lang-" + language).click();
+    await page.locator("#select-sbom-btn").click();
+    await page.locator("#sbom-file-input").setInputFiles(payload);
+    await expect(filename).toBeVisible();
+    await expect(filename).toHaveText(payload.name);
+    const clipped = await filename.evaluate(el => el.scrollWidth > el.clientWidth);
+    expect(clipped, language + " filename must fit across wrapped lines").toBe(false);
+    await page.locator("#sbom-modal-preview-btn").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#sbom-version-input")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  }
+});
+
 test("@smoke creates a project, uploads and previews an SBOM, saves it and downloads it after reload", async ({ page, service }) => {
   await page.goto(service.url);
   const project = await createProject(page, "Browser fixture");
