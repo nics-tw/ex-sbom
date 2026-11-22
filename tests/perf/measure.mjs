@@ -172,7 +172,7 @@ async function measureBrowser() {
         },
         topology: {
           path: topology,
-          selector: '#tab-content [data-is-expanded="true"] .truncate',
+          selector: '#tab-content [id^="topology-level-"] li > button[aria-haspopup="dialog"]',
           expected: Array.from({ length: 8 }, (_, level) =>
             Math.min(10, Math.max(0, Math.ceil((manifest.components_per_version - level) / 8)))).reduce((a, b) => a + b, 0),
           action: `#file-tabs [data-version="${firstVersion}"] .sbom-tab-label`,
