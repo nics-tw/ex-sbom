@@ -93,7 +93,7 @@ function versionRow(page, version) {
   });
 }
 
-test("upload dialog keeps keyboard focus and returns it when dismissed", async ({ page, service }) => {
+test("upload dialog keeps keyboard focus and returns it when dismissed", async ({ page, service, browserName }) => {
   await page.goto(service.url);
   const trigger = page.locator("#select-sbom-btn");
   await trigger.focus();
@@ -102,9 +102,10 @@ test("upload dialog keeps keyboard focus and returns it when dismissed", async (
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveAccessibleName(/Select SBOM file|選擇 SBOM 檔案/);
   await expect(page.locator("#sbom-pick-file-btn")).toBeFocused();
-  await page.keyboard.press("Tab");
+  const tabKey = browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+  await page.keyboard.press(tabKey);
   await expect(page.locator("#sbom-modal-cancel")).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press(`Shift+${tabKey}`);
   await expect(page.locator("#sbom-pick-file-btn")).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
@@ -136,7 +137,10 @@ test("@smoke creates a project, uploads and previews an SBOM, saves it and downl
   await upload(page, sbom("fixture-library", "1.0.0"), "First release");
   await page.reload();
   await selectProject(page, project, "Browser fixture");
-  await versionRow(page, "First release").locator(".version-load-btn").click();
+  const openVersion = versionRow(page, "First release").locator(".version-load-btn");
+  await openVersion.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "First release", exact: true })).toBeFocused();
   const reportButton = page.getByRole("button", { name: "Download PDF Report" });
   const reportStatus = page.locator("#tab-content").getByRole("status");
   await page.route("**/report?*", route => route.fulfill({ status: 500 }), { times: 1 });
@@ -152,6 +156,14 @@ test("@smoke creates a project, uploads and previews an SBOM, saves it and downl
   expect(download.suggestedFilename()).toMatch(/^First release.*\.pdf$/i);
   await expect(reportStatus).toContainText(download.suggestedFilename());
   await expect(reportStatus).toContainText(/browser.*downloads/i);
+  await page.locator("#search-input").fill("fixture-library");
+  await expect(page.locator("#search-status")).toContainText(/Search results/);
+  await page.locator("#lang-zh").click();
+  await expect(page.locator("#search-status")).toContainText("搜尋結果");
+  await expect(versionRow(page, "First release").locator(".version-load-btn")).toHaveAccessibleName(/開啟/);
+  await page.locator("#search-clear-btn").focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator("#search-input")).toBeFocused();
   const handle = await open(await download.path(), "r");
   try {
     const result = await handle.read(Buffer.alloc(5));
@@ -161,7 +173,7 @@ test("@smoke creates a project, uploads and previews an SBOM, saves it and downl
   }
 });
 
-test("searches, compares, renames and deletes versions across windows and a service restart", async ({ page, context, service }) => {
+test("searches, compares, renames and deletes versions across windows and a service restart", async ({ page, context, service, browserName }) => {
   await page.goto(service.url);
   const project = await createProject(page, "Two releases");
   await upload(page, sbom("fixture-library", "1.0.0"), "Before");
@@ -226,7 +238,7 @@ test("searches, compares, renames and deletes versions across windows and a serv
   const showLess = second.locator("#tab-content").getByRole("button", { name: /Show less/ });
   await expect(showLess).toHaveAttribute("aria-expanded", "true");
   await expect(showLess).toBeFocused();
-  await second.keyboard.press("Tab");
+  await second.keyboard.press(browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab");
   await expect(extraComponent).toBeFocused();
   await showLess.focus();
   await second.keyboard.press("Space");
@@ -291,7 +303,7 @@ test("cancels the previous project request and keeps the latest project selected
       predicate: request => request.url().endsWith(`/projects/${first}`),
     });
     await page.locator("#project-select").selectOption(second);
-    expect((await cancelled).failure()?.errorText).toContain("ABORTED");
+    expect((await cancelled).failure()?.errorText).toMatch(/aborted|cancelled/i);
     releaseFirst();
     await expect(versionRow(page, "Second version")).toBeVisible();
     await expect(page.locator("#project-select")).toHaveValue(second);
@@ -334,7 +346,7 @@ test("keeps the latest version visible during slow topology requests", async ({ 
     await page.locator('#file-tabs [data-version="Later"] .sbom-tab-label').focus();
     await page.keyboard.press('Space');
     await expect(content).toContainText("later-library");
-    expect((await earlierResponse).failure()?.errorText).toContain("ERR_ABORTED");
+    expect((await earlierResponse).failure()?.errorText).toMatch(/aborted|cancelled/i);
     allowEarlier();
     await routeDone;
     await expect(page.locator("#file-tabs .tab-active")).toHaveText("Later");
@@ -443,7 +455,7 @@ test("preserves a chosen interface language across navigation and reload", async
   await expect(html).toHaveAttribute("lang", "en");
 });
 
-test("provides bilingual landmarks, field names, and keyboard skip links", async ({ page, service }) => {
+test("provides bilingual landmarks, field names, and keyboard skip links", async ({ page, service, browserName }) => {
   await page.goto(service.url);
   const main = page.getByRole("main");
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
@@ -453,7 +465,7 @@ test("provides bilingual landmarks, field names, and keyboard skip links", async
   await expect(page.getByRole("textbox", { name: "New project name" })).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Search components or CVEs" })).toBeVisible();
 
-  await page.keyboard.press("Tab");
+  await page.keyboard.press(browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab");
   await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(main).toBeFocused();
@@ -465,7 +477,7 @@ test("provides bilingual landmarks, field names, and keyboard skip links", async
   await expect(main.getByRole("heading", { level: 1, name: "ex-sbom 操作教學" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "網站導覽" })).toBeVisible();
 
-  await page.keyboard.press("Tab");
+  await page.keyboard.press(browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab");
   await expect(page.getByRole("link", { name: "跳至主要內容" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(main).toBeFocused();

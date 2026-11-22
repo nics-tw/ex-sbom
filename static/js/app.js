@@ -36,6 +36,8 @@
           historyConfirm: "Delete version {0}?",
           historyRenameError: "Could not rename version: {0}",
           historyDeleteError: "Could not delete version: {0}",
+          searchFound: "Search results: {0}",
+          searchFailed: "Could not complete the search. Please try again.",
           uploadSelectTitle: "Select SBOM file",
           uploadPick: "Choose file",
           uploadCancel: "Cancel",
@@ -181,6 +183,8 @@
           historyConfirm: "確定要刪除版本「{0}」？",
           historyRenameError: "無法重新命名版本：{0}",
           historyDeleteError: "無法刪除版本：{0}",
+          searchFound: "搜尋結果：{0} 筆",
+          searchFailed: "無法完成搜尋，請再試一次。",
           uploadSelectTitle: "選擇 SBOM 檔案",
           uploadPick: "選擇檔案",
           uploadCancel: "取消",
@@ -324,6 +328,12 @@
       change(lang) {
         State.language = lang;
         this.apply();
+        Search.translate();
+        Diff.translate();
+        VersionHistory.translate();
+        for (const tab of document.getElementById("file-tabs").children) {
+          tab.querySelector(".sbom-tab-close")?.setAttribute("aria-label", t("closeVersion", tab.dataset.version));
+        }
         if (State.activeTab) Sbom.fetchTopology(State.activeTab.dataset.version);
       },
     };
@@ -1083,8 +1093,21 @@
     const Search = {
       _results: new RequestSlot(),
       _timer: null,
+      _displayed: null,
+
+      translate() {
+        if (this._displayed) this._render(this._displayed);
+      },
+
+      _render(data) {
+        this._displayed = data;
+        ResultView.search(document.getElementById("search-results"), document.getElementById("search-clear-btn"), data);
+        const status = document.getElementById("search-status");
+        if (status) status.textContent = data.total ? t("searchFound", data.total) : t("searchNoResults");
+      },
 
       schedule(value) {
+        this._displayed = null;
         const query = value.trim();
         if (!query) {
           this.clear();
@@ -1113,29 +1136,34 @@
           this._results.owns(req) &&
           State.projectID === req.projectID &&
           document.getElementById("search-input").value.trim() === req.q;
+        const status = document.getElementById("search-status");
         try {
           const json = await Api.search(req.projectID, q, req.controller.signal);
           if (!isCurrent()) return;
-          ResultView.search(
-            document.getElementById("search-results"),
-            document.getElementById("search-clear-btn"),
-            json.data,
-          );
+          this._render(json.data);
         } catch (e) {
           if (e.name === "AbortError" || !isCurrent()) return;
           console.error("Search error:", e);
+          const results = document.getElementById("search-results");
+          results.classList.add("hidden");
+          results.innerHTML = "";
+          document.getElementById("search-clear-btn").classList.remove("hidden");
+          if (status) status.textContent = t("searchFailed");
         } finally {
           this._results.finish(req);
         }
       },
 
       clear() {
+        this._displayed = null;
         this._cancel();
         document.getElementById("search-input").value = "";
         const container = document.getElementById("search-results");
         container.classList.add("hidden");
         container.innerHTML = "";
         document.getElementById("search-clear-btn").classList.add("hidden");
+        const status = document.getElementById("search-status");
+        if (status) status.textContent = "";
       },
     };
 
@@ -1145,6 +1173,26 @@
     const Diff = {
       _versions: new RequestSlot(),
       _comparison: new RequestSlot(),
+      _displayed: null,
+
+      translate() {
+        const compare = document.getElementById("diff-compare-btn");
+        if (!compare) return;
+        document.getElementById("diff-label-a").textContent = t("diffSbomA");
+        document.getElementById("diff-label-b").textContent = t("diffSbomB");
+        compare.textContent = t("diffCompare");
+        const swap = document.getElementById("diff-swap-btn");
+        swap.title = t("diffSwap");
+        swap.setAttribute("aria-label", t("diffSwap"));
+        if (this._displayed) this._render(this._displayed);
+      },
+
+      _render(comparison) {
+        this._displayed = comparison;
+        const result = document.getElementById("diff-result");
+        ResultView.diff(result, comparison.data, comparison.a, comparison.b);
+        document.getElementById("diff-status").textContent = result.firstElementChild?.textContent?.trim() ?? "";
+      },
 
       cancel() {
         this._versions.cancel();
@@ -1152,6 +1200,7 @@
       },
 
       _selectionChanged() {
+        this._displayed = null;
         this._comparison.cancel();
         document.getElementById("diff-result").innerHTML = "";
         document.getElementById("diff-status").textContent = "";
@@ -1169,6 +1218,8 @@
         const a = document.getElementById("diff-select-a").value;
         const b = document.getElementById("diff-select-b").value;
         const resultEl = document.getElementById("diff-result");
+        this._displayed = null;
+        document.getElementById("diff-status").textContent = "";
 
         if (!a || !b || a === b) {
           this._comparison.cancel();
@@ -1194,8 +1245,7 @@
         try {
           const json = await Api.diff(req.projectID, a, b, req.controller.signal);
           if (!isCurrent()) return;
-          ResultView.diff(resultEl, json.data, a, b);
-          document.getElementById("diff-status").textContent = resultEl.firstElementChild?.textContent?.trim() ?? "";
+          this._render({ data: json.data, a, b });
         } catch (e) {
           if (e.name === "AbortError" || !isCurrent()) return;
           resultEl.innerHTML = `<p role="alert" class="text-red-700">${esc(e.message)}</p>`;
@@ -1244,11 +1294,8 @@
         const compare = document.getElementById("diff-compare-btn");
         const swap = document.getElementById("diff-swap-btn");
         const result = document.getElementById("diff-result");
-        document.getElementById("diff-label-a").textContent = t("diffSbomA");
-        document.getElementById("diff-label-b").textContent = t("diffSbomB");
-        compare.textContent = t("diffCompare");
-        swap.title = t("diffSwap");
-        swap.setAttribute("aria-label", t("diffSwap"));
+        this._displayed = null;
+        this.translate();
         result.innerHTML = "";
         for (const select of selects) {
           select.innerHTML = "";
@@ -1309,6 +1356,12 @@
     // VERSION HISTORY — list all stored versions for current project
     // ═══════════════════════════════════════════════════════════════════════════
     const VersionHistory = {
+      translate() {
+        if (this._projectID !== null && this._projectID === State.projectID) {
+          this._render(document.getElementById("version-history-list"));
+        }
+      },
+
       refreshIfVisible() {
         if (!document.getElementById("panel-analysis").classList.contains("hidden")) this.load();
       },
@@ -1385,9 +1438,9 @@
             <td class="px-4 py-3 text-sm font-medium text-gray-800">${esc(v.version)}</td>
             <td class="px-4 py-3 text-sm text-gray-500">${date}</td>
             <td class="px-4 py-3 text-sm">
-              <button class="text-[#009999] hover:underline text-xs mr-3 version-load-btn" aria-label="${esc(t("historyOpenVersion", v.version))}" data-version="${esc(v.version)}">${t("historyOpen")}</button>
+              <button class="text-[#006b6b] hover:underline text-xs mr-3 version-load-btn" aria-label="${esc(t("historyOpenVersion", v.version))}" data-version="${esc(v.version)}">${t("historyOpen")}</button>
               <button class="text-gray-500 hover:underline text-xs mr-3 version-rename-btn" aria-label="${esc(t("historyRenameVersion", v.version))}" data-version="${esc(v.version)}">${t("historyRename")}</button>
-              <button class="text-red-400 hover:underline text-xs version-delete-btn" aria-label="${esc(t("historyDeleteVersion", v.version))}" data-version="${esc(v.version)}">${t("historyDelete")}</button>
+              <button class="text-red-700 hover:underline text-xs version-delete-btn" aria-label="${esc(t("historyDeleteVersion", v.version))}" data-version="${esc(v.version)}">${t("historyDelete")}</button>
             </td>
           </tr>`;
         }).join("");
@@ -1425,6 +1478,7 @@
             const version = btn.dataset.version;
             MainTab.show("analysis");
             Sbom.addTab(version, true);
+            State.activeTab?.querySelector(".sbom-tab-label")?.focus();
           });
         });
 
@@ -1570,7 +1624,7 @@
 
         const previewBtn = document.getElementById("sbom-modal-preview-btn");
         previewBtn.disabled = true;
-        previewBtn.textContent = "解析中...";
+        previewBtn.textContent = t("uploadPreviewing");
 
         this._resetPreview();
         const req = this._preview.begin({ projectID: State.projectID, file: fileInput.files[0] });
@@ -1582,7 +1636,7 @@
           const json = await resp.json();
           if (!isCurrent()) return;
           if (!resp.ok) {
-            errEl.textContent = json.error || "預覽失敗";
+            errEl.textContent = json.error || t("uploadPreviewError");
 
             return;
           }
@@ -1597,27 +1651,27 @@
 
           const summary = document.getElementById("sbom-preview-summary");
           summary.innerHTML = `
-            <div class="flex gap-6 mb-3 text-sm">
+            <div class="flex flex-wrap gap-x-6 gap-y-2 mb-3 text-sm">
               <span class="text-gray-500">${t("uploadComponentCount")} <strong class="text-gray-800">${data.summary.component_count}</strong></span>
-              <span class="text-gray-500">${t("uploadVulnCount")} <strong class="${data.summary.vuln_count > 0 ? 'text-red-600' : 'text-green-600'}">${data.summary.vuln_count}</strong></span>
+              <span class="text-gray-500">${t("uploadVulnCount")} <strong class="${data.summary.vuln_count > 0 ? 'text-red-700' : 'text-green-700'}">${data.summary.vuln_count}</strong></span>
             </div>`;
           this._renderPreviewTopology(summary, data.bom_result);
 
           const displayName = data.filename || req.file.name;
           document.getElementById("sbom-preview-title").innerHTML =
-            `${t("uploadPreviewTitle")} <span class="text-gray-400 font-normal text-base">— ${esc(displayName)}</span>`;
+            `${t("uploadPreviewTitle")} <span class="text-gray-600 font-normal text-base break-words">— ${esc(displayName)}</span>`;
           document.getElementById("sbom-version-input").value = "";
 
           const commitBtn = document.getElementById("sbom-modal-commit-btn");
           if (this._existingVersion) {
             document.getElementById("sbom-version-hint").textContent =
               t("uploadDuplicate", this._existingVersion);
-            document.getElementById("sbom-version-hint").classList.add("text-yellow-600");
+            document.getElementById("sbom-version-hint").classList.add("text-amber-800");
             commitBtn.disabled = true;
           } else {
             document.getElementById("sbom-version-hint").textContent =
-              "建議命名方式：{filename}_{version} / {filename}_{date} / {prefix}_{version} / {prefix}_{date}";
-            document.getElementById("sbom-version-hint").classList.remove("text-yellow-600");
+              t("uploadVersionHint");
+            document.getElementById("sbom-version-hint").classList.remove("text-amber-800");
             commitBtn.disabled = false;
           }
 
@@ -1628,7 +1682,7 @@
           document.getElementById("sbom-version-input").focus();
         } catch (e) {
           if (!isCurrent()) return;
-          errEl.textContent = e.message || "預覽失敗";
+          errEl.textContent = e.message || t("uploadPreviewError");
 
         } finally {
           if (this._preview.owns(req)) {
@@ -1870,7 +1924,10 @@
       document.getElementById("search-input").addEventListener("keydown", e => {
         if (e.key === "Escape") Search.clear();
       });
-      document.getElementById("search-clear-btn").addEventListener("click", () => Search.clear());
+      document.getElementById("search-clear-btn").addEventListener("click", () => {
+        document.getElementById("search-input").focus();
+        Search.clear();
+      });
 
       // Event delegation: search result rows → open component modal
       document.getElementById("search-results").addEventListener("click", e => {

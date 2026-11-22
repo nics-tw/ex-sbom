@@ -92,6 +92,7 @@
           </div>
           <button id="search-clear-btn" class="hidden text-sm text-gray-700 underline" data-shell-i18n="clearSearch">Clear search</button>
         </div>
+        <p id="search-status" role="status" class="text-sm text-gray-700"></p>
         <div id="search-results" class="hidden mb-4 border border-gray-200 rounded-md bg-white shadow-sm max-h-80 overflow-y-auto"></div>
         <div id="upload-status"></div>
         <!-- 版本歷史 -->
@@ -120,7 +121,7 @@
           <h2 id="sbom-pick-title" class="text-lg font-semibold text-gray-800 mb-4" data-i18n="uploadSelectTitle">Select SBOM file</h2>
           <input type="file" id="sbom-file-input" class="hidden" accept=".json,.xml,.spdx" />
           <div class="flex items-center gap-3 mb-6">
-            <button id="sbom-pick-file-btn" class="px-3 py-1.5 text-sm rounded-md border border-[#009999] text-[#009999] hover:bg-[#009999] hover:text-white transition-colors" data-i18n="uploadPick" autofocus>Choose file</button>
+            <button id="sbom-pick-file-btn" class="control-secondary px-3 py-1.5 text-sm rounded-md border transition-colors" data-i18n="uploadPick" autofocus>Choose file</button>
             <span id="sbom-filename-display" class="text-sm text-gray-500 truncate">尚未選擇檔案</span>
           </div>
           <p id="sbom-modal-step1-error" role="alert" class="inline-error text-sm text-red-700"></p>
@@ -137,7 +138,7 @@
           <label class="block text-sm font-medium text-gray-700 mb-1">Version name</label>
           <input id="sbom-version-input" aria-describedby="sbom-version-hint sbom-modal-step2-error" type="text"
             class="w-full border border-gray-300 rounded-md py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#009999] mb-1" />
-          <p id="sbom-version-hint" class="text-xs text-gray-400 mb-2"></p>
+          <p id="sbom-version-hint" class="text-xs text-gray-600 mb-2"></p>
           <p id="sbom-modal-step2-error" role="alert" class="inline-error text-sm text-red-700"></p>
           <div class="flex flex-wrap justify-end gap-3 mt-4">
             <button id="sbom-modal-back-btn" class="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50" data-i18n="uploadBack">Back</button>
