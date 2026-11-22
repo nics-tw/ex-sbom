@@ -24,6 +24,7 @@ func newTestRepo(t *testing.T) (*SBOMRepository, int64) {
 
 	path := filepath.Join(t.TempDir(), "test.duckdb")
 	require.NoError(t, db.Init(path))
+	t.Cleanup(db.Close)
 
 	var projectID int64
 	require.NoError(t, db.DB.QueryRow(

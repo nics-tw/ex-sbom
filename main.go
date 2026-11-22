@@ -21,6 +21,7 @@ import (
 
 	"ex-sbom/internal/db"
 	"ex-sbom/internal/handler"
+	"ex-sbom/internal/handler/middleware"
 	reporthandler "ex-sbom/internal/handler/report"
 	sbomhandler "ex-sbom/internal/handler/sbom"
 	topohandler "ex-sbom/internal/handler/topology"
@@ -189,6 +190,7 @@ func createServer(projectSvc *psvc.Service, sbomSvc *ssbom.Service) *gin.Engine 
 	reportH := reporthandler.New(sbomSvc)
 
 	r := gin.Default()
+	r.Use(middleware.LocalBrowserRequest())
 	setupSSR(r)
 	handler.SetupRouterGroup(r, projectH, sbomH, topoH, reportH)
 

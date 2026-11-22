@@ -413,6 +413,26 @@ func (r *checksumTrackingRepo) FindVersionBySHA256(_ domain.ProjectID, checksum 
 	return "", repository.ErrVersionNotFound
 }
 
+func TestService_SaveParsedDetectsLegacyChecksumDuplicate(t *testing.T) {
+	bom := FormattedSBOM{ComponentInfo: map[string]Component{
+		"pkg": {Vulns: []Vuln{{ID: "CVE-1", FixVersions: []string{"1.1"}}}},
+	}}
+	current := HashSBOM(bom)
+	legacy := legacyHashSBOM(bom)
+	assert.NotEqual(t, current, legacy)
+
+	repo := &checksumTrackingRepo{byChecksum: map[string]domain.Version{legacy: "existing"}}
+	svc := NewService(repo, NewInMemoryCache())
+	version, err := svc.FindVersionForSBOM(wsID, current, bom)
+	assert.NoError(t, err)
+	assert.Equal(t, domain.Version("existing"), version)
+
+	err = svc.SaveParsed(wsID, "duplicate", bom, current, time.Time{})
+	var duplicate *DuplicateSHA256Error
+	assert.ErrorAs(t, err, &duplicate)
+	assert.Zero(t, repo.inserts)
+}
+
 func TestService_SaveParsed_ConcurrentSameChecksumInsertsOnce(t *testing.T) {
 	// Arrange: two concurrent uploads of the same file (same SHA-256), as when
 	// two browser tabs submit simultaneously.

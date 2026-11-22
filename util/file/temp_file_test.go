@@ -116,7 +116,10 @@ func TestCopyAndCreate(t *testing.T) {
 
 	// Test error case: temp dir creation fails when TMPDIR is unusable
 	t.Run("temp dir creation error", func(t *testing.T) {
-		t.Setenv("TMPDIR", filepath.Join(tempDir, "does-not-exist"))
+		invalidTempDir := filepath.Join(tempDir, "does-not-exist")
+		t.Setenv("TMPDIR", invalidTempDir)
+		t.Setenv("TMP", invalidTempDir)
+		t.Setenv("TEMP", invalidTempDir)
 
 		input := FileInput{
 			IsCDX: false,

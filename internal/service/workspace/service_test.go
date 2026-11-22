@@ -125,6 +125,48 @@ func (f *fakeRepo) GetLatestAll() (domain.ProjectID, []domain.SBOMEntry, error) 
 	return 0, nil, nil
 }
 
+func TestPreviewSaveLoadPreservesFixVersions(t *testing.T) {
+	const projectID domain.ProjectID = 42
+	repo := newFakeRepo()
+	cache := ssbom.NewInMemoryCache()
+	sbomSvc := ssbom.NewService(repo, cache)
+	projectSvc := New(repo, cache)
+
+	preview := ssbom.FormattedSBOM{
+		ComponentInfo: map[string]ssbom.Component{
+			"pkg": {
+				Name: "pkg", Version: "1.0", VulnNumber: 1,
+				Vulns: []ssbom.Vuln{{ID: "CVE-1", FixVersions: []string{"1.1", "1.2"}}},
+			},
+		},
+	}
+	previewJSON, err := json.Marshal(preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var submitted ssbom.FormattedSBOM
+	if err := json.Unmarshal(previewJSON, &submitted); err != nil {
+		t.Fatal(err)
+	}
+	if err := sbomSvc.SaveParsed(projectID, "v1", submitted, ssbom.HashSBOM(preview), time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+
+	cache.DeleteProject(projectID)
+	names, corrupted, err := projectSvc.Load(projectID)
+	if err != nil || len(corrupted) != 0 || len(names) != 1 || names[0] != "v1" {
+		t.Fatalf("reload failed: names=%v corrupted=%v err=%v", names, corrupted, err)
+	}
+	loaded, ok := cache.Get(projectID, "v1")
+	if !ok {
+		t.Fatal("saved version missing after reload")
+	}
+	fixes := loaded.ComponentInfo["pkg"].Vulns[0].FixVersions
+	if len(fixes) != 2 || fixes[0] != "1.1" || fixes[1] != "1.2" {
+		t.Fatalf("fix candidates lost in preview/save/reload: %v", fixes)
+	}
+}
+
 // TestLoadDoesNotClobberConcurrentSave reproduces the save/load race: a Load
 // whose DB snapshot was taken before a concurrent save finishes must not wipe
 // the newly saved version from the cache.

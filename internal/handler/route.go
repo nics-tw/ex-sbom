@@ -22,12 +22,12 @@ func SetupRouterGroup(r *gin.Engine,
 ) {
 	projects := r.Group("/projects")
 	projects.GET("", projectH.List)
-	projects.POST("", projectH.Create)
+	projects.POST("", middleware.JSONContentType(), projectH.Create)
 
 	proj := projects.Group("/:id")
 	proj.Use(middleware.ProjectID())
 	proj.GET("", projectH.Get)
-	proj.PUT("", projectH.Update)
+	proj.PUT("", middleware.JSONContentType(), projectH.Update)
 	proj.DELETE("", projectH.Delete)
 	proj.GET("/versions", sbomH.ListVersions)
 	proj.GET("/diff", sbomH.Diff)
@@ -35,12 +35,12 @@ func SetupRouterGroup(r *gin.Engine,
 
 	sboms := proj.Group("/sboms")
 	sboms.GET("", sbomH.List)
-	sboms.POST("", sbomH.Create)
+	sboms.POST("", middleware.JSONContentType(), sbomH.Create)
 	sboms.POST("/preview", sbomH.Preview)
 
 	namedSBOM := sboms.Group("/:name")
 	namedSBOM.DELETE("", sbomH.Delete)
-	namedSBOM.PUT("", sbomH.Rename)
+	namedSBOM.PUT("", middleware.JSONContentType(), sbomH.Rename)
 	namedSBOM.GET("/report", reportH.CreatePDF)
 
 	topo := namedSBOM.Group("/topology")

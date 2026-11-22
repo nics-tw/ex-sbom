@@ -334,6 +334,33 @@ func TestCreateServer(t *testing.T) {
 	}
 }
 
+func TestCreateServerRejectsNonLocalBrowserRequests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cache := ssbom.NewInMemoryCache()
+	server := createServer(psvc.New(nil, cache), ssbom.NewService(nil, cache))
+
+	rebound := httptest.NewRequest(http.MethodGet, "/", nil)
+	rebound.Host = "rebound.example:8080"
+	reboundResult := httptest.NewRecorder()
+	server.ServeHTTP(reboundResult, rebound)
+	assert.Equal(t, http.StatusForbidden, reboundResult.Code)
+
+	crossOrigin := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(`{"name":"created"}`))
+	crossOrigin.Host = "localhost:8080"
+	crossOrigin.Header.Set("Content-Type", "text/plain")
+	crossOrigin.Header.Set("Origin", "https://attacker.example")
+	crossOriginResult := httptest.NewRecorder()
+	server.ServeHTTP(crossOriginResult, crossOrigin)
+	assert.Equal(t, http.StatusForbidden, crossOriginResult.Code)
+
+	plainText := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(`{"name":"created"}`))
+	plainText.Host = "localhost:8080"
+	plainText.Header.Set("Content-Type", "text/plain")
+	plainTextResult := httptest.NewRecorder()
+	server.ServeHTTP(plainTextResult, plainText)
+	assert.Equal(t, http.StatusUnsupportedMediaType, plainTextResult.Code)
+}
+
 func TestURL(t *testing.T) {
 	config := Config{
 		Port:     "8080",

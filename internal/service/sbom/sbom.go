@@ -68,7 +68,7 @@ type (
 		EPSS string `json:"epss,omitempty"`
 		LEV  string `json:"lev,omitempty"`
 
-		FixVersions []string `json:"-"`
+		FixVersions []string `json:"fix_versions,omitempty"`
 	}
 
 	version struct {
@@ -122,6 +122,27 @@ func HashSBOM(sbom FormattedSBOM) string {
 	}
 
 	return fmt.Sprintf("%x", sha256.Sum256(b))
+}
+
+// legacyHashSBOM matches checksums saved before fix candidates were included
+// in the JSON result. It is used only for duplicate lookup; new preview tokens
+// and saves always bind the complete result through HashSBOM.
+func legacyHashSBOM(sbom FormattedSBOM) string {
+	if sbom.ComponentInfo == nil {
+		return HashSBOM(sbom)
+	}
+	components := make(map[string]Component, len(sbom.ComponentInfo))
+	for name, component := range sbom.ComponentInfo {
+		if len(component.Vulns) != 0 {
+			component.Vulns = append([]Vuln(nil), component.Vulns...)
+			for i := range component.Vulns {
+				component.Vulns[i].FixVersions = nil
+			}
+		}
+		components[name] = component
+	}
+	sbom.ComponentInfo = components
+	return HashSBOM(sbom)
 }
 
 func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]string) []VlunDepPath {

@@ -84,6 +84,30 @@ func riskFields(comp Component) (maxCvss, maxEpss, maxLev string, severe bool) {
 	return
 }
 
+type vulnRiskKey struct {
+	id, cvss, epss, lev string
+}
+
+// sameVulnRisks compares findings as a multiset, so source ordering cannot
+// produce a false diff and equal counts cannot hide changed findings.
+func sameVulnRisks(a, b []Vuln) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[vulnRiskKey]int, len(a))
+	for _, vuln := range a {
+		counts[vulnRiskKey{vuln.ID, vuln.CVSSScore, vuln.EPSS, vuln.LEV}]++
+	}
+	for _, vuln := range b {
+		key := vulnRiskKey{vuln.ID, vuln.CVSSScore, vuln.EPSS, vuln.LEV}
+		if counts[key] == 0 {
+			return false
+		}
+		counts[key]--
+	}
+	return true
+}
+
 // DiffSBOMs compares two FormattedSBOMs and returns added/removed/changed components grouped by level.
 func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 	result := DiffResult{ByLevel: make(map[int]*LevelDiff)}
@@ -113,7 +137,9 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 
 		cvssB, epssB, levB, severeB := riskFields(compB)
 		levelB := b.ComponentToLevel[name]
-		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber || levelA != levelB {
+		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber ||
+			levelA != levelB || compA.ContainsVulnDep != compB.ContainsVulnDep ||
+			!sameVulnRisks(compA.Vulns, compB.Vulns) {
 			diff := ComponentDiff{
 				Name:       name,
 				VersionA:   compA.Version,

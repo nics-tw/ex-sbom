@@ -16,6 +16,7 @@ type Cache interface {
 	Set(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM)
 	Delete(projectID domain.ProjectID, name domain.Version)
 	DeleteProject(projectID domain.ProjectID)
+	ReplaceProject(projectID domain.ProjectID, sboms map[domain.Version]FormattedSBOM)
 	Keys(projectID domain.ProjectID) []domain.Version
 	All(projectID domain.ProjectID) map[domain.Version]FormattedSBOM
 
@@ -88,6 +89,19 @@ func (c *inMemoryCache) DeleteProject(projectID domain.ProjectID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.data, projectID)
+}
+
+// ReplaceProject swaps a complete project snapshot in one write. Copying the
+// supplied map also keeps later caller changes from mutating the cache.
+func (c *inMemoryCache) ReplaceProject(projectID domain.ProjectID, sboms map[domain.Version]FormattedSBOM) {
+	replacement := make(map[domain.Version]FormattedSBOM, len(sboms))
+	for version, bom := range sboms {
+		replacement[version] = bom
+	}
+
+	c.mu.Lock()
+	c.data[projectID] = replacement
+	c.mu.Unlock()
 }
 
 func (c *inMemoryCache) Keys(projectID domain.ProjectID) []domain.Version {

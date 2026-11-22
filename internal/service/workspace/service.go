@@ -113,13 +113,13 @@ func (s *Service) Load(projectID domain.ProjectID) (names, corrupted []domain.Ve
 		decoded = append(decoded, loaded{version: rec.Version, bom: formatted})
 	}
 
-	s.cache.DeleteProject(projectID)
-
 	names = make([]domain.Version, 0, len(decoded))
+	replacement := make(map[domain.Version]ssbom.FormattedSBOM, len(decoded))
 	for _, l := range decoded {
-		s.cache.Set(projectID, l.version, l.bom)
+		replacement[l.version] = l.bom
 		names = append(names, l.version)
 	}
+	s.cache.ReplaceProject(projectID, replacement)
 
 	return names, corrupted, nil
 }

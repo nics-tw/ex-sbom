@@ -1076,6 +1076,7 @@
     // DIFF — modal with lazy creation and event delegation
     // ═══════════════════════════════════════════════════════════════════════════
     const Diff = {
+      _panelLoadSeq: 0,
       openModal() {
         let modal = document.getElementById("diff-modal");
         if (!modal) {
@@ -1158,6 +1159,8 @@
         }
 
         // Abort any in-flight diff and bind this request to its identity
+        if (this._request && this._request.projectID === State.projectID &&
+            this._request.a === a && this._request.b === b) return;
         if (this._request) this._request.controller.abort();
         const req = { controller: new AbortController(), projectID: State.projectID, a, b };
         this._request = req;
@@ -1292,8 +1295,15 @@
         document.getElementById("diff-swap-btn").title          = t("diffSwap");
         document.getElementById("diff-result").innerHTML        = "";
 
+        const projectID = State.projectID;
+        const loadSeq = ++this._panelLoadSeq;
+        const selectedA = document.getElementById("diff-select-a").value;
+        const selectedB = document.getElementById("diff-select-b").value;
         try {
-          const json = await Api.listVersions(State.projectID);
+          const json = await Api.listVersions(projectID);
+          if (loadSeq !== this._panelLoadSeq || State.projectID !== projectID ||
+              document.getElementById("diff-select-a").value !== selectedA ||
+              document.getElementById("diff-select-b").value !== selectedB) return;
           const versions = (json.data ?? []).map(v => v.version);
           ["diff-select-a", "diff-select-b"].forEach((id, i) => {
             const sel = document.getElementById(id);

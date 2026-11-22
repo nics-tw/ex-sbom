@@ -103,13 +103,24 @@ func (s *Service) Search(projectID domain.ProjectID, query string) []SearchResul
 	return searchInCache(s.cache.All(projectID), query)
 }
 
-// FindVersionBySHA256 returns the version name that already has the given SHA-256, or "" if none.
-func (s *Service) FindVersionBySHA256(projectID domain.ProjectID, checksum string) (domain.Version, error) {
-	version, err := s.repo.FindVersionBySHA256(projectID, checksum)
-	if errors.Is(err, repository.ErrVersionNotFound) {
-		return "", nil
+// FindVersionForSBOM checks both the current result checksum and the legacy
+// checksum that omitted fix candidates, preserving duplicate detection for
+// SBOMs saved before fix_versions was persisted.
+func (s *Service) FindVersionForSBOM(projectID domain.ProjectID, checksum string, bom FormattedSBOM) (domain.Version, error) {
+	checksums := []string{checksum}
+	if legacy := legacyHashSBOM(bom); legacy != checksum {
+		checksums = append(checksums, legacy)
 	}
-	return version, err
+	for _, candidate := range checksums {
+		version, err := s.repo.FindVersionBySHA256(projectID, candidate)
+		if err == nil {
+			return version, nil
+		}
+		if !errors.Is(err, repository.ErrVersionNotFound) {
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 // ListVersions returns all non-deleted SBOM versions for a project, newest first.
@@ -135,14 +146,6 @@ func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version,
 		return domain.ErrProjectNotFound
 	}
 
-	existing, err := s.repo.FindVersionBySHA256(projectID, sha256Hash)
-	if err != nil && !errors.Is(err, repository.ErrVersionNotFound) {
-		return err
-	}
-	if err == nil {
-		return &DuplicateSHA256Error{Version: existing}
-	}
-
 	sortFormattedSBOM(&bom)
 
 	// The client echoes back the preview payload; recompute the hash so a
@@ -150,6 +153,14 @@ func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version,
 	// is rejected instead of persisted under the wrong identity.
 	if actual := HashSBOM(bom); actual != sha256Hash {
 		return ErrSHA256Mismatch
+	}
+
+	existing, err := s.FindVersionForSBOM(projectID, sha256Hash, bom)
+	if err != nil {
+		return err
+	}
+	if existing != "" {
+		return &DuplicateSHA256Error{Version: existing}
 	}
 
 	if err := s.repo.CreateSBOM(projectID, version, bom, bomTimestamp, sha256Hash); err != nil {

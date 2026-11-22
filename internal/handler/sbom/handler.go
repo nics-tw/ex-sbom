@@ -284,7 +284,7 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
-	existingVersion, err := h.sbomSvc.FindVersionBySHA256(projectID, sha256Hash)
+	existingVersion, err := h.sbomSvc.FindVersionForSBOM(projectID, sha256Hash, bomResult)
 	if err != nil {
 		slog.Error("Failed to check duplicate SHA-256", "error", err)
 		existingVersion = ""

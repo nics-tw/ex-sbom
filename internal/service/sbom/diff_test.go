@@ -103,6 +103,43 @@ func TestDiffSBOMs_IdenticalSBOMs(t *testing.T) {
 	assert.Empty(t, result.ByLevel, "identical SBOMs should produce no diff")
 }
 
+func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
+	base := Component{
+		Version: "1.0.0", VulnNumber: 2,
+		Vulns: []Vuln{
+			{ID: "CVE-1", CVSSScore: "7.1", EPSS: "0.1", LEV: "0.2"},
+			{ID: "CVE-2", CVSSScore: "4.0", EPSS: "0.3", LEV: "0.4"},
+		},
+	}
+	tests := []struct {
+		name    string
+		change  func(*Component)
+		changed bool
+	}{
+		{"reordered findings", func(c *Component) { c.Vulns[0], c.Vulns[1] = c.Vulns[1], c.Vulns[0] }, false},
+		{"replaced identity", func(c *Component) { c.Vulns[0].ID = "CVE-3" }, true},
+		{"changed CVSS", func(c *Component) { c.Vulns[0].CVSSScore = "7.2" }, true},
+		{"changed EPSS", func(c *Component) { c.Vulns[0].EPSS = "0.2" }, true},
+		{"changed LEV", func(c *Component) { c.Vulns[0].LEV = "0.3" }, true},
+		{"changed dependency risk", func(c *Component) { c.ContainsVulnDep = true }, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			newComponent := base
+			newComponent.Vulns = append([]Vuln(nil), base.Vulns...)
+			tt.change(&newComponent)
+			a := makeSBOM(map[string]Component{"pkg": base}, map[string]int{"pkg": 0})
+			b := makeSBOM(map[string]Component{"pkg": newComponent}, map[string]int{"pkg": 0})
+			result := DiffSBOMs(a, b)
+			if tt.changed {
+				assert.Len(t, result.ByLevel[0].Changed, 1)
+			} else {
+				assert.Empty(t, result.ByLevel)
+			}
+		})
+	}
+}
+
 func TestDiffSBOMs_AddedComponent(t *testing.T) {
 	// Arrange
 	sbomA := makeSBOM(map[string]Component{}, map[string]int{})

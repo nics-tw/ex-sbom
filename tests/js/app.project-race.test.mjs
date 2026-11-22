@@ -38,15 +38,16 @@ function makeApp() {
     navigator: { language: "en" },
     window: {},
     console,
+    AbortController,
   };
   vm.createContext(sandbox);
-  // Project/State/Api are consts in script scope; expose them for the test
-  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api };", sandbox);
+  // Expose script-scope state and actions for the test.
+  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api, Diff };", sandbox);
 
-  const { Project, State, Api } = sandbox.__test;
+  const { Project, State, Api, Diff } = sandbox.__test;
   // Triggered indirectly via _apply -> MainTab.show("analysis")
   Api.listVersions = () => Promise.resolve({ data: [] });
-  return { Project, State, Api, getElementById };
+  return { Project, State, Api, Diff, getElementById };
 }
 
 function deferred() {
@@ -112,4 +113,45 @@ test("matching response for the current selection still applies", async () => {
   await Project.get("A");
 
   assert.equal(State.projectID, "A");
+});
+
+test("stale diff version response does not replace current project options", async () => {
+  const { Diff, State, Api, getElementById } = makeApp();
+  const pending = new Map();
+  Api.listVersions = projectID => {
+    const request = deferred();
+    pending.set(projectID, request);
+    return request.promise;
+  };
+
+  State.projectID = "A";
+  const oldLoad = Diff.openInPanel();
+  State.projectID = "B";
+  const currentLoad = Diff.openInPanel();
+  pending.get("B").resolve({ data: [{ version: "B1" }, { version: "B2" }] });
+  await currentLoad;
+  pending.get("A").resolve({ data: [{ version: "A1" }] });
+  await oldLoad;
+
+  assert.match(getElementById("diff-select-a").innerHTML, /B1/);
+  assert.doesNotMatch(getElementById("diff-select-a").innerHTML, /A1/);
+});
+
+test("duplicate in-flight diff comparison makes one request", async () => {
+  const { Diff, State, Api, getElementById } = makeApp();
+  State.projectID = "A";
+  getElementById("diff-select-a").value = "v1";
+  getElementById("diff-select-b").value = "v2";
+  const pending = deferred();
+  let calls = 0;
+  Api.diff = () => {
+    calls++;
+    return pending.promise;
+  };
+
+  const first = Diff._run();
+  const second = Diff._run();
+  assert.equal(calls, 1);
+  pending.resolve({ data: { by_level: {} } });
+  await Promise.all([first, second]);
 });
