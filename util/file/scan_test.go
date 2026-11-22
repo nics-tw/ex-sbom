@@ -68,7 +68,28 @@ func TestPackageIdentityMatchesOSVScanner(t *testing.T) {
 	}
 }
 
-type scanFixtureTransport struct{ expected PackageVersion }
+func TestGetScanResultRejectsInvalidOSVDetails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fixture.cdx.json")
+	data := `{"bomFormat":"CycloneDX","specVersion":"1.6","version":1,"components":[{"type":"library","name":"fixture","version":"1.0","purl":"pkg:npm/fixture@1.0"}]}`
+	require.NoError(t, os.WriteFile(path, []byte(data), 0600))
+	originalTransport := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	// The batch reports TEST-1, but its detail response contains malformed JSON.
+	http.DefaultTransport = scanFixtureTransport{
+		expected: PackageVersion{Ecosystem: "npm", Name: "fixture", Version: "1.0"},
+		detail:   `{"id":`,
+	}
+	findings, observation, err := GetScanResult(path)
+	require.ErrorContains(t, err, "invalid OSV vulnerability details")
+	assert.Nil(t, findings)
+	assert.Equal(t, QueryObservation{}, observation)
+}
+
+type scanFixtureTransport struct {
+	expected PackageVersion
+	detail   string
+}
 
 func (transport scanFixtureTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.Body != nil {
@@ -96,7 +117,10 @@ func (transport scanFixtureTransport) RoundTrip(r *http.Request) (*http.Response
 		}
 		reply = `{"results":[{"vulns":[{"id":"TEST-1"}]}]}`
 	case r.Method == http.MethodGet && r.URL.String() == "https://api.osv.dev/v1/vulns/TEST-1":
-		reply = `{"id":"TEST-1","summary":"Synthetic finding","modified":"2025-01-01T00:00:00Z"}`
+		reply = transport.detail
+		if reply == "" {
+			reply = `{"id":"TEST-1","summary":"Synthetic finding","modified":"2025-01-01T00:00:00Z"}`
+		}
 	default:
 		return nil, fmt.Errorf("unexpected outbound request: %s %s", r.Method, r.URL)
 	}
