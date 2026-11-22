@@ -489,6 +489,91 @@ func TestService_SaveParsedCanonicalizesFindingOrder(t *testing.T) {
 	}
 }
 
+func TestService_SaveParsedCanonicalizesFixVersionOrder(t *testing.T) {
+	makeBOM := func(suggest, other string, candidates ...string) FormattedSBOM {
+		return FormattedSBOM{ComponentInfo: map[string]Component{
+			"pkg": {Vulns: []Vuln{{
+				ID: "CVE-1", SuggestFixVersion: suggest, OtherFixVersions: other, FixVersions: candidates,
+			}}},
+		}}
+	}
+	const suggest = "1.2-a, 2.0"
+	const other = "1.2-b, 3.0"
+	canonical := makeBOM(suggest, other, "1.2-a", "1.2-b", "2.0", "3.0")
+	sortFormattedSBOM(&canonical)
+	checksum := HashSBOM(canonical)
+	reordered := makeBOM(suggest, "3.0, 1.2-b", "3.0", "1.2-b", "2.0", "1.2-a")
+	changed := makeBOM(suggest, other, "1.2-a", "1.2-b", "2.0", "3.1")
+
+	t.Run("preview checksum binds the candidates", func(t *testing.T) {
+		repo := &checksumTrackingRepo{byChecksum: map[string]domain.Version{}}
+		svc := NewService(repo, NewInMemoryCache())
+		require.ErrorIs(t, svc.SaveParsed(wsID, "changed", changed, checksum, time.Time{}), ErrSHA256Mismatch)
+		require.NoError(t, svc.SaveParsed(wsID, "reordered", reordered, checksum, time.Time{}))
+		assert.Equal(t, domain.Version("reordered"), repo.byChecksum[checksum])
+	})
+
+	for _, tc := range []struct {
+		name      string
+		stored    FormattedSBOM
+		duplicate bool
+	}{
+		{"stored candidates in scanner order", makeBOM(suggest, "3.0, 1.2-b", "3.0", "2.0", "1.2-b", "1.2-a"), true},
+		{"legacy JSON with a different tied suggestion", makeBOM("1.2-b, 2.0", "3.0, 1.2-a"), true},
+		{"modern candidate set differs", changed, false},
+		{"modern candidate spelling differs", makeBOM(suggest, other, "v1.2-a", "1.2-b", "2.0", "3.0"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storedJSON, err := json.Marshal(tc.stored)
+			require.NoError(t, err)
+			storedChecksum := HashSBOM(tc.stored)
+			require.NotEqual(t, checksum, storedChecksum)
+			repo := &checksumTrackingRepo{
+				byChecksum: map[string]domain.Version{storedChecksum: "existing"},
+				records:    []domain.SBOMEntry{{Version: "existing", SHA256: storedChecksum, BomResult: storedJSON}},
+			}
+			svc := NewService(repo, NewInMemoryCache())
+			version, err := svc.FindVersionForSBOM(wsID, checksum, canonical)
+			require.NoError(t, err)
+			err = svc.SaveParsed(wsID, "submitted", canonical, checksum, time.Time{})
+			if tc.duplicate {
+				assert.Equal(t, domain.Version("existing"), version)
+				var duplicate *DuplicateSHA256Error
+				assert.ErrorAs(t, err, &duplicate)
+				assert.Zero(t, repo.inserts)
+			} else {
+				assert.Empty(t, version)
+				assert.NoError(t, err)
+				assert.Equal(t, 1, repo.inserts)
+			}
+		})
+	}
+}
+
+func TestService_FindVersionForSBOMMatchesLegacyPrefixedTie(t *testing.T) {
+	makeBOM := func(suggestion string, candidates []string) FormattedSBOM {
+		return FormattedSBOM{ComponentInfo: map[string]Component{
+			"pkg": {Vulns: []Vuln{{
+				ID: "CVE-1", SuggestFixVersion: suggestion, OtherFixVersions: "v1.2-a, v1.2-b",
+				FixVersions: candidates,
+			}}},
+		}}
+	}
+	stored := makeBOM("1.2-b", nil)
+	storedJSON, err := json.Marshal(stored)
+	require.NoError(t, err)
+	storedChecksum := HashSBOM(stored)
+	repo := &checksumTrackingRepo{
+		byChecksum: map[string]domain.Version{storedChecksum: "existing"},
+		records:    []domain.SBOMEntry{{Version: "existing", SHA256: storedChecksum, BomResult: storedJSON}},
+	}
+	svc := NewService(repo, NewInMemoryCache())
+	canonical := makeBOM("1.2-a", []string{"v1.2-a", "v1.2-b"})
+	version, err := svc.FindVersionForSBOM(wsID, HashSBOM(canonical), canonical)
+	require.NoError(t, err)
+	assert.Equal(t, domain.Version("existing"), version)
+}
+
 func TestService_SaveParsed_ConcurrentSameChecksumInsertsOnce(t *testing.T) {
 	// Arrange: two concurrent uploads of the same file (same SHA-256), as when
 	// two browser tabs submit simultaneously.

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"ex-sbom/internal/domain"
@@ -120,32 +121,37 @@ func (s *Service) FindVersionForSBOM(projectID domain.ProjectID, checksum string
 			return "", err
 		}
 	}
-	// If no component has multiple findings, the vulnerability sort could not
-	// have changed the stored hash and the exact lookups were sufficient.
+	// An old checksum can differ when scanner order affected findings or fix candidates.
 	for _, component := range bom.ComponentInfo {
 		if len(component.Vulns) > 1 {
-			return s.findVersionWithOldVulnOrder(projectID, checksum, legacy)
+			return s.findVersionWithOldOrder(projectID, bom)
+		}
+		for _, vuln := range component.Vulns {
+			if len(vuln.FixVersions) > 1 || strings.Contains(vuln.OtherFixVersions, ", ") {
+				return s.findVersionWithOldOrder(projectID, bom)
+			}
 		}
 	}
 	return "", nil
 }
 
-// Old checksums used scanner order. Normalize the persisted result for comparison
-// on an exact miss without rewriting existing records.
-func (s *Service) findVersionWithOldVulnOrder(projectID domain.ProjectID, checksum, legacy string) (domain.Version, error) {
+// Normalize old results for lookup without rewriting the stored checksum.
+func (s *Service) findVersionWithOldOrder(projectID domain.ProjectID, bom FormattedSBOM) (domain.Version, error) {
 	records, err := s.repo.GetAllByProject(projectID)
 	if err != nil {
 		return "", err
 	}
+	bom = normalizeOldFixVersionDisplay(bom)
+	checksum, legacy := HashSBOM(bom), legacyHashSBOM(bom)
 	for _, record := range records {
 		var stored FormattedSBOM
 		if err := json.Unmarshal(record.BomResult, &stored); err != nil {
 			continue
 		}
 		sortFormattedSBOM(&stored)
-		// The legacy candidate only matches when the persisted record itself omitted
-		// fix versions. A modern record with different fix versions stays distinct.
-		if hash := HashSBOM(stored); hash == checksum || hash == legacy {
+		// Only a stored result that omitted all fix candidates can match the legacy hash.
+		hash := HashSBOM(normalizeOldFixVersionDisplay(stored))
+		if hash == checksum || hash == legacy {
 			return record.Version, nil
 		}
 	}

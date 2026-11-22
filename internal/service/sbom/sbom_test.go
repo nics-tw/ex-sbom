@@ -60,6 +60,29 @@ func TestFindNearestVersions(t *testing.T) {
 	}
 }
 
+func TestGetVulnsFixVersionsIgnoreScannerOrder(t *testing.T) {
+	makeVulns := func(candidates ...string) []Vuln {
+		var events []*osvschema.Event
+		for _, candidate := range candidates {
+			events = append(events, &osvschema.Event{Fixed: candidate})
+		}
+		return getVulns("pkg", "1.0", map[string]models.PackageVulns{
+			"pkg": {Vulnerabilities: []*osvschema.Vulnerability{{
+				Affected: []*osvschema.Affected{{Ranges: []*osvschema.Range{{Events: events}}}},
+			}}},
+		})
+	}
+
+	forward := makeVulns("3.0", "1.2-b", "2.0", "1.2-a")
+	reversed := makeVulns("1.2-a", "2.0", "1.2-b", "3.0")
+	assert.Equal(t, forward, reversed)
+	if assert.Len(t, forward, 1) {
+		assert.Equal(t, []string{"1.2-a", "1.2-b", "2.0", "3.0"}, forward[0].FixVersions)
+		assert.Equal(t, "1.2-a, 2.0", forward[0].SuggestFixVersion)
+		assert.Equal(t, "1.2-b, 3.0", forward[0].OtherFixVersions)
+	}
+}
+
 func TestParseVersion(t *testing.T) {
 	tests := []struct {
 		name     string

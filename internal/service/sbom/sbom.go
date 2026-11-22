@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -113,6 +114,14 @@ func sortFormattedSBOM(sbom *FormattedSBOM) {
 	}
 
 	for _, component := range sbom.ComponentInfo {
+		for i := range component.Vulns {
+			slices.Sort(component.Vulns[i].FixVersions)
+			if versions := component.Vulns[i].OtherFixVersions; strings.Contains(versions, ", ") {
+				other := strings.Split(versions, ", ")
+				slices.Sort(other)
+				component.Vulns[i].OtherFixVersions = getVersionString(other)
+			}
+		}
 		slices.SortFunc(component.Vulns, compareVulns)
 	}
 }
@@ -164,6 +173,32 @@ func legacyHashSBOM(sbom FormattedSBOM) string {
 	}
 	sbom.ComponentInfo = components
 	return HashSBOM(sbom)
+}
+
+// normalizeOldFixVersionDisplay collapses the two display lists for old-checksum
+// lookup. Scanner order used to decide which numerically tied version was suggested.
+func normalizeOldFixVersionDisplay(sbom FormattedSBOM) FormattedSBOM {
+	sbom.ComponentInfo = maps.Clone(sbom.ComponentInfo)
+	for name, component := range sbom.ComponentInfo {
+		component.Vulns = slices.Clone(component.Vulns)
+		for i := range component.Vulns {
+			vuln := &component.Vulns[i]
+			versions := strings.Split(vuln.OtherFixVersions, ", ")
+			for _, suggestion := range strings.Split(vuln.SuggestFixVersion, ", ") {
+				// Older suggestions dropped a leading v while Other retained the raw candidate.
+				if !slices.Contains(versions, "v"+suggestion) {
+					versions = append(versions, suggestion)
+				}
+			}
+			versions = slices.DeleteFunc(versions, func(v string) bool { return v == "" })
+			slices.Sort(versions)
+			vuln.SuggestFixVersion = ""
+			vuln.OtherFixVersions = getVersionString(slices.Compact(versions))
+		}
+		slices.SortFunc(component.Vulns, compareVulns)
+		sbom.ComponentInfo[name] = component
+	}
+	return sbom
 }
 
 func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]string) []VlunDepPath {
@@ -353,6 +388,7 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 				continue
 			}
 			allFixVers := getAllFixVersions(v)
+			slices.Sort(allFixVers)
 			suggestFix := findNearestVersions(version, allFixVers)
 			otherFixVer := getDiff(allFixVers, suggestFix)
 
@@ -573,13 +609,12 @@ func findNearestVersions(target string, versions []string) []string {
 		return nil
 	}
 
-	// Sort versions in ascending order
-	sort.Slice(sameMajorHigher, func(i, j int) bool {
-		return compareVersions(sameMajorHigher[i], sameMajorHigher[j]) < 0
-	})
-	sort.Slice(differentMajorHigher, func(i, j int) bool {
-		return compareVersions(differentMajorHigher[i], differentMajorHigher[j]) < 0
-	})
+	// Break numeric ties by the original spelling so scanner order cannot pick a different fix.
+	compareCandidates := func(a, b version) int {
+		return cmp.Or(compareVersions(a, b), strings.Compare(a.Original, b.Original))
+	}
+	slices.SortFunc(sameMajorHigher, compareCandidates)
+	slices.SortFunc(differentMajorHigher, compareCandidates)
 
 	var result []string
 
