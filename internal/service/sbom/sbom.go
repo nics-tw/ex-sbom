@@ -5,12 +5,18 @@
 package ssbom
 
 import (
-	"ex-sbom/util"
+	"cmp"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+
+	"ex-sbom/util"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
@@ -64,7 +70,7 @@ type (
 		EPSS string `json:"epss,omitempty"`
 		LEV  string `json:"lev,omitempty"`
 
-		FixVersions []string `json:"-"`
+		FixVersions []string `json:"fix_versions,omitempty"`
 	}
 
 	version struct {
@@ -74,8 +80,6 @@ type (
 )
 
 var (
-	SBOMs = map[string]FormattedSBOM{}
-
 	CVSSThreshold = float64(7)
 )
 
@@ -91,17 +95,110 @@ func (bom FormattedSBOM) GetVulnComponents() []string {
 	return vulnComponents
 }
 
-func GetSBOM(name string) (FormattedSBOM, error) {
-	sbom, ok := SBOMs[name]
-	if !ok {
-		return FormattedSBOM{}, fmt.Errorf("SBOM not found")
+// sortFormattedSBOM sorts all slices inside FormattedSBOM so that the result is
+// deterministic regardless of map iteration order during construction.
+// Must be called before HashSBOM and repo.Save.
+func sortFormattedSBOM(sbom *FormattedSBOM) {
+	sort.Strings(sbom.Components)
+
+	for level := range sbom.DependencyLevel {
+		sort.Strings(sbom.DependencyLevel[level])
 	}
 
-	return sbom, nil
+	for name := range sbom.Dependency {
+		sort.Strings(sbom.Dependency[name])
+	}
+
+	for name := range sbom.ReverseDependency {
+		sort.Strings(sbom.ReverseDependency[name])
+	}
+
+	for _, component := range sbom.ComponentInfo {
+		for i := range component.Vulns {
+			slices.Sort(component.Vulns[i].FixVersions)
+			if versions := component.Vulns[i].OtherFixVersions; strings.Contains(versions, ", ") {
+				other := strings.Split(versions, ", ")
+				slices.Sort(other)
+				component.Vulns[i].OtherFixVersions = getVersionString(other)
+			}
+		}
+		slices.SortFunc(component.Vulns, compareVulns)
+	}
 }
 
-func DeleteSBOM(name string) {
-	delete(SBOMs, name)
+// compareVulns orders findings by all persisted fields, with fix candidates last
+// so removing that historical field does not change the order of distinct findings.
+func compareVulns(a, b Vuln) int {
+	return cmp.Or(
+		cmp.Compare(a.ID, b.ID),
+		cmp.Compare(a.Summary, b.Summary),
+		cmp.Compare(a.Details, b.Details),
+		cmp.Compare(a.CVSSScore, b.CVSSScore),
+		cmp.Compare(a.SuggestFixVersion, b.SuggestFixVersion),
+		cmp.Compare(a.OtherFixVersions, b.OtherFixVersions),
+		cmp.Compare(a.EPSS, b.EPSS),
+		cmp.Compare(a.LEV, b.LEV),
+		slices.Compare(a.FixVersions, b.FixVersions),
+	)
+}
+
+// HashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
+// Call sortFormattedSBOM first to normalize slice order.
+func HashSBOM(sbom FormattedSBOM) string {
+	b, err := json.Marshal(sbom)
+	if err != nil {
+		slog.Error("HashSBOM: unreachable marshal failure", "error", err)
+		return ""
+	}
+
+	return fmt.Sprintf("%x", sha256.Sum256(b))
+}
+
+// legacyHashSBOM matches checksums saved before fix candidates were included
+// in the JSON result. It is used only for duplicate lookup; new preview tokens
+// and saves always bind the complete result through HashSBOM.
+func legacyHashSBOM(sbom FormattedSBOM) string {
+	if sbom.ComponentInfo == nil {
+		return HashSBOM(sbom)
+	}
+	components := make(map[string]Component, len(sbom.ComponentInfo))
+	for name, component := range sbom.ComponentInfo {
+		if len(component.Vulns) != 0 {
+			component.Vulns = append([]Vuln(nil), component.Vulns...)
+			for i := range component.Vulns {
+				component.Vulns[i].FixVersions = nil
+			}
+		}
+		components[name] = component
+	}
+	sbom.ComponentInfo = components
+	return HashSBOM(sbom)
+}
+
+// normalizeOldFixVersionDisplay collapses the two display lists for old-checksum
+// lookup. Scanner order used to decide which numerically tied version was suggested.
+func normalizeOldFixVersionDisplay(sbom FormattedSBOM) FormattedSBOM {
+	sbom.ComponentInfo = maps.Clone(sbom.ComponentInfo)
+	for name, component := range sbom.ComponentInfo {
+		component.Vulns = slices.Clone(component.Vulns)
+		for i := range component.Vulns {
+			vuln := &component.Vulns[i]
+			versions := strings.Split(vuln.OtherFixVersions, ", ")
+			for _, suggestion := range strings.Split(vuln.SuggestFixVersion, ", ") {
+				// Older suggestions dropped a leading v while Other retained the raw candidate.
+				if !slices.Contains(versions, "v"+suggestion) {
+					versions = append(versions, suggestion)
+				}
+			}
+			versions = slices.DeleteFunc(versions, func(v string) bool { return v == "" })
+			slices.Sort(versions)
+			vuln.SuggestFixVersion = ""
+			vuln.OtherFixVersions = getVersionString(slices.Compact(versions))
+		}
+		slices.SortFunc(component.Vulns, compareVulns)
+		sbom.ComponentInfo[name] = component
+	}
+	return sbom
 }
 
 func GetVulnDepPaths(startComp string, endComps []string, depMap map[string][]string) []VlunDepPath {
@@ -287,7 +384,11 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 	if vuln, ok := vulnMap[name]; ok {
 		var vulns []Vuln
 		for _, v := range vuln.Vulnerabilities {
+			if v == nil {
+				continue
+			}
 			allFixVers := getAllFixVersions(v)
+			slices.Sort(allFixVers)
 			suggestFix := findNearestVersions(version, allFixVers)
 			otherFixVer := getDiff(allFixVers, suggestFix)
 
@@ -295,11 +396,11 @@ func getVulns(name string, version string, vulnMap map[string]models.PackageVuln
 				ID:                getCVEFromAliases(v.Aliases),
 				Summary:           v.Summary,
 				Details:           v.Details,
-				CVSSScore:         getCVSS(v.ID, vuln.Groups),
+				CVSSScore:         getCVSS(v.Id, vuln.Groups),
 				SuggestFixVersion: getVersionString(suggestFix),
 				OtherFixVersions:  getVersionString(otherFixVer),
 
-				FixVersions: getAllFixVersions(v),
+				FixVersions: allFixVers,
 			})
 		}
 
@@ -344,14 +445,14 @@ func getVersionString(strs []string) string {
 	return version.String()
 }
 
-func getAllFixVersions(v osvschema.Vulnerability) []string {
+func getAllFixVersions(v *osvschema.Vulnerability) []string {
 	var fixVersions []string
 
-	for _, affected := range v.Affected {
-		for _, r := range affected.Ranges {
-			for _, e := range r.Events {
-				if len(e.Fixed) > 0 && !slices.Contains(fixVersions, e.Fixed) {
-					fixVersions = append(fixVersions, e.Fixed)
+	for _, affected := range v.GetAffected() {
+		for _, r := range affected.GetRanges() {
+			for _, e := range r.GetEvents() {
+				if e.GetFixed() != "" && !slices.Contains(fixVersions, e.GetFixed()) {
+					fixVersions = append(fixVersions, e.GetFixed())
 				}
 			}
 		}
@@ -508,13 +609,12 @@ func findNearestVersions(target string, versions []string) []string {
 		return nil
 	}
 
-	// Sort versions in ascending order
-	sort.Slice(sameMajorHigher, func(i, j int) bool {
-		return compareVersions(sameMajorHigher[i], sameMajorHigher[j]) < 0
-	})
-	sort.Slice(differentMajorHigher, func(i, j int) bool {
-		return compareVersions(differentMajorHigher[i], differentMajorHigher[j]) < 0
-	})
+	// Break numeric ties by the original spelling so scanner order cannot pick a different fix.
+	compareCandidates := func(a, b version) int {
+		return cmp.Or(compareVersions(a, b), strings.Compare(a.Original, b.Original))
+	}
+	slices.SortFunc(sameMajorHigher, compareCandidates)
+	slices.SortFunc(differentMajorHigher, compareCandidates)
 
 	var result []string
 

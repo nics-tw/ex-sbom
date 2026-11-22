@@ -1,0 +1,46 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "id-not-name-demo",
+  "documentNamespace": "https://example.com/spdx/id-not-name-demo",
+  "creationInfo": {
+    "created": "2024-01-02T03:04:05Z",
+    "creators": ["Tool: manual-fixture"]
+  },
+  "packages": [
+    {
+      "name": "alpha",
+      "SPDXID": "SPDXRef-Package-a-3f9c1e",
+      "versionInfo": "1.0.0",
+      "downloadLocation": "NOASSERTION",
+      "licenseDeclared": "MIT"
+    },
+    {
+      "name": "beta",
+      "SPDXID": "SPDXRef-Package-b-7ab212",
+      "versionInfo": "2.0.0",
+      "downloadLocation": "NOASSERTION",
+      "licenseDeclared": "Apache-2.0"
+    },
+    {
+      "name": "gamma",
+      "SPDXID": "SPDXRef-Package-c-c0ffee",
+      "versionInfo": "3.0.0",
+      "downloadLocation": "NOASSERTION",
+      "licenseDeclared": "BSD-3-Clause"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relatedSpdxElement": "SPDXRef-Package-a-3f9c1e",
+      "relationshipType": "DESCRIBES"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-a-3f9c1e",
+      "relatedSpdxElement": "SPDXRef-Package-b-7ab212",
+      "relationshipType": "DEPENDS_ON"
+    }
+  ]
+}

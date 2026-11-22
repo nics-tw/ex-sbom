@@ -6,13 +6,15 @@ package ssbom
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
+
+	"ex-sbom/internal/domain"
 	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
 	"ex-sbom/util/file"
-	"fmt"
-	"log/slog"
-	"slices"
-	"strings"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
@@ -24,80 +26,105 @@ const (
 	documentID         = "DOCUMENT"
 	documentRootPrefix = "DocumentRoot-"
 	filePrefix         = "File-"
+	spdxNoAssertion    = "NOASSERTION"
+	spdxNone           = "NONE"
 )
 
-func ProcessSPDX(name string, document *spdx.Document, file []byte) error {
-	if document == nil {
-		return nil
-	}
-
-	if _, ok := SBOMs[name]; ok {
-		// reset the sbom
-		SBOMs[name] = FormattedSBOM{}
-	}
-
+func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string, error) {
 	c := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
 	dependency := getSpdxDep(*document, refToName)
-	dependencyLevel := getSpdxDependencyDepthMap(*document, c, refToName)
+	dependencyLevel := getSpdxDependencyDepthMap(*document, refToName)
 
-	SBOMs[name] = FormattedSBOM{
+	componentInfo, err := getSpdxComponentInfo(*document, rawData, name)
+	if err != nil {
+		return FormattedSBOM{}, "", err
+	}
+
+	bom := FormattedSBOM{
 		Components:        c,
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
-		ComponentInfo:     getSpdxComponentInfo(*document, file, name),
+		ComponentInfo:     componentInfo,
 	}
 
 	compWithVuln := []string{}
-
-	for compName, info := range SBOMs[name].ComponentInfo {
+	for compName, info := range bom.ComponentInfo {
 		if info.VulnNumber > 0 {
 			compWithVuln = append(compWithVuln, compName)
 		}
 	}
 
 	affecteds := []string{}
-
 	for _, compName := range compWithVuln {
-		affected := getAffecteds(compName, SBOMs[name].ReverseDependency)
-
+		affected := getAffecteds(compName, bom.ReverseDependency)
 		if len(affected) > 0 {
 			affecteds = append(affecteds, affected...)
 		}
 	}
 
 	distinct := util.StringSlice(affecteds)
-
 	for _, compName := range distinct {
-		if _, ok := SBOMs[name]; !ok {
-			slog.Error("failed to get name from refA", "refA", name)
-
-			continue
-		}
-
-		componentInfo := SBOMs[name].ComponentInfo[compName]
+		componentInfo := bom.ComponentInfo[compName]
 		componentInfo.ContainsVulnDep = true
-
-		// componentInfo.VulnDeps = append(componentInfo.VulnDeps, withVuln...)
-		SBOMs[name].ComponentInfo[compName] = componentInfo
+		bom.ComponentInfo[compName] = componentInfo
 	}
+
+	sortFormattedSBOM(&bom)
+	sha256Hash := HashSBOM(bom)
+
+	return bom, sha256Hash, nil
+}
+
+func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, document *spdx.Document, rawData []byte) error {
+	if document == nil {
+		return nil
+	}
+
+	final, sha256Hash, err := buildSPDXResult(document, rawData, name)
+	if err != nil {
+		return err
+	}
+
+	unlock := s.cache.LockProject(projectID)
+	if err := s.repo.CreateSBOM(projectID, name, final, spdxTimestamp(document), sha256Hash); err != nil {
+		slog.Error("Failed to save SBOM to DB", "error", err)
+	} else {
+		s.cache.setPersisted(projectID, name, final, sha256Hash)
+	}
+	unlock()
 
 	slog.Info(
 		"Process SPDX-formatted SBOM successfully",
-		"name",
-		name,
-		"numbers of components",
-		len(c),
-		"total levels",
-		fmt.Sprintf("%d", len(SBOMs[name].DependencyLevel)),
+		"name", util.LogSafe(name),
+		"numbers of components", len(final.Components),
+		"total levels", fmt.Sprintf("%d", len(final.DependencyLevel)),
 	)
 
 	return nil
 }
 
-func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameMap map[string]string) map[int][]string {
+func spdxTimestamp(doc *spdx.Document) time.Time {
+	if doc.CreationInfo == nil {
+		return time.Time{}
+	}
+	timestamp, _ := time.Parse(time.RFC3339, doc.CreationInfo.Created)
+	return timestamp
+}
+
+func (s *Service) PreviewSPDX(document *spdx.Document, rawData []byte) (FormattedSBOM, string, error) {
+	if document == nil {
+		return FormattedSBOM{}, "", nil
+	}
+	return buildSPDXResult(document, rawData, "preview")
+}
+
+// getSpdxDependencyDepthMap builds the dependency graph and computes depth levels
+// entirely with SPDX package IDs, and only converts them to display names at the end.
+// This keeps the topology correct even when a package's SPDX ID differs from its name.
+func getSpdxDependencyDepthMap(sbom spdx.Document, nameMap map[string]string) map[int][]string {
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
 	allNodes := make(map[string]bool)
@@ -106,11 +133,20 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 		return nil
 	}
 
+	// nameMap keys are raw SPDX identifiers; graph nodes are trimmed, so align them here
+	idToName := make(map[string]string, len(nameMap))
+	for id, name := range nameMap {
+		idToName[trimSPDXPrefix(id)] = name
+	}
+
 	for _, d := range sbom.Relationships {
 		refAStr := trimSPDXPrefix(getRefIDStr(d.RefA))
 		refBStr := trimSPDXPrefix(getRefIDStr(d.RefB))
 
 		if isGeneratedRoot(refAStr) || isGeneratedRoot(refBStr) {
+			continue
+		}
+		if isSPDXSpecialValue(refAStr) || isSPDXSpecialValue(refBStr) {
 			continue
 		}
 
@@ -129,16 +165,25 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 	}
 
 	depthMap := make(map[string]int)
+	visiting := make(map[string]bool)
 
 	var dfs func(node string, depth int)
 	dfs = func(node string, depth int) {
-		if depth > depthMap[node] {
-			depthMap[node] = depth
+		if visiting[node] {
+			return
 		}
-
+		// Memoization: an equal or deeper visit already propagated through this
+		// subtree, so revisiting cannot improve any depth. Without this check,
+		// reconverging branches make the traversal exponential.
+		if current, seen := depthMap[node]; seen && depth <= current {
+			return
+		}
+		depthMap[node] = depth
+		visiting[node] = true
 		for _, neighbor := range graph[node] {
 			dfs(neighbor, depth+1)
 		}
+		visiting[node] = false
 	}
 
 	for _, root := range roots {
@@ -151,39 +196,25 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, allComponents []string, nameM
 		result[depth] = append(result[depth], node)
 	}
 
-	roots = getRootComponents(allComponents, result)
-
-	if len(result[0]) == 0 {
-		var levels []int
-		for level := range result {
-			levels = append(levels, level)
-		}
-
-		slices.Sort(levels)
-
-		for _, level := range levels {
-			if level == 0 {
-				continue
-			}
-
-			result[level-1] = result[level]
-			delete(result, level)
+	// packages that never appear in any traversed relationship (e.g. isolated
+	// components, or components only related to the generated root) are roots
+	for id := range idToName {
+		if _, ok := depthMap[id]; !ok {
+			result[0] = append(result[0], id)
 		}
 	}
-
-	result[0] = append(result[0], roots...)
 
 	convertedResult := make(map[int][]string)
 
 	for level, components := range result {
 		for _, component := range components {
-			if name, ok := nameMap[component]; ok {
+			if name, ok := idToName[component]; ok {
 				convertedResult[level] = append(convertedResult[level], name)
 			}
 		}
 	}
 
-	return result
+	return convertedResult
 }
 
 func getSpdxComponents(input spdx.Document) []string {
@@ -191,7 +222,7 @@ func getSpdxComponents(input spdx.Document) []string {
 
 	for _, p := range input.Packages {
 		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
-			components = append(components, string(p.PackageSPDXIdentifier))
+			components = append(components, p.PackageName)
 		}
 	}
 
@@ -223,17 +254,20 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 			if isGeneratedRoot(refA) || isGeneratedRoot(refB) {
 				continue
 			}
+			if isSPDXSpecialValue(refA) || isSPDXSpecialValue(refB) {
+				continue
+			}
 
 			nameA, ok := nameMap[getRefIDStr(r.RefA)]
 			if !ok {
-				slog.Error("failed to get name from refA", "refA", refA)
+				slog.Error("failed to get name from refA", "refA", util.LogSafe(refA))
 
 				continue
 			}
 
 			nameB, ok := nameMap[getRefIDStr(r.RefB)]
 			if !ok {
-				slog.Error("failed to get name from refB", "refB", refB)
+				slog.Error("failed to get name from refB", "refB", util.LogSafe(refB))
 
 				continue
 			}
@@ -245,30 +279,33 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) map[string]Component {
+func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (map[string]Component, error) {
 	var result = make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
-		Name:  filename,
 		IsCDX: false,
 		Data:  files,
 	})
 	if err != nil {
-		slog.Error("failed to copy and create file", "error", err)
-
-		return nil
+		return nil, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
 	}
+
+	defer func() {
+		if err := file.Delete(path); err != nil {
+			slog.Error("failed to delete file", "error", err, "filename", util.LogSafe(filename), "path", path)
+		}
+	}()
 
 	vulnPkgs, err := file.GetScanResult(path)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
-		slog.Error("failed to get scan result", "error", err)
+		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 
 	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
 
 	for _, p := range input.Packages {
-		if p.PackageSPDXIdentifier != "" {
-			result[string(p.PackageSPDXIdentifier)] = Component{
+		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
+			result[p.PackageName] = Component{
 				Name:       p.PackageName,
 				Version:    p.PackageVersion,
 				VulnNumber: getVulnNumber(p.PackageName, trimmedVulnPkgs),
@@ -279,7 +316,6 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 	}
 
 	var cves []string
-
 	for _, c := range result {
 		for _, v := range c.Vulns {
 			if v.ID != "" {
@@ -288,20 +324,21 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		}
 	}
 
+	// will call api for get epss and lev
 	firstInfos, err := lev.GetByChunk(cves)
 	if err != nil {
 		slog.Error("failed to get lev info", "error", err)
 	}
 
 	if len(firstInfos) == 0 {
-		slog.Info("no lev info found for the components", "name", filename)
+		slog.Info("no lev info found for the components", "name", util.LogSafe(filename))
 	}
 
 	for name, info := range result {
 		updated := false
 		for i, v := range info.Vulns {
 			if data, found := firstInfos[v.ID]; found {
-				slog.Info("found lev info", "cve", v.ID, "lev", data.LEV, "epss", data.EPSS)
+				slog.Info("found lev info", "cve", util.LogSafe(v.ID), "lev", data.LEV, "epss", util.LogSafe(data.EPSS))
 				info.Vulns[i].EPSS = fmt.Sprintf("%.6f", data.EPSSNum)
 				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
 				updated = true
@@ -312,16 +349,14 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) ma
 		}
 	}
 
-	file.Delete(path)
-
-	return result
+	return result, nil
 }
 
 // the implement of the common.DocElementID interface containing three possible ID
 // in these case we only apply the one that only exists as the unique ID for the purpose of handy mapping
 func getRefIDStr(input common.DocElementID) string {
 	if len(input.DocumentRefID) > 0 {
-		return input.DocumentRefID
+		return string(input.DocumentRefID)
 	} else if len(input.ElementRefID) > 0 {
 		return string(input.ElementRefID)
 	} else if len(input.SpecialID) > 0 {
@@ -353,6 +388,11 @@ func trimSPDXPrefix(input string) string {
 // for better understanding and preventing confusion, we will ignore it as default
 func isGeneratedRoot(input string) bool {
 	return input == documentID || strings.HasPrefix(input, documentRootPrefix) || strings.HasPrefix(input, filePrefix)
+}
+
+// isSPDXSpecialValue returns true for SPDX special values that are not real package references.
+func isSPDXSpecialValue(input string) bool {
+	return input == spdxNoAssertion || input == spdxNone
 }
 
 // some document will have publication naming as prefix for the component name containing vulnerability

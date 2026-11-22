@@ -10,6 +10,8 @@ import (
 	"sort"
 	"testing"
 
+	"ex-sbom/internal/domain"
+
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
 	"github.com/stretchr/testify/assert"
@@ -55,6 +57,29 @@ func TestFindNearestVersions(t *testing.T) {
 				t.Errorf("findNearestVersions() = %v, want %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestGetVulnsFixVersionsIgnoreScannerOrder(t *testing.T) {
+	makeVulns := func(candidates ...string) []Vuln {
+		var events []*osvschema.Event
+		for _, candidate := range candidates {
+			events = append(events, &osvschema.Event{Fixed: candidate})
+		}
+		return getVulns("pkg", "1.0", map[string]models.PackageVulns{
+			"pkg": {Vulnerabilities: []*osvschema.Vulnerability{{
+				Affected: []*osvschema.Affected{{Ranges: []*osvschema.Range{{Events: events}}}},
+			}}},
+		})
+	}
+
+	forward := makeVulns("3.0", "1.2-b", "2.0", "1.2-a")
+	reversed := makeVulns("1.2-a", "2.0", "1.2-b", "3.0")
+	assert.Equal(t, forward, reversed)
+	if assert.Len(t, forward, 1) {
+		assert.Equal(t, []string{"1.2-a", "1.2-b", "2.0", "3.0"}, forward[0].FixVersions)
+		assert.Equal(t, "1.2-a, 2.0", forward[0].SuggestFixVersion)
+		assert.Equal(t, "1.2-b, 3.0", forward[0].OtherFixVersions)
 	}
 }
 
@@ -480,22 +505,22 @@ func TestGetReverseDep(t *testing.T) {
 func TestGetAllFixVersions(t *testing.T) {
 	tests := []struct {
 		name     string
-		vuln     osvschema.Vulnerability
+		vuln     *osvschema.Vulnerability
 		expected []string
 	}{
 		{
 			name:     "empty vulnerability",
-			vuln:     osvschema.Vulnerability{},
+			vuln:     &osvschema.Vulnerability{},
 			expected: []string{},
 		},
 		{
 			name: "single fixed version",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 								},
 							},
@@ -507,12 +532,12 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "multiple fixed versions",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 									{Fixed: "2.0.0"},
 								},
@@ -525,12 +550,12 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "duplicate fixed versions",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 									{Fixed: "1.2.3"}, // Duplicate
 								},
@@ -543,21 +568,21 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "multiple affected packages with different fixed versions",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 								},
 							},
 						},
 					},
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "4.5.6"},
 								},
 							},
@@ -569,17 +594,17 @@ func TestGetAllFixVersions(t *testing.T) {
 		},
 		{
 			name: "complex nested structure",
-			vuln: osvschema.Vulnerability{
-				Affected: []osvschema.Affected{
+			vuln: &osvschema.Vulnerability{
+				Affected: []*osvschema.Affected{
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "1.2.3"},
 								},
 							},
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "2.3.4"},
 									{Fixed: ""}, // Empty fixed version
 								},
@@ -587,9 +612,9 @@ func TestGetAllFixVersions(t *testing.T) {
 						},
 					},
 					{
-						Ranges: []osvschema.Range{
+						Ranges: []*osvschema.Range{
 							{
-								Events: []osvschema.Event{
+								Events: []*osvschema.Event{
 									{Fixed: "3.4.5"},
 									{Fixed: "1.2.3"}, // Duplicate across packages
 								},
@@ -654,17 +679,17 @@ func TestGetVulns(t *testing.T) {
 	// Setup test data
 	mockVulnMap := map[string]models.PackageVulns{
 		"package1": {
-			Vulnerabilities: []osvschema.Vulnerability{
+			Vulnerabilities: []*osvschema.Vulnerability{
 				{
-					ID:      "CVE-2023-1234",
+					Id:      "CVE-2023-1234",
 					Summary: "Test vulnerability 1",
 					Details: "Details for test vulnerability 1",
 					Aliases: []string{"CVE-2023-1234", "GHSA-1234"},
-					Affected: []osvschema.Affected{
+					Affected: []*osvschema.Affected{
 						{
-							Ranges: []osvschema.Range{
+							Ranges: []*osvschema.Range{
 								{
-									Events: []osvschema.Event{
+									Events: []*osvschema.Event{
 										{Fixed: "1.2.4"},
 										{Fixed: "2.0.0"},
 									},
@@ -682,17 +707,17 @@ func TestGetVulns(t *testing.T) {
 			},
 		},
 		"package2": {
-			Vulnerabilities: []osvschema.Vulnerability{
+			Vulnerabilities: []*osvschema.Vulnerability{
 				{
-					ID:      "CVE-2023-5678",
+					Id:      "CVE-2023-5678",
 					Summary: "Test vulnerability 2",
 					Details: "Details for test vulnerability 2",
 					Aliases: []string{"CVE-2023-5678", "GHSA-5678"},
-					Affected: []osvschema.Affected{
+					Affected: []*osvschema.Affected{
 						{
-							Ranges: []osvschema.Range{
+							Ranges: []*osvschema.Range{
 								{
-									Events: []osvschema.Event{
+									Events: []*osvschema.Event{
 										{Fixed: "2.3.0"},
 									},
 								},
@@ -701,15 +726,15 @@ func TestGetVulns(t *testing.T) {
 					},
 				},
 				{
-					ID:      "CVE-2023-9012",
+					Id:      "CVE-2023-9012",
 					Summary: "Test vulnerability 3",
 					Details: "Details for test vulnerability 3",
 					Aliases: []string{"CVE-2023-9012", "GHSA-9012"},
-					Affected: []osvschema.Affected{
+					Affected: []*osvschema.Affected{
 						{
-							Ranges: []osvschema.Range{
+							Ranges: []*osvschema.Range{
 								{
-									Events: []osvschema.Event{
+									Events: []*osvschema.Event{
 										{Fixed: "3.0.0"},
 										{Fixed: "2.5.0"},
 									},
@@ -731,7 +756,7 @@ func TestGetVulns(t *testing.T) {
 			},
 		},
 		"package3": {
-			Vulnerabilities: []osvschema.Vulnerability{},
+			Vulnerabilities: []*osvschema.Vulnerability{},
 			Groups:          []models.GroupInfo{},
 		},
 	}
@@ -821,19 +846,19 @@ func TestGetVulnNumber(t *testing.T) {
 	// Setup test data
 	mockVulnMap := map[string]models.PackageVulns{
 		"package1": {
-			Vulnerabilities: []osvschema.Vulnerability{
-				{ID: "CVE-2023-1111"},
-				{ID: "CVE-2023-2222"},
-				{ID: "CVE-2023-3333"},
+			Vulnerabilities: []*osvschema.Vulnerability{
+				{Id: "CVE-2023-1111"},
+				{Id: "CVE-2023-2222"},
+				{Id: "CVE-2023-3333"},
 			},
 		},
 		"package2": {
-			Vulnerabilities: []osvschema.Vulnerability{
-				{ID: "CVE-2023-4444"},
+			Vulnerabilities: []*osvschema.Vulnerability{
+				{Id: "CVE-2023-4444"},
 			},
 		},
 		"package3": {
-			Vulnerabilities: []osvschema.Vulnerability{},
+			Vulnerabilities: []*osvschema.Vulnerability{},
 		},
 	}
 
@@ -976,24 +1001,21 @@ func TestGetCVSS(t *testing.T) {
 }
 
 func TestGetSBOM(t *testing.T) {
-	// Save original value to restore later
-	originalSBOMs := SBOMs
-	defer func() {
-		SBOMs = originalSBOMs
-	}()
+	const workspaceID domain.ProjectID = 1
+
+	cache := NewInMemoryCache()
+	svc := NewService(nil, cache)
 
 	// Setup test data
-	SBOMs = map[string]FormattedSBOM{
-		"existing": {
-			Components: []string{"comp1", "comp2"},
-			Dependency: map[string][]string{
-				"comp1": {"comp2"},
-			},
-			ComponentInfo: map[string]Component{
-				"comp1": {Name: "comp1", Version: "1.0"},
-			},
+	cache.Set(workspaceID, "existing", FormattedSBOM{
+		Components: []string{"comp1", "comp2"},
+		Dependency: map[string][]string{
+			"comp1": {"comp2"},
 		},
-	}
+		ComponentInfo: map[string]Component{
+			"comp1": {Name: "comp1", Version: "1.0"},
+		},
+	})
 
 	tests := []struct {
 		name          string
@@ -1019,7 +1041,7 @@ func TestGetSBOM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := GetSBOM(tt.sbomName)
+			result, err := svc.Get(workspaceID, tt.sbomName)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -1177,20 +1199,13 @@ func TestGetVulnComponents(t *testing.T) {
 }
 
 func TestDeleteSBOM(t *testing.T) {
-	// Save original value to restore later
-	originalSBOMs := SBOMs
-	defer func() {
-		SBOMs = originalSBOMs
-	}()
+	const workspaceID domain.ProjectID = 1
 
-	// Setup test data
-	SBOMs = map[string]FormattedSBOM{
-		"sbom1": {
-			Components: []string{"comp1", "comp2"},
-		},
-		"sbom2": {
-			Components: []string{"comp3", "comp4"},
-		},
+	setupCache := func() Cache {
+		c := NewInMemoryCache()
+		c.Set(workspaceID, "sbom1", FormattedSBOM{Components: []string{"comp1", "comp2"}})
+		c.Set(workspaceID, "sbom2", FormattedSBOM{Components: []string{"comp3", "comp4"}})
+		return c
 	}
 
 	tests := []struct {
@@ -1215,25 +1230,15 @@ func TestDeleteSBOM(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Call the function we're testing
-			DeleteSBOM(tt.sbomToDelete)
+			cache := setupCache()
 
-			// Check if the SBOM was deleted
-			_, exists := SBOMs[tt.checkExisting]
+			cache.Delete(workspaceID, tt.sbomToDelete)
+
+			_, exists := cache.Get(workspaceID, tt.checkExisting)
 			assert.Equal(t, tt.shouldExist, exists,
 				"After deletion, SBOM '%s' existence = %v, want %v",
 				tt.checkExisting, exists, tt.shouldExist)
 		})
-
-		// Reset test data between tests
-		SBOMs = map[string]FormattedSBOM{
-			"sbom1": {
-				Components: []string{"comp1", "comp2"},
-			},
-			"sbom2": {
-				Components: []string{"comp3", "comp4"},
-			},
-		}
 	}
 }
 

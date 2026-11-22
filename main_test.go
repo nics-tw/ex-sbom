@@ -13,6 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	ssbom "ex-sbom/internal/service/sbom"
+	psvc "ex-sbom/internal/service/workspace"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -46,11 +49,11 @@ func TestSetupSSR(t *testing.T) {
 			description:    "Should serve tutorial.html template",
 		},
 		{
-			name:           "favicon route serves ICO",
+			name:           "favicon route serves PNG",
 			method:         "GET",
 			path:           "/favicon.ico",
 			expectedStatus: http.StatusOK,
-			expectedType:   "image/x-icon",
+			expectedType:   "image/png",
 			description:    "Should serve favicon.ico file",
 		},
 		{
@@ -162,7 +165,7 @@ func TestSetupSSR_StaticFileHeaders(t *testing.T) {
 		path         string
 		expectedType string
 	}{
-		{"/favicon.ico", "image/x-icon"},
+		{"/favicon.ico", "image/png"},
 		{"/apple-touch-icon.png", "image/png"},
 		{"/apple-touch-icon-precomposed.png", "image/png"},
 	}
@@ -201,8 +204,8 @@ func TestSetupSSR_RouteCount(t *testing.T) {
 	// Get final route count
 	finalRoutes := len(router.Routes())
 
-	// Should have added 5 routes (2 HTML + 3 static files)
-	expectedNewRoutes := 5
+	// Should have added 7 routes (2 HTML + 3 static img files + 2 for StaticFS /static/js)
+	expectedNewRoutes := 7
 	actualNewRoutes := finalRoutes - initialRoutes
 
 	assert.Equal(t, expectedNewRoutes, actualNewRoutes,
@@ -307,7 +310,11 @@ func TestGetConfig(t *testing.T) {
 func TestCreateServer(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	server := createServer()
+	cache := ssbom.NewInMemoryCache()
+	projectSvc := psvc.New(nil, cache)
+	sbomSvc := ssbom.NewService(nil, cache)
+
+	server := createServer(projectSvc, sbomSvc)
 
 	assert.NotNil(t, server)
 
@@ -327,15 +334,53 @@ func TestCreateServer(t *testing.T) {
 	}
 }
 
+func TestCreateServerRejectsNonLocalBrowserRequests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cache := ssbom.NewInMemoryCache()
+	server := createServer(psvc.New(nil, cache), ssbom.NewService(nil, cache))
+
+	rebound := httptest.NewRequest(http.MethodGet, "/", nil)
+	rebound.Host = "rebound.example:8080"
+	reboundResult := httptest.NewRecorder()
+	server.ServeHTTP(reboundResult, rebound)
+	assert.Equal(t, http.StatusForbidden, reboundResult.Code)
+
+	crossOrigin := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(`{"name":"created"}`))
+	crossOrigin.Host = "localhost:8080"
+	crossOrigin.Header.Set("Content-Type", "text/plain")
+	crossOrigin.Header.Set("Origin", "https://attacker.example")
+	crossOriginResult := httptest.NewRecorder()
+	server.ServeHTTP(crossOriginResult, crossOrigin)
+	assert.Equal(t, http.StatusForbidden, crossOriginResult.Code)
+
+	plainText := httptest.NewRequest(http.MethodPost, "/projects", strings.NewReader(`{"name":"created"}`))
+	plainText.Host = "localhost:8080"
+	plainText.Header.Set("Content-Type", "text/plain")
+	plainTextResult := httptest.NewRecorder()
+	server.ServeHTTP(plainTextResult, plainText)
+	assert.Equal(t, http.StatusUnsupportedMediaType, plainTextResult.Code)
+}
+
 func TestURL(t *testing.T) {
 	config := Config{
-		Port: "8080",
+		Port:     "8080",
+		BindAddr: "127.0.0.1",
 	}
 
-	expectedURL := "http://localhost:8080"
+	expectedURL := "http://127.0.0.1:8080"
 	assert.Equal(t, expectedURL, config.URL(), "URL should match expected format")
 
 	config.Port = "3000"
-	expectedURL = "http://localhost:3000"
+	config.BindAddr = "::1"
+	expectedURL = "http://[::1]:3000"
 	assert.Equal(t, expectedURL, config.URL(), "URL should update with new port")
+}
+
+func TestIsLoopbackBind(t *testing.T) {
+	for _, addr := range []string{"127.0.0.1", "127.0.0.2", "::1"} {
+		assert.True(t, isLoopbackBind(addr), addr)
+	}
+	for _, addr := range []string{"0.0.0.0", "::", "192.0.2.1", "localhost"} {
+		assert.False(t, isLoopbackBind(addr), addr)
+	}
 }
