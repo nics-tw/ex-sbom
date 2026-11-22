@@ -104,7 +104,7 @@ const ResultView = {
           <span class="text-amber-600 font-bold w-4 text-center flex-shrink-0">~</span>
           <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
           <div class="flex items-center gap-2 flex-shrink-0">
-            ${this._versionCell(r.version_b, sbomB, r.name)}
+            ${this._versionCell(r.version_b, sbomB, r.key_b ?? r.name)}
             <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_b ?? 0}</span>
           </div>
         </div>

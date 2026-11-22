@@ -11,6 +11,7 @@ import (
 
 // ComponentDiff represents a single component difference between two SBOMs.
 type ComponentDiff struct {
+	KeyB     string `json:"key_b,omitempty"`
 	Name     string `json:"name"`
 	VersionA string `json:"version_a,omitempty"`
 	VersionB string `json:"version_b,omitempty"`
@@ -111,15 +112,78 @@ func sameVulnRisks(a, b []Vuln) bool {
 	return true
 }
 
+type diffIdentity struct {
+	name    string
+	version string
+}
+
+type diffCandidates struct {
+	key   string
+	count int
+}
+
+func diffName(key string, component Component) string {
+	if component.Name != "" {
+		return component.Name
+	}
+	return key
+}
+
+func matchDiffComponents(a, b map[string]Component) (map[string]string, map[string]struct{}) {
+	matches := make(map[string]string)
+	matchedB := make(map[string]struct{})
+	for key, compA := range a {
+		if compB, ok := b[key]; ok && diffName(key, compA) == diffName(key, compB) && compA.Version == compB.Version {
+			matches[key] = key
+			matchedB[key] = struct{}{}
+		}
+	}
+
+	// Aliases reflect the names present in one document and may change when
+	// another package shares the same name. Match exact versions first to
+	// retain survivors, then pair only unambiguous upgrades.
+	for _, includeVersion := range []bool{true, false} {
+		indexA := unmatchedDiffComponents(a, matches, includeVersion)
+		indexB := unmatchedDiffComponents(b, matchedB, includeVersion)
+		for identity, keysA := range indexA {
+			keysB := indexB[identity]
+			if keysA.count == 1 && keysB.count == 1 {
+				matches[keysA.key] = keysB.key
+				matchedB[keysB.key] = struct{}{}
+			}
+		}
+	}
+	return matches, matchedB
+}
+
+func unmatchedDiffComponents[T any](components map[string]Component, matched map[string]T, includeVersion bool) map[diffIdentity]diffCandidates {
+	index := make(map[diffIdentity]diffCandidates)
+	for key, component := range components {
+		if _, ok := matched[key]; ok {
+			continue
+		}
+		identity := diffIdentity{name: diffName(key, component)}
+		if includeVersion {
+			identity.version = component.Version
+		}
+		entry := index[identity]
+		entry.key = key
+		entry.count++
+		index[identity] = entry
+	}
+	return index
+}
+
 // DiffSBOMs compares two FormattedSBOMs and returns added/removed/changed components grouped by level.
 func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 	result := DiffResult{ByLevel: make(map[int]*LevelDiff)}
+	matches, matchedB := matchDiffComponents(a.ComponentInfo, b.ComponentInfo)
 
 	for name, compA := range a.ComponentInfo {
 		levelA := a.ComponentToLevel[name]
 		cvssA, epssA, levA, severeA := riskFields(compA)
 
-		compB, exists := b.ComponentInfo[name]
+		keyB, exists := matches[name]
 		if !exists {
 			getOrCreateLevel(&result, levelA).Removed = append(
 				getOrCreateLevel(&result, levelA).Removed,
@@ -138,8 +202,9 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 			continue
 		}
 
+		compB := b.ComponentInfo[keyB]
 		cvssB, epssB, levB, severeB := riskFields(compB)
-		levelB := b.ComponentToLevel[name]
+		levelB := b.ComponentToLevel[keyB]
 		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber ||
 			levelA != levelB || compA.ContainsVulnDep != compB.ContainsVulnDep ||
 			!sameVulnRisks(compA.Vulns, compB.Vulns) {
@@ -163,6 +228,9 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 				SevereB:    severeB,
 			}
 
+			if keyB != name {
+				diff.KeyB = keyB
+			}
 			getOrCreateLevel(&result, levelA).Changed = append(
 				getOrCreateLevel(&result, levelA).Changed, diff,
 			)
@@ -170,7 +238,7 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 	}
 
 	for name, compB := range b.ComponentInfo {
-		if _, exists := a.ComponentInfo[name]; !exists {
+		if _, exists := matchedB[name]; !exists {
 			levelB := b.ComponentToLevel[name]
 			cvssB, epssB, levB, severeB := riskFields(compB)
 

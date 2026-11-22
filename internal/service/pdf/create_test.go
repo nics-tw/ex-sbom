@@ -7,7 +7,9 @@ package pdf
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +87,64 @@ func TestFormatReportFileName(t *testing.T) {
 	created := time.Date(2026, 11, 22, 10, 23, 42, 0, time.UTC)
 	require.Equal(t, "正式版_1_2_report_20261122_102342.pdf", FileName("正式版/1\n2", created))
 	require.Equal(t, "sbom_report_20261122_102342.pdf", FileName("   ", created))
+}
+
+func TestGenerateRepeatsInventoryHeadingsAndPreservesRowsAcrossPages(t *testing.T) {
+	tool, err := exec.LookPath("pdftotext")
+	if err != nil {
+		t.Skip("pdftotext is required to verify paginated inventory content")
+	}
+	const segmentCount = 360
+	segments := make([]string, segmentCount)
+	for i := range segments {
+		segments[i] = fmt.Sprintf("row-segment-%03d", i)
+	}
+	segmentPattern := regexp.MustCompile(`row-segment-\d{3}`)
+	for _, tc := range []struct {
+		language, section string
+		columns           []string
+	}{
+		{English, "Component inventory", []string{"Component", "Version", "Scope", "Findings"}},
+		{TraditionalChinese, "元件清單", []string{"元件", "版本", "類型", "弱點數"}},
+	} {
+		t.Run(tc.language, func(t *testing.T) {
+			columnPatterns := make([]string, len(tc.columns))
+			for i, column := range tc.columns {
+				columnPatterns[i] = regexp.QuoteMeta(column)
+			}
+			headingRow := regexp.MustCompile(`(?m)^[ \t]*` + strings.Join(columnPatterns, `[ \t]+`) + `[ \t]*$`)
+			var output bytes.Buffer
+			bom := ssbom.FormattedSBOM{ComponentInfo: map[string]ssbom.Component{
+				"a": {Name: "before-inventory-row", Version: "before-version"},
+				"b": {Name: strings.Join(segments, " "), Version: "spanning-version"},
+				"c": {Name: "after-inventory-row", Version: "after-version"},
+			}}
+			require.NoError(t, Generate(&output, Report{Language: tc.language, SBOM: bom}))
+			command := exec.Command(tool, "-layout", "-", "-")
+			command.Stdin = bytes.NewReader(output.Bytes())
+			result, err := command.CombinedOutput()
+			require.NoError(t, err, string(result))
+			text := string(result)
+			require.Equal(t, segments, segmentPattern.FindAllString(text, -1))
+			spanningPages := 0
+			for _, page := range strings.Split(text, "\f") {
+				firstSegment := segmentPattern.FindStringIndex(page)
+				if firstSegment == nil {
+					continue
+				}
+				spanningPages++
+				_, afterSection, found := strings.Cut(page[:firstSegment[0]], tc.section)
+				require.True(t, found, "missing inventory section heading on page %d", spanningPages)
+				require.Regexp(t, headingRow, afterSection, "missing inventory column headings on page %d", spanningPages)
+			}
+			require.GreaterOrEqual(t, spanningPages, 2)
+			for _, marker := range []string{"before-inventory-row", "before-version", "spanning-version", "after-inventory-row", "after-version"} {
+				require.Equal(t, 1, strings.Count(text, marker), marker)
+			}
+			require.Less(t, strings.Index(text, "before-inventory-row"), strings.Index(text, segments[0]))
+			require.Greater(t, strings.Index(text, "after-inventory-row"), strings.Index(text, segments[segmentCount-1]))
+		})
+	}
 }
 
 func TestGeneratePreservesOriginalTextForUnavailableGlyphs(t *testing.T) {

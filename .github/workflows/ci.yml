@@ -56,8 +56,9 @@ jobs:
       - name: Verify performance measurement entry point
         run: |
           perf_dir="$(mktemp -d)"
-          go run ./tests/perf/cmd/seed -db "$perf_dir/data.duckdb" -versions 2 -components 8 > "$perf_dir/fixture.json"
-          node tests/perf/measure.mjs "${RUNNER_TEMP}/ex-sbom-browser.test" "$perf_dir/data.duckdb" "$perf_dir/fixture.json" 1
+          versions=2
+          go run ./tests/perf/cmd/seed -db "$perf_dir/data.duckdb" -versions "$versions" -components 8 > "$perf_dir/fixture.json"
+          node tests/perf/measure.mjs "${RUNNER_TEMP}/ex-sbom-browser.test" "$perf_dir/data.duckdb" "$perf_dir/fixture.json" 1 "$versions"
 
       - name: Upload browser failure details
         if: failure()

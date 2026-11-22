@@ -65,6 +65,40 @@ func TestPreviewRetainsFindingsForSameNamePackages(t *testing.T) {
 	}
 }
 
+func TestDiffSBOMsWhenSameNamePackageIsAddedOrRemoved(t *testing.T) {
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = sameNameOSVFixture{}
+
+	const header = `{"bomFormat":"CycloneDX","specVersion":"1.7","version":1,"components":[`
+	const survivor = `{"type":"library","bom-ref":"first","name":"fixture","version":"1.0.0","purl":"pkg:npm/fixture@1.0.0"}`
+	const extra = `{"type":"library","bom-ref":"second","name":"fixture","version":"2.0.0","purl":"pkg:npm/fixture@2.0.0"}`
+	service := &Service{}
+	single, checksum, _, err := service.Preview([]byte(header + survivor + `]}`))
+	require.NoError(t, err)
+	double, _, _, err := service.Preview([]byte(header + extra + "," + survivor + `]}`))
+	require.NoError(t, err)
+	require.Equal(t, []string{"fixture"}, single.Components)
+	require.Equal(t, []string{"fixture (first)", "fixture (second)"}, double.Components)
+
+	added := DiffSBOMs(single, double)
+	require.Len(t, added.ByLevel, 1)
+	addedLevel := added.ByLevel[double.ComponentToLevel["fixture (second)"]]
+	require.Len(t, addedLevel.Added, 1)
+	require.Equal(t, "fixture (second)", addedLevel.Added[0].Name)
+	require.Empty(t, addedLevel.Removed)
+	require.Empty(t, addedLevel.Changed)
+
+	removed := DiffSBOMs(double, single)
+	require.Len(t, removed.ByLevel, 1)
+	removedLevel := removed.ByLevel[double.ComponentToLevel["fixture (second)"]]
+	require.Len(t, removedLevel.Removed, 1)
+	require.Equal(t, "fixture (second)", removedLevel.Removed[0].Name)
+	require.Empty(t, removedLevel.Added)
+	require.Empty(t, removedLevel.Changed)
+	require.Equal(t, checksum, HashSBOM(single))
+}
+
 type sameNameOSVFixture struct{}
 
 func (sameNameOSVFixture) RoundTrip(r *http.Request) (*http.Response, error) {

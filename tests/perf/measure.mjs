@@ -9,6 +9,7 @@
 //   node tests/perf/measure.mjs "$run_dir/server.test" "$run_dir/data.duckdb" "$run_dir/fixture.json" 30
 //
 // Use the seeder flags to set populated projects, versions, components and fanout.
+// If you seed with -versions N, pass the same N after the sample count.
 // The database migration also creates one empty default project.
 // Compare first requests on fresh processes and repeated requests after startup.
 // Browser times use test CSS, and RSS is sampled rather than an OS high-water mark.
@@ -26,20 +27,33 @@ import { chromium } from "../e2e/node_modules/playwright/index.mjs";
 import { startServer, useLocalAssets } from "../e2e/server.mjs";
 
 const execute = promisify(execFile);
-const [binary, dbPath, manifestPath, count = "30"] = process.argv.slice(2);
+const [binary, dbPath, manifestPath, count = "30", versionCount = "4"] = process.argv.slice(2);
 const samples = Number(count);
-assert(binary && dbPath && manifestPath && Number.isSafeInteger(samples) && samples > 0,
-  "usage: node tests/perf/measure.mjs SERVER_BINARY DUCKDB MANIFEST_JSON [SAMPLES]");
+const versions = Number(versionCount);
+assert(binary && dbPath && manifestPath && Number.isSafeInteger(samples) && samples > 0 &&
+  Number.isSafeInteger(versions) && versions >= 2,
+  "usage: node tests/perf/measure.mjs SERVER_BINARY DUCKDB MANIFEST_JSON [SAMPLES] [VERSIONS]");
+
+// The seeder creates a fresh database. The migration inserts the default
+// project first, then tests/perf/cmd/seed creates the first populated project.
+const projectID = 2;
+const projectName = "Performance fixture 000000";
+const versionName = index => `version-${String(index).padStart(6, "0")}`;
+const firstVersion = versionName(versions - 1);
+const secondVersion = versionName(versions - 2);
+const searchTerm = "fixture-hit";
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-assert(Number.isSafeInteger(manifest.target_project_id) && manifest.target_project_id > 0,
-  "invalid fixture project ID");
-assert(typeof manifest.first_version === "string" && manifest.first_version.length > 0 &&
-  typeof manifest.second_version === "string" && manifest.second_version.length > 0 &&
-  typeof manifest.search_term === "string", "invalid fixture manifest");
-const root = "/projects/" + manifest.target_project_id;
-const search = root + "/search?" + new URLSearchParams({ q: manifest.search_term });
-const diff = root + "/diff?" + new URLSearchParams({ a: manifest.first_version, b: manifest.second_version });
-const topology = root + "/sboms/" + encodeURIComponent(manifest.first_version) + "/topology";
+assert.equal(manifest.target_project_id, projectID, "fixture project ID does not match the seeder");
+assert.equal(manifest.target_project_name, projectName, "fixture project name does not match the seeder");
+assert.equal(manifest.versions_per_project, versions, "pass the seeder's -versions value after SAMPLES");
+assert.equal(manifest.first_version, firstVersion, "fixture first version does not match the seeder");
+assert.equal(manifest.second_version, secondVersion, "fixture second version does not match the seeder");
+assert.equal(manifest.search_term, searchTerm, "fixture search term does not match the seeder");
+
+const root = "/projects/" + projectID;
+const search = root + "/search?" + new URLSearchParams({ q: searchTerm });
+const diff = root + "/diff?" + new URLSearchParams({ a: firstVersion, b: secondVersion });
+const topology = root + "/sboms/" + encodeURIComponent(firstVersion) + "/topology";
 
 function summarize(values) {
   assert(values.length > 0 && values.every(Number.isFinite));
@@ -106,7 +120,7 @@ function operation(path, expected) {
 async function measureAPI() {
   const operations = {
     search: operation(search, data => data.total ===
-      Math.ceil(manifest.components_per_version / 10) * manifest.versions_per_project),
+      Math.ceil(manifest.components_per_version / 10) * versions),
     diff: operation(diff, data => Object.values(data.by_level).reduce(
       (count, level) => count + (level.changed?.length ?? 0), 0) === Math.ceil(manifest.components_per_version / 5)),
     topology: operation(topology, data => data.reduce(
@@ -137,18 +151,18 @@ async function measureBrowser() {
       const page = await context.newPage();
       await page.goto(baseURL);
       const selected = page.locator("#project-select");
-      await selected.selectOption({ label: manifest.target_project_name });
+      await selected.selectOption({ label: projectName });
       await page.waitForFunction(version =>
         Array.from(document.querySelectorAll(".version-load-btn")).some(button => button.dataset.version === version),
-      manifest.first_version);
+        firstVersion);
 
       const operations = {
         search: {
           path: search,
           selector: '#search-results [data-action="show-component"]',
-          expected: Math.ceil(manifest.components_per_version / 10) * manifest.versions_per_project,
+          expected: Math.ceil(manifest.components_per_version / 10) * versions,
           action: "#search-input",
-          value: manifest.search_term,
+          value: searchTerm,
         },
         diff: {
           path: diff,
@@ -161,19 +175,19 @@ async function measureBrowser() {
           selector: '#tab-content [data-is-expanded="true"] .truncate',
           expected: Array.from({ length: 8 }, (_, level) =>
             Math.min(10, Math.max(0, Math.ceil((manifest.components_per_version - level) / 8)))).reduce((a, b) => a + b, 0),
-          action: `#file-tabs [data-version="${manifest.first_version}"] .sbom-tab-label`,
+          action: `#file-tabs [data-version="${firstVersion}"] .sbom-tab-label`,
         },
       };
       const results = {};
       for (const [name, scenario] of Object.entries(operations)) {
         if (name === "diff") {
           await page.locator("#main-tab-diff").click();
-          await page.locator("#diff-select-a").selectOption(manifest.first_version);
-          await page.locator("#diff-select-b").selectOption(manifest.second_version);
+          await page.locator("#diff-select-a").selectOption(firstVersion);
+          await page.locator("#diff-select-b").selectOption(secondVersion);
         }
         if (name === "topology") {
           await page.locator("#main-tab-analysis").click();
-          const button = page.locator(`.version-load-btn[data-version="${manifest.first_version}"]`);
+          const button = page.locator(`.version-load-btn[data-version="${firstVersion}"]`);
           await button.click();
           await page.locator(scenario.selector).first().waitFor();
         }
