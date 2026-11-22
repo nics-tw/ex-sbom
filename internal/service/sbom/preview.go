@@ -50,6 +50,7 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		if err != nil {
 			return FormattedSBOM{}, "", time.Time{}, err
 		}
+		setReportSpecification(&bom, rawData, keySPDXVersion, "")
 		return bom, sha256Hash, spdxTimestamp(doc), nil
 
 	case sbomFormatCycloneDX:
@@ -62,10 +63,24 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		// Scan the same (possibly downgraded) representation the decoder accepted,
 		// so the scanner cannot reject bytes the parser already validated.
 		result, sha256Hash, bomTimestamp, err := s.PreviewCDX(bom, cdxData)
+		if err == nil {
+			setReportSpecification(&result, rawData, keySpecVersion, "CycloneDX ")
+		}
 		return result, sha256Hash, bomTimestamp, err
 
 	default:
 		return FormattedSBOM{}, "", time.Time{}, ErrInvalidSBOMFormat
+	}
+}
+
+// Use the original input's specification, even when the scanner parsed a
+// supported representation of a newer CycloneDX document.
+func setReportSpecification(bom *FormattedSBOM, raw []byte, key, prefix string) {
+	var metadata map[string]json.RawMessage
+	var version string
+	if bom.ReportSource != nil && json.Unmarshal(raw, &metadata) == nil &&
+		json.Unmarshal(metadata[key], &version) == nil && version != "" {
+		bom.ReportSource.Specification = prefix + version
 	}
 }
 

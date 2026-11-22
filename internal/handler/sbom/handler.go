@@ -284,12 +284,16 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
+	if bomResult.ReportSource != nil {
+		bomResult.ReportSource.FileName = fileHeader.Filename
+		bomResult.ReportSource.FileSHA256 = fmt.Sprintf("%x", sha256.Sum256(sbomData))
+	}
 	existingVersion, err := h.sbomSvc.FindVersionForSBOM(projectID, sha256Hash, bomResult)
 	if err != nil {
 		slog.Error("Failed to check duplicate SHA-256", "error", err)
 		existingVersion = ""
 	}
-	previewToken, err := h.previewToken(projectID, sha256Hash, bomTimestamp)
+	previewToken, err := h.previewToken(projectID, sha256Hash, bomTimestamp, bomResult.ReportSource)
 	if err != nil {
 		slog.Error("Failed to sign SBOM preview", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: "failed to sign SBOM preview"})
@@ -344,7 +348,7 @@ func (h *Handler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: fmt.Sprintf(msg.ErrMissingParam, "version")})
 		return
 	}
-	if !h.validPreviewToken(body.PreviewToken, projectID, body.SHA256, body.BomTimestamp) {
+	if !h.validPreviewToken(body.PreviewToken, projectID, body.SHA256, body.BomTimestamp, body.BomResult.ReportSource) {
 		c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: "invalid preview token; preview the SBOM again"})
 		return
 	}
@@ -424,16 +428,18 @@ func errCause(err error) string {
 }
 
 type previewClaim struct {
-	ProjectID    domain.ProjectID `json:"project_id"`
-	SHA256       domain.SHA256    `json:"sha256"`
-	BomTimestamp time.Time        `json:"bom_timestamp"`
+	ProjectID    domain.ProjectID    `json:"project_id"`
+	SHA256       domain.SHA256       `json:"sha256"`
+	BomTimestamp time.Time           `json:"bom_timestamp"`
+	ReportSource *ssbom.ReportSource `json:"report_source,omitempty"`
 }
 
-func (h *Handler) previewToken(projectID domain.ProjectID, checksum domain.SHA256, timestamp time.Time) (string, error) {
+func (h *Handler) previewToken(projectID domain.ProjectID, checksum domain.SHA256, timestamp time.Time, source *ssbom.ReportSource) (string, error) {
 	claim, err := json.Marshal(previewClaim{
 		ProjectID:    projectID,
 		SHA256:       checksum,
 		BomTimestamp: timestamp,
+		ReportSource: source,
 	})
 	if err != nil {
 		return "", err
@@ -443,10 +449,10 @@ func (h *Handler) previewToken(projectID domain.ProjectID, checksum domain.SHA25
 	return hex.EncodeToString(mac.Sum(nil)), nil
 }
 
-func (h *Handler) validPreviewToken(token string, projectID domain.ProjectID, checksum domain.SHA256, timestamp time.Time) bool {
+func (h *Handler) validPreviewToken(token string, projectID domain.ProjectID, checksum domain.SHA256, timestamp time.Time, source *ssbom.ReportSource) bool {
 	if len(token) != 2*sha256.Size {
 		return false
 	}
-	expected, err := h.previewToken(projectID, checksum, timestamp)
+	expected, err := h.previewToken(projectID, checksum, timestamp, source)
 	return err == nil && hmac.Equal([]byte(token), []byte(expected))
 }

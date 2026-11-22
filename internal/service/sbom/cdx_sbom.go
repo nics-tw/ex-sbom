@@ -45,7 +45,7 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	dependency := getCdxDep(bom.Dependencies, refToName, rootRef)
 	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName, rootRef)
 
-	componentInfo, err := getCdxComponentInfo(bom.Components, rawData, name)
+	componentInfo, observation, err := getCdxComponentInfo(bom.Components, rawData, name)
 	if err != nil {
 		return FormattedSBOM{}, "", time.Time{}, err
 	}
@@ -57,6 +57,7 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
 		ComponentInfo:     componentInfo,
+		ReportSource:      observedSource(cdxReportPackages(bom.Components), componentInfo, observation),
 	}
 
 	withVuln := []string{}
@@ -378,7 +379,7 @@ func getCdxDep(input *[]cdx.Dependency, refToName map[string]string, rootRef str
 	return dependency
 }
 
-func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) (map[string]Component, error) {
+func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) (map[string]Component, file.QueryObservation, error) {
 	componentInfo := make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -386,7 +387,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		Data:  files,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
+		return nil, file.QueryObservation{}, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
 	}
 
 	defer func() {
@@ -395,20 +396,22 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		}
 	}()
 
-	vulnPkgs, err := file.GetScanResult(path)
+	vulnPkgs, observation, err := file.GetScanResult(path)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
-		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
+		return nil, file.QueryObservation{}, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
-
-	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
 
 	if input != nil {
 		for _, c := range *input {
+			if _, exists := componentInfo[c.Name]; exists {
+				continue
+			}
+			vulns := packageFindings(vulnPkgs, file.IdentifyPackage(c.Name, c.Version, c.PackageURL))
 			componentInfo[c.Name] = Component{
 				Name:       c.Name,
 				Version:    c.Version,
-				VulnNumber: getVulnNumber(c.Name, trimmedVulnPkgs),
-				Vulns:      getVulns(c.Name, c.Version, trimmedVulnPkgs),
+				VulnNumber: len(vulns),
+				Vulns:      vulns,
 				Licences:   getCdxLicences(c.Licenses),
 			}
 		}
@@ -447,7 +450,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		}
 	}
 
-	return componentInfo, nil
+	return componentInfo, observation, nil
 }
 
 func getCdxLicences(input *cdx.Licenses) string {
@@ -474,4 +477,16 @@ func getCdxLicences(input *cdx.Licenses) string {
 	}
 
 	return licences.String()
+}
+
+func cdxReportPackages(components *[]cdx.Component) []file.PackageVersion {
+	if components == nil {
+		return nil
+	}
+	packages := make([]file.PackageVersion, 0, len(*components))
+	for _, component := range *components {
+		packages = append(packages, file.IdentifyPackage(component.Name, component.Version, component.PackageURL))
+		packages = append(packages, cdxReportPackages(component.Components)...)
+	}
+	return packages
 }

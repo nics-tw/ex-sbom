@@ -11,14 +11,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import vm from "node:vm";
 
-const appJs = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "../../static/js/app.js"),
-  "utf8",
-);
+const appJs = ["api.js", "request-slot.js", "result-view.js", "app.js"]
+  .map(file => readFileSync(new URL(`../../static/js/${file}`, import.meta.url), "utf8"))
+  .join("\n");
 
 const sandbox = {
   document: { addEventListener() {}, getElementById: () => null },

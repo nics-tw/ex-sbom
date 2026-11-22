@@ -1,12 +1,12 @@
     // ═══════════════════════════════════════════════════════════════════════════
-    // STATE — single source of truth for mutable app state
+    // Project owns projectID, Sbom owns the open and active tabs, and i18n owns language.
+    // Request ownership stays with each feature, alongside its render and reset logic.
     // ═══════════════════════════════════════════════════════════════════════════
     const State = {
       projectID: null,
       uploadedFiles: new Set(),
       activeTab: null,
       language: "en",
-      topologyRequest: null,
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -26,6 +26,10 @@
           uploadFailed: "{0}: {1}",
           errorReadingFile: "Error reading file",
           warningOverwrite: "Warning: the previous <strong>{0}</strong> will be overwritten since the file names are same.",
+          downloadReport: "Download PDF Report",
+          reportPreparing: "Preparing the PDF report…",
+          reportDownloadStarted: "Download requested for {0}. You can find it in your browser’s downloads.",
+          reportDownloadError: "Could not create the PDF report. Please try again.",
           delete: "Delete",
           deletedSuccessfully: "{0} deleted successfully",
           errorDeleting: "Error deleting file: {0}",
@@ -93,6 +97,7 @@
           diffSevere: "Severe",
           diffNoChanges: "No differences found",
           diffSelectBoth: "Please select two different SBOMs",
+          diffVersionsFailed: "Could not load versions. Open the comparison tab again to retry.",
           diffSummary: "Showing {0} additions, {1} removals, {2} changes",
           diffVulns: "Vulns",
         },
@@ -108,6 +113,10 @@
           uploadFailed: "{0}: {1}",
           errorReadingFile: "讀取檔案錯誤",
           warningOverwrite: "警告：由於檔案名稱相同，之前的 <strong>{0}</strong> 將被覆蓋。",
+          downloadReport: "下載 PDF 報告",
+          reportPreparing: "正在產製 PDF 報告…",
+          reportDownloadStarted: "已交由瀏覽器下載 {0}，請在瀏覽器的下載清單查找。",
+          reportDownloadError: "無法產製 PDF 報告，請再試一次。",
           delete: "刪除",
           deletedSuccessfully: "{0} 刪除成功",
           errorDeleting: "刪除檔案錯誤: {0}",
@@ -175,6 +184,7 @@
           diffSevere: "嚴重",
           diffNoChanges: "無差異",
           diffSelectBoth: "請選擇兩個不同的 SBOM",
+          diffVersionsFailed: "無法載入版本。請重新開啟差異比對頁籤再試一次。",
           diffSummary: "共 {0} 項新增、{1} 項移除、{2} 項變更",
           diffVulns: "漏洞",
         },
@@ -215,88 +225,19 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // API — all HTTP calls in one place
-    // ═══════════════════════════════════════════════════════════════════════════
-    const Api = {
-      async _json(url, opts = {}) {
-        const resp = await fetch(url, opts);
-        const json = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(json.error || `HTTP ${resp.status}`);
-        return json;
-      },
-
-      getProjects()      { return this._json("/projects"); },
-      getProject(id)     { return this._json(`/projects/${encodeURIComponent(id)}`); },
-      createProject(name) {
-        return this._json("/projects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        });
-      },
-      renameProject(id, name) {
-        return this._json(`/projects/${encodeURIComponent(id)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        });
-      },
-      deleteProject(id)  { return this._json(`/projects/${encodeURIComponent(id)}`, { method: "DELETE" }); },
-
-      previewSBOM(projectID, file) {
-        const form = new FormData();
-        form.append("file", file);
-        return fetch(`/projects/${projectID}/sboms/preview`, { method: "POST", body: form });
-      },
-
-      commitSBOM(projectID, version, bomResult, sha256, bomTimestamp, previewToken) {
-        return fetch(`/projects/${projectID}/sboms`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version, bom_result: bomResult, sha256, bom_timestamp: bomTimestamp, preview_token: previewToken }),
-        });
-      },
-      listVersions(projectID) {
-        return this._json(`/projects/${projectID}/versions`);
-      },
-      renameSBOM(projectID, name, newName) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ version: newName }),
-        });
-      },
-      deleteSBOM(projectID, name) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}`, { method: "DELETE" });
-      },
-
-      getTopology(projectID, name, signal) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(name)}/topology`, { signal });
-      },
-      getComponent(projectID, sbom, comp, signal) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component?component=${encodeURIComponent(comp)}`, { signal });
-      },
-      getVulnDep(projectID, sbom, comp, signal) {
-        return this._json(`/projects/${projectID}/sboms/${encodeURIComponent(sbom)}/topology/component/vuln-dep?component=${encodeURIComponent(comp)}`, { signal });
-      },
-      search(projectID, q, signal) {
-        return this._json(`/projects/${projectID}/search?q=${encodeURIComponent(q)}`, { signal });
-      },
-      diff(projectID, a, b, signal) {
-        return this._json(`/projects/${projectID}/diff?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`, { signal });
-      },
-    };
-
-    // ═══════════════════════════════════════════════════════════════════════════
     // PROJECT — project CRUD + UI state sync
     // ═══════════════════════════════════════════════════════════════════════════
     const Project = {
+      _list: new RequestSlot(),
+      _selection: new RequestSlot(),
+      _selectionGen: 0,
+
       async load(autoLoad = true, selectID = null) {
-        const request = ++this._listGen;
+        const request = this._list.begin();
         const selection = this._selectionGen;
         try {
-          const json = await Api.getProjects();
-          if (request !== this._listGen) return;
+          const json = await Api.getProjects(request.controller.signal);
+          if (!this._list.owns(request)) return;
           const { projects, current } = json.data;
           const sel = document.getElementById("project-select");
           const preferred = selection === this._selectionGen && selectID !== null
@@ -313,24 +254,18 @@
             else this._apply({ data: { project_id: null } });
           }
         } catch (e) {
-          console.error("Failed to load projects:", e);
+          if (this._list.owns(request)) console.error("Failed to load projects:", e);
+        } finally {
+          this._list.finish(request);
         }
       },
 
       _apply(json) {
         State.projectID = json.data?.project_id ?? null;
-        if (State.topologyRequest) {
-          State.topologyRequest.controller.abort();
-          State.topologyRequest = null;
-        }
+        ComponentModal.close();
+        SbomModal.close();
+        Sbom.reset();
         document.getElementById("upload-status").innerHTML = "";
-
-        document.getElementById("file-tabs").innerHTML = "";
-        document.getElementById("tab-content").innerHTML =
-          `<div id="no-tabs-message" class="text-gray-500 italic" data-i18n="noFilesUploaded">${t("noFilesUploaded")}</div>`;
-        State.uploadedFiles.clear();
-        State.activeTab = null;
-        // Stale search input/results from the previous project: abort + reset
         Search.clear();
 
         // Default to SBOM 分析 tab on project load
@@ -341,24 +276,20 @@
         document.getElementById("project-current").textContent = State.projectID && opt ? `(${opt.text})` : "";
       },
 
-      // Monotonic token: only the latest project selection may apply its response
-      _selectionGen: 0,
-      _listGen: 0,
-
       async get(id) {
-        const gen = ++this._selectionGen;
+        this._selectionGen++;
+        const request = this._selection.begin({ id });
         this._apply({ data: { project_id: null } });
         try {
-          const json = await Api.getProject(id);
-          // Stale response guard: a newer selection/create/delete happened,
-          // or the selector no longer points at this project
-          if (gen !== this._selectionGen) return;
+          const json = await Api.getProject(request.id, request.controller.signal);
+          if (!this._selection.owns(request)) return;
           const sel = document.getElementById("project-select");
           if (sel && sel.value !== String(id)) return;
           this._apply(json);
         } catch (e) {
-          if (gen !== this._selectionGen) return;
-          console.error("Failed to get project:", e);
+          if (this._selection.owns(request)) console.error("Failed to get project:", e);
+        } finally {
+          this._selection.finish(request);
         }
       },
 
@@ -370,33 +301,36 @@
           await this.load(stillSelected, stillSelected ? json.data.project_id : null);
         } catch (e) {
           console.error("Failed to create project:", e);
-          alert(e.message || "Failed to create project");
+          if (selection === this._selectionGen) alert(e.message || "Failed to create project");
         }
       },
 
       async rename(id, name) {
+        const selection = this._selectionGen;
         try {
           await Api.renameProject(id, name);
           await this.load(false);
         } catch (e) {
           console.error("Failed to rename project:", e);
-          alert(e.message || "Failed to rename project");
+          if (selection === this._selectionGen) alert(e.message || "Failed to rename project");
         }
       },
 
       async delete(id) {
+        const selection = this._selectionGen;
         try {
           await Api.deleteProject(id);
           const sel = document.getElementById("project-select");
           const deletedSelection = String(sel.value || State.projectID) === String(id);
           if (deletedSelection) {
             this._selectionGen++;
+            this._selection.cancel();
             this._apply({ data: { project_id: null } });
           }
           await this.load(deletedSelection);
         } catch (e) {
           console.error("Failed to delete project:", e);
-          alert(e.message || "Failed to delete project");
+          if (selection === this._selectionGen) alert(e.message || "Failed to delete project");
         }
       },
     };
@@ -405,6 +339,21 @@
     // SBOM — file upload, tabs, topology rendering, delete, report download
     // ═══════════════════════════════════════════════════════════════════════════
     const Sbom = {
+      _topology: new RequestSlot(),
+
+      reset() {
+        document.getElementById("file-tabs").innerHTML = "";
+        State.uploadedFiles.clear();
+        this._clearActiveTab();
+      },
+
+      _clearActiveTab() {
+        this._topology.cancel();
+        State.activeTab = null;
+        document.getElementById("tab-content").innerHTML =
+          `<div id="no-tabs-message" class="text-gray-500 italic" data-i18n="noFilesUploaded">${t("noFilesUploaded")}</div>`;
+      },
+
       // autoSelect=true: also select+fetch the tab (default for user-uploaded files).
       // autoSelect=false: only create the tab element (used on project load to avoid N fetches).
       addTab(fileName, autoSelect = true) {
@@ -439,23 +388,7 @@
         </svg>`;
         closeBtn.addEventListener("click", e => {
           e.stopPropagation();
-          State.uploadedFiles.delete(tab.dataset.version);
-          const wasActive = tab.classList.contains("tab-active");
-          tab.remove();
-          if (wasActive) {
-            const next = tabsContainer.querySelector("div");
-            if (next) {
-              this.selectTab(next);
-            } else {
-              if (State.topologyRequest) {
-                State.topologyRequest.controller.abort();
-                State.topologyRequest = null;
-              }
-              document.getElementById("tab-content").innerHTML =
-                `<div id="no-tabs-message" class="text-gray-500 italic">${t("noFilesUploaded")}</div>`;
-              State.activeTab = null;
-            }
-          }
+          this.removeTab(tab.dataset.version);
         });
 
         tab.appendChild(fileIcon);
@@ -489,8 +422,12 @@
         downloadBtn.className = "bg-[#009999] hover:bg-[#19a3a3] text-white py-1 px-3 rounded text-sm flex items-center";
         downloadBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
-        </svg><span>Download PDF Report</span>`;
-        downloadBtn.addEventListener("click", () => this.downloadReport(fileName));
+        </svg><span data-i18n="downloadReport">${t("downloadReport")}</span>`;
+        const status = document.createElement("span");
+        status.className = "max-w-xs text-sm break-all";
+        status.setAttribute("role", "status");
+        downloadBtn.addEventListener("click", () => this.downloadReport(fileName, downloadBtn, status));
+        btnGroup.appendChild(status);
 
         btnGroup.appendChild(downloadBtn);
         header.appendChild(title);
@@ -510,22 +447,56 @@
         this.fetchTopology(fileName);
       },
 
-      downloadReport(fileName) {
-        // Server sends Content-Disposition: attachment — window.open triggers browser download
-        window.open(`/projects/${State.projectID}/sboms/${encodeURIComponent(fileName)}/report`);
+      async downloadReport(version, button, status) {
+        const projectID = State.projectID;
+        const isCurrent = () => State.projectID === projectID && State.activeTab?.dataset.version === version && button.isConnected;
+        button.disabled = true;
+        status.textContent = t("reportPreparing");
+        try {
+          const response = await Api.getReport(projectID, version, State.language);
+          if (!response.ok || response.headers.get("Content-Type")?.split(";")[0] !== "application/pdf") {
+            throw new Error("PDF report unavailable");
+          }
+          const filename = this._reportFilename(response.headers.get("Content-Disposition"));
+          const pdf = await response.blob();
+          if (!isCurrent()) return;
+          const url = URL.createObjectURL(pdf);
+          try {
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            link.click();
+          } finally {
+            // Give the browser time to start reading the download.
+            setTimeout(() => URL.revokeObjectURL(url), 30_000);
+          }
+          status.textContent = t("reportDownloadStarted", filename);
+        } catch {
+          if (isCurrent()) status.textContent = t("reportDownloadError");
+        } finally {
+          button.disabled = false;
+        }
+      },
+
+      _reportFilename(disposition) {
+        if (!disposition) return "sbom_report.pdf";
+        const encoded = disposition.match(/;\s*filename\*=UTF-8''([^;]+)/i);
+        if (encoded) {
+          try {
+            return decodeURIComponent(encoded[1]);
+          } catch {
+            return "sbom_report.pdf";
+          }
+        }
+        const filename = disposition.match(/;\s*filename=(?:"([^"]+)"|([^;]+))/i);
+        return filename?.[1] || filename?.[2] || "sbom_report.pdf";
       },
 
       async fetchTopology(fileName) {
-        // Abort any in-flight topology request from a previous tab/project
-        if (State.topologyRequest) State.topologyRequest.controller.abort();
-        const req = { controller: new AbortController(), projectID: State.projectID, fileName };
-        State.topologyRequest = req;
-        // Only touch the shared tab content if this request still matches the
-        // current project + active tab when the response arrives
-        const isCurrent = () =>
-          State.topologyRequest === req &&
+        const req = this._topology.begin({ projectID: State.projectID, tab: State.activeTab, fileName });
+        const isCurrent = () => this._topology.owns(req) &&
           State.projectID === req.projectID &&
-          State.activeTab?.dataset.version === req.fileName;
+          State.activeTab === req.tab && req.tab?.dataset.version === req.fileName;
 
         const content = document.getElementById("tab-content");
         const header = content.querySelector("div:first-child");
@@ -545,7 +516,7 @@
             <div class="text-sm mt-1">${esc(e.message) || t("unknownError")}</div>`;
           content.appendChild(errEl);
         } finally {
-          if (State.topologyRequest === req) State.topologyRequest = null;
+          this._topology.finish(req);
         }
       },
 
@@ -678,44 +649,6 @@
         return panel;
       },
 
-      async delete(fileName) {
-        try {
-          await Api.deleteSBOM(State.projectID, fileName);
-          const tabsContainer = document.getElementById("file-tabs");
-          const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.version === fileName);
-          State.uploadedFiles.delete(fileName); // always sync state, even if tab element is missing
-          if (tabEl) {
-            tabsContainer.removeChild(tabEl);
-            if (State.activeTab === tabEl) {
-              document.getElementById("tab-content").innerHTML = "";
-              State.activeTab = null;
-            }
-          }
-          if (State.uploadedFiles.size > 0) {
-            const first = tabsContainer.querySelector("div");
-            if (first) this.selectTab(first);
-          } else {
-            document.getElementById("tab-content").innerHTML =
-              `<div id="no-tabs-message" class="text-gray-500 italic">${t("noFilesUploaded")}</div>`;
-          }
-          document.getElementById("sbom-file-input").value = "";
-
-          const status = document.getElementById("upload-status");
-          const msg = document.createElement("div");
-          msg.className = "mt-2 text-green-600 flex items-center";
-          msg.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-          </svg>${t("deletedSuccessfully", esc(fileName))}`;
-          status.innerHTML = "";
-          status.appendChild(msg);
-          setTimeout(() => msg.remove(), 3000);
-        } catch (e) {
-          console.error("Delete error:", e);
-          alert(t("errorDeleting", e.message || t("unknownError")));
-        }
-      },
-
-      // Remove a tab by version name without calling the API (used after 版本歷史 delete).
       renameTab(oldVersion, newVersion) {
         const tabsContainer = document.getElementById("file-tabs");
         const tabEl = Array.from(tabsContainer.children).find(el => el.dataset.version === oldVersion);
@@ -742,9 +675,7 @@
           if (next) {
             this.selectTab(next);
           } else {
-            document.getElementById("tab-content").innerHTML =
-              `<div id="no-tabs-message" class="text-gray-500 italic">${t("noFilesUploaded")}</div>`;
-            State.activeTab = null;
+            this._clearActiveTab();
           }
         }
       },
@@ -754,6 +685,7 @@
     // COMPONENT MODAL — lazy-created, event delegation for vuln toggles
     // ═══════════════════════════════════════════════════════════════════════════
     const ComponentModal = {
+      _details: new RequestSlot(),
       _ensureModal() {
         if (document.getElementById("component-modal")) return;
         const modal = document.createElement("div");
@@ -773,10 +705,7 @@
           </div>`;
         document.body.appendChild(modal);
 
-        document.getElementById("component-modal-close").addEventListener("click", () => {
-          this._abort();
-          document.getElementById("component-modal").classList.add("hidden");
-        });
+        document.getElementById("component-modal-close").addEventListener("click", () => this.close());
 
         // Event delegation for vuln accordion toggles
         document.getElementById("component-modal-content").addEventListener("click", e => {
@@ -791,26 +720,17 @@
         });
       },
 
-      _abort() {
-        if (this._request) {
-          this._request.controller.abort();
-          this._request = null;
-        }
+      close() {
+        this._details.cancel();
+        document.getElementById("component-modal")?.classList.add("hidden");
       },
 
       async show(sbomName, component) {
         this._ensureModal();
-        // Abort any in-flight detail request and bind this one to its identity
-        this._abort();
-        const req = { controller: new AbortController(), projectID: State.projectID, sbomName, component };
-        this._request = req;
-        // Only render if this is still the latest request, identity matches,
-        // and the modal is still open when the responses arrive
-        const isCurrent = () =>
-          this._request === req &&
+        const req = this._details.begin({ projectID: State.projectID, sbomName, component });
+        const isCurrent = () => this._details.owns(req) &&
           State.projectID === req.projectID &&
           !document.getElementById("component-modal").classList.contains("hidden");
-
         document.getElementById("component-modal-title").textContent = component;
         document.getElementById("component-modal").classList.remove("hidden");
         document.getElementById("component-modal-content").innerHTML = `
@@ -838,14 +758,14 @@
               <p class="mt-2">${esc(e.message) || "Unknown error"}</p>
             </div>`;
         } finally {
-          if (this._request === req) this._request = null;
+          this._details.finish(req);
         }
       },
 
       showFromLocal(compKey, compInfo, bomResult) {
         this._ensureModal();
         // Local render must not be overwritten by a late in-flight response
-        this._abort();
+        this._details.cancel();
         document.getElementById("component-modal-title").textContent = compInfo.name || compKey;
         document.getElementById("component-modal").classList.remove("hidden");
 
@@ -983,85 +903,56 @@
     // SEARCH — debounced search with event delegation for result clicks
     // ═══════════════════════════════════════════════════════════════════════════
     const Search = {
-      _abort() {
-        if (this._request) {
-          this._request.controller.abort();
-          this._request = null;
+      _results: new RequestSlot(),
+      _timer: null,
+
+      schedule(value) {
+        const query = value.trim();
+        if (!query) {
+          this.clear();
+          return;
         }
+        this._cancel();
+        const projectID = State.projectID;
+        this._timer = setTimeout(() => {
+          this._timer = null;
+          if (State.projectID === projectID) this.run(query);
+        }, 300);
+      },
+
+      _cancel() {
+        if (this._timer !== null) clearTimeout(this._timer);
+        this._timer = null;
+        this._results.cancel();
       },
 
       async run(q) {
         if (!State.projectID) return;
-        // Abort any in-flight search and bind this one to its identity
-        this._abort();
-        const req = { controller: new AbortController(), projectID: State.projectID, q };
-        this._request = req;
+        const req = this._results.begin({ projectID: State.projectID, q });
         // Only render if this is still the latest request and the project +
         // query are unchanged when the response arrives
         const isCurrent = () =>
-          this._request === req &&
+          this._results.owns(req) &&
           State.projectID === req.projectID &&
           document.getElementById("search-input").value.trim() === req.q;
         try {
           const json = await Api.search(req.projectID, q, req.controller.signal);
           if (!isCurrent()) return;
-          this._renderResults(json.data);
+          ResultView.search(
+            document.getElementById("search-results"),
+            document.getElementById("search-clear-btn"),
+            json.data,
+          );
         } catch (e) {
           if (e.name === "AbortError" || !isCurrent()) return;
           console.error("Search error:", e);
         } finally {
-          if (this._request === req) this._request = null;
+          this._results.finish(req);
         }
-      },
-
-      _renderResults(data) {
-        const container = document.getElementById("search-results");
-        const clearBtn  = document.getElementById("search-clear-btn");
-
-        if (!data || data.total === 0) {
-          container.innerHTML = `<div class="px-4 py-3 text-sm text-gray-500">No results found</div>`;
-          container.classList.remove("hidden");
-          clearBtn.classList.remove("hidden");
-          return;
-        }
-
-        const rows = data.results.map(r => {
-          const typeBadge = r.match_type === "component"
-            ? `<span class="inline-block text-xs bg-blue-100 text-blue-700 rounded px-1.5 py-0.5">component</span>`
-            : `<span class="inline-block text-xs bg-red-100 text-red-700 rounded px-1.5 py-0.5">CVE</span>`;
-          const levelLabel = r.level === 0 ? "直接使用之元件" : `第${esc(r.level)}級`;
-          const levelBadge = `<span class="inline-block text-xs bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 ml-1">${levelLabel}</span>`;
-          const icons = (r.has_vuln     ? _warnSVG("red",    "alert")   : "")
-                      + (r.has_vuln_dep ? _warnSVG("yellow", "warning") : "");
-          const vulnInfo = r.match_type === "vuln"
-            ? `<div class="text-xs text-red-600 mt-0.5">${esc(r.vuln_id)}${r.cvss_score ? " · CVSS " + esc(r.cvss_score) : ""}</div>
-               <div class="text-xs text-gray-400 truncate">${esc(r.vuln_summary) || ""}</div>`
-            : `<div class="text-xs text-gray-400">${esc(r.vuln_count)} vuln${r.vuln_count !== 1 ? "s" : ""}</div>`;
-          // Use data attributes for event delegation (no inline onclick)
-          const safeSbom = esc(r.sbom);
-          const safeComp = esc(r.component);
-          return `
-            <div class="flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer"
-                 data-action="show-component" data-sbom="${safeSbom}" data-component="${safeComp}">
-              <div class="mt-0.5 flex gap-1">${typeBadge}${levelBadge}</div>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium text-gray-800">
-                  ${safeComp}${icons}
-                  <span class="text-xs text-gray-400 font-normal ml-1">${esc(r.version) || ""}</span>
-                </div>
-                <div class="text-xs text-gray-500">${safeSbom}</div>
-                ${vulnInfo}
-              </div>
-            </div>`;
-        }).join("");
-
-        container.innerHTML = rows;
-        container.classList.remove("hidden");
-        clearBtn.classList.remove("hidden");
       },
 
       clear() {
-        this._abort();
+        this._cancel();
         document.getElementById("search-input").value = "";
         const container = document.getElementById("search-results");
         container.classList.add("hidden");
@@ -1074,69 +965,17 @@
     // DIFF — modal with lazy creation and event delegation
     // ═══════════════════════════════════════════════════════════════════════════
     const Diff = {
-      _panelLoadSeq: 0,
-      openModal() {
-        let modal = document.getElementById("diff-modal");
-        if (!modal) {
-          modal = document.createElement("div");
-          modal.id = "diff-modal";
-          modal.className = "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden";
-          modal.innerHTML = `
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
-              <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h2 class="text-xl font-medium text-gray-800" id="diff-modal-title"></h2>
-                <button id="diff-modal-close" class="text-gray-500 hover:text-gray-700">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div class="p-6 border-b border-gray-200 flex items-end space-x-4">
-                <div class="flex-1">
-                  <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-a"></label>
-                  <select id="diff-select-a" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
-                </div>
-                <button id="diff-swap-btn" type="button" class="border border-gray-300 hover:bg-gray-100 text-gray-600 p-2 rounded-md transition duration-150" title="">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
-                  </svg>
-                </button>
-                <div class="flex-1">
-                  <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-b"></label>
-                  <select id="diff-select-b" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
-                </div>
-                <button id="diff-compare-btn" class="bg-[#009999] hover:bg-[#19a3a3] text-white font-medium py-2 px-4 rounded-md shadow transition duration-200"></button>
-              </div>
-              <div class="overflow-y-auto flex-1 p-6" id="diff-result"></div>
-            </div>`;
-          document.body.appendChild(modal);
-          const hideModal = () => modal.classList.add("hidden");
-          document.getElementById("diff-modal-close").addEventListener("click", hideModal);
-          modal.addEventListener("click", e => { if (e.target === modal) hideModal(); });
-          document.getElementById("diff-compare-btn").addEventListener("click", () => this._run());
-          document.getElementById("diff-swap-btn").addEventListener("click", () => this._swap());
-          // Event delegation for version-cell component clicks
-          document.getElementById("diff-result").addEventListener("click", e => {
-            const el = e.target.closest("[data-action='show-component']");
-            if (!el) return;
-            ComponentModal.show(el.dataset.sbom, el.dataset.component);
-          });
-        }
+      _versions: new RequestSlot(),
+      _comparison: new RequestSlot(),
 
-        modal.classList.remove("hidden");
-        document.getElementById("diff-modal-title").textContent = t("diffSbomTitle");
-        document.getElementById("diff-label-a").textContent     = t("diffSbomA");
-        document.getElementById("diff-label-b").textContent     = t("diffSbomB");
-        document.getElementById("diff-compare-btn").textContent = t("diffCompare");
-        document.getElementById("diff-swap-btn").title          = t("diffSwap");
+      cancel() {
+        this._versions.cancel();
+        this._comparison.cancel();
+      },
+
+      _selectionChanged() {
+        this._comparison.cancel();
         document.getElementById("diff-result").innerHTML = "";
-
-        const names = Array.from(State.uploadedFiles);
-        ["diff-select-a", "diff-select-b"].forEach((id, i) => {
-          const sel = document.getElementById(id);
-          sel.innerHTML = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-          if (names[i]) sel.value = names[i];
-        });
       },
 
       _swap() {
@@ -1144,6 +983,7 @@
         const b = document.getElementById("diff-select-b");
         if (!a || !b) return;
         [a.value, b.value] = [b.value, a.value];
+        this._selectionChanged();
       },
 
       async _run() {
@@ -1152,20 +992,16 @@
         const resultEl = document.getElementById("diff-result");
 
         if (!a || !b || a === b) {
+          this._comparison.cancel();
           resultEl.innerHTML = `<p class="text-red-500">${t("diffSelectBoth")}</p>`;
           return;
         }
 
-        // Abort any in-flight diff and bind this request to its identity
-        if (this._request && this._request.projectID === State.projectID &&
-            this._request.a === a && this._request.b === b) return;
-        if (this._request) this._request.controller.abort();
-        const req = { controller: new AbortController(), projectID: State.projectID, a, b };
-        this._request = req;
-        // Only render if this is still the latest request and the project +
-        // both selectors still match when the response arrives
+        const pending = this._comparison.current;
+        if (pending?.projectID === State.projectID && pending.a === a && pending.b === b) return;
+        const req = this._comparison.begin({ projectID: State.projectID, a, b });
         const isCurrent = () =>
-          this._request === req &&
+          this._comparison.owns(req) &&
           State.projectID === req.projectID &&
           document.getElementById("diff-select-a").value === req.a &&
           document.getElementById("diff-select-b").value === req.b;
@@ -1179,80 +1015,13 @@
         try {
           const json = await Api.diff(req.projectID, a, b, req.controller.signal);
           if (!isCurrent()) return;
-          this._renderResult(json.data, a, b);
+          ResultView.diff(resultEl, json.data, a, b);
         } catch (e) {
           if (e.name === "AbortError" || !isCurrent()) return;
           resultEl.innerHTML = `<p class="text-red-500">${esc(e.message)}</p>`;
         } finally {
-          if (this._request === req) this._request = null;
+          this._comparison.finish(req);
         }
-      },
-
-      _versionCell(ver, sbomName, compName) {
-        if (!ver || !sbomName) return "";
-        return `<span class="cursor-pointer hover:underline text-[#009999] font-mono text-xs"
-                      data-action="show-component" data-sbom="${esc(sbomName)}" data-component="${esc(compName)}">${esc(ver)}</span>`;
-      },
-
-      _diffRow(r, type, sbomA, sbomB) {
-        const icons = `${r.has_vuln ? _warnSVG("red", "alert") : ""}${r.has_vuln_dep ? _warnSVG("yellow", "warning") : ""}`;
-        const name = `<span class="font-mono text-xs">${esc(r.name)}</span>`;
-
-        if (type === "added") {
-          return `<tr>
-            <td class="px-3 py-1.5 border-r border-gray-200 bg-white"></td>
-            <td class="px-3 py-1.5 bg-green-50">
-              <div class="flex items-center gap-2">
-                <span class="text-green-600 font-bold w-4 text-center flex-shrink-0">+</span>
-                <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  ${this._versionCell(r.version_b, sbomB, r.name)}
-                  <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_b ?? 0}</span>
-                </div>
-              </div>
-            </td>
-          </tr>`;
-        }
-
-        if (type === "removed") {
-          return `<tr>
-            <td class="px-3 py-1.5 border-r border-gray-200 bg-red-50">
-              <div class="flex items-center gap-2">
-                <span class="text-red-600 font-bold w-4 text-center flex-shrink-0">−</span>
-                <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  ${this._versionCell(r.version_a, sbomA, r.name)}
-                  <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_a ?? 0}</span>
-                </div>
-              </div>
-            </td>
-            <td class="px-3 py-1.5 bg-white"></td>
-          </tr>`;
-        }
-
-        // changed
-        return `<tr>
-          <td class="px-3 py-1.5 border-r border-amber-200 bg-amber-50">
-            <div class="flex items-center gap-2">
-              <span class="text-amber-600 font-bold w-4 text-center flex-shrink-0">~</span>
-              <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
-              <div class="flex items-center gap-2 flex-shrink-0">
-                ${this._versionCell(r.version_a, sbomA, r.name)}
-                <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_a ?? 0}</span>
-              </div>
-            </div>
-          </td>
-          <td class="px-3 py-1.5 bg-amber-50">
-            <div class="flex items-center gap-2">
-              <span class="text-amber-600 font-bold w-4 text-center flex-shrink-0">~</span>
-              <div class="flex items-center gap-1 flex-1 min-w-0">${name}${icons}</div>
-              <div class="flex items-center gap-2 flex-shrink-0">
-                ${this._versionCell(r.version_b, sbomB, r.name)}
-                <span class="text-xs text-gray-500 w-8 text-right">${r.vulns_b ?? 0}</span>
-              </div>
-            </div>
-          </td>
-        </tr>`;
       },
 
       async openInPanel() {
@@ -1280,6 +1049,9 @@
 
           document.getElementById("diff-compare-btn").addEventListener("click", () => this._run());
           document.getElementById("diff-swap-btn").addEventListener("click", () => this._swap());
+          for (const id of ["diff-select-a", "diff-select-b"]) {
+            document.getElementById(id).addEventListener("change", () => this._selectionChanged());
+          }
           document.getElementById("diff-result").addEventListener("click", e => {
             const el = e.target.closest("[data-action='show-component']");
             if (!el) return;
@@ -1287,111 +1059,45 @@
           });
         }
 
-        document.getElementById("diff-label-a").textContent     = t("diffSbomA");
-        document.getElementById("diff-label-b").textContent     = t("diffSbomB");
-        document.getElementById("diff-compare-btn").textContent = t("diffCompare");
-        document.getElementById("diff-swap-btn").title          = t("diffSwap");
-        document.getElementById("diff-result").innerHTML        = "";
+        const selects = ["diff-select-a", "diff-select-b"].map(id => document.getElementById(id));
+        const compare = document.getElementById("diff-compare-btn");
+        const swap = document.getElementById("diff-swap-btn");
+        const result = document.getElementById("diff-result");
+        document.getElementById("diff-label-a").textContent = t("diffSbomA");
+        document.getElementById("diff-label-b").textContent = t("diffSbomB");
+        compare.textContent = t("diffCompare");
+        swap.title = t("diffSwap");
+        result.innerHTML = "";
+        for (const select of selects) {
+          select.innerHTML = "";
+          select.disabled = true;
+        }
+        compare.disabled = true;
+        swap.disabled = true;
 
-        const projectID = State.projectID;
-        const loadSeq = ++this._panelLoadSeq;
-        const selectedA = document.getElementById("diff-select-a").value;
-        const selectedB = document.getElementById("diff-select-b").value;
+        this._comparison.cancel();
+        const request = this._versions.begin({ projectID: State.projectID });
+        const isCurrent = () => this._versions.owns(request) && State.projectID === request.projectID;
         try {
-          const json = await Api.listVersions(projectID);
-          if (loadSeq !== this._panelLoadSeq || State.projectID !== projectID ||
-              document.getElementById("diff-select-a").value !== selectedA ||
-              document.getElementById("diff-select-b").value !== selectedB) return;
+          if (!request.projectID) return;
+          const json = await Api.listVersions(request.projectID, request.controller.signal);
+          if (!isCurrent()) return;
           const versions = (json.data ?? []).map(v => v.version);
-          ["diff-select-a", "diff-select-b"].forEach((id, i) => {
-            const sel = document.getElementById(id);
-            sel.innerHTML = versions.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-            if (versions[i]) sel.value = versions[i];
+          const options = versions.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+          selects.forEach((select, i) => {
+            select.innerHTML = options;
+            if (versions[i]) select.value = versions[i];
+            select.disabled = versions.length === 0;
           });
-        } catch (e) {
-          console.error("Failed to load versions for diff:", e);
+          compare.disabled = versions.length < 2;
+          swap.disabled = versions.length < 2;
+        } catch {
+          if (isCurrent()) result.textContent = t("diffVersionsFailed");
+        } finally {
+          this._versions.finish(request);
         }
       },
 
-      _renderResult(data, sbomA, sbomB) {
-        const resultEl = document.getElementById("diff-result");
-        const byLevel  = data.by_level || {};
-        const levels   = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
-
-        let totalAdded = 0, totalRemoved = 0, totalChanged = 0;
-        for (const level of levels) {
-          const ld = byLevel[level];
-          totalAdded   += ld.added?.length   || 0;
-          totalRemoved += ld.removed?.length || 0;
-          totalChanged += ld.changed?.length || 0;
-        }
-        const anyChanges = totalAdded + totalRemoved + totalChanged > 0;
-
-        if (!anyChanges) {
-          resultEl.innerHTML = `<p class="text-gray-500 text-center py-8">${t("diffNoChanges")}</p>`;
-          return;
-        }
-
-        // Summary bar
-        let html = `<div class="flex items-center gap-4 mb-6 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-          <span class="font-medium text-gray-700">${t("diffSummary", totalAdded, totalRemoved, totalChanged)}</span>
-          <span class="flex items-center gap-3 ml-auto">
-            ${totalAdded   ? `<span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-green-200 border border-green-400"></span><span class="text-green-700 font-medium">+${totalAdded}</span></span>` : ""}
-            ${totalRemoved ? `<span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-400"></span><span class="text-red-700 font-medium">−${totalRemoved}</span></span>` : ""}
-            ${totalChanged ? `<span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm bg-yellow-200 border border-yellow-400"></span><span class="text-yellow-700 font-medium">~${totalChanged}</span></span>` : ""}
-          </span>
-        </div>`;
-
-        for (const level of levels) {
-          const ld = byLevel[level];
-          const nA = ld.added?.length || 0, nR = ld.removed?.length || 0, nC = ld.changed?.length || 0;
-          const total = nA + nR + nC;
-          const va = ld.total_vulns_a ?? 0, vb = ld.total_vulns_b ?? 0;
-          if (!total && va === vb) continue;
-          const vulnColor = vb > va ? "text-red-600" : vb < va ? "text-green-600" : "text-gray-500";
-          const levelId = `diff-level-${level}`;
-
-          // Merge all rows into a unified list: removed first, then changed, then added
-          let rows = "";
-          (ld.removed || []).forEach(r => { rows += this._diffRow(r, "removed", sbomA, sbomB); });
-          (ld.changed || []).forEach(r => { rows += this._diffRow(r, "changed", sbomA, sbomB); });
-          (ld.added   || []).forEach(r => { rows += this._diffRow(r, "added",   sbomA, sbomB); });
-
-          // Badge counts
-          const badges = [
-            nA ? `<span class="bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded">+${nA}</span>` : "",
-            nR ? `<span class="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">−${nR}</span>` : "",
-            nC ? `<span class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-0.5 rounded">~${nC}</span>` : "",
-          ].filter(Boolean).join(" ");
-
-          html += `
-            <div class="mb-4 border border-gray-200 rounded-lg overflow-hidden">
-              <div class="flex items-center justify-between bg-gray-100 px-4 py-2 ${total ? "cursor-pointer select-none hover:bg-gray-200 transition-colors" : ""}" ${total ? `onclick="(function(el){var b=document.getElementById('${levelId}');b.classList.toggle('hidden');el.querySelector('[data-chevron]').classList.toggle('rotate-90');})(this)"` : ""}>
-                <div class="flex items-center gap-3">
-                  ${total ? `<svg data-chevron class="h-4 w-4 text-gray-500 transition-transform" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
-                  </svg>` : ""}
-                  <span class="font-semibold text-gray-700">${t("diffLevel")} ${level}</span>
-                  ${badges}
-                </div>
-                <span class="text-xs font-medium ${vulnColor}">${t("diffVulns")}: <span class="line-through text-gray-400">${va}</span> → ${vb}</span>
-              </div>
-              ${total ? `<div id="${levelId}">
-                <table class="w-full text-sm border-collapse">
-                  <thead>
-                    <tr class="bg-gray-50 border-b border-gray-200">
-                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2 border-r border-gray-200">${esc(sbomA)}</th>
-                      <th class="text-left px-3 py-2 font-medium text-gray-600 w-1/2">${esc(sbomB)}</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">${rows}</tbody>
-                </table>
-              </div>` : ""}
-            </div>`;
-        }
-
-        resultEl.innerHTML = html;
-      },
     };
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1410,8 +1116,13 @@
           btn.classList.toggle("text-gray-500", id !== tab);
           btn.classList.toggle("border-transparent", id !== tab);
         });
-        if (tab === "analysis") VersionHistory.load();
-        if (tab === "diff")     Diff.openInPanel();
+        if (tab === "analysis") {
+          Diff.cancel();
+          VersionHistory.load();
+        } else {
+          VersionHistory.invalidate();
+          Diff.openInPanel();
+        }
       },
     };
 
@@ -1419,6 +1130,11 @@
     // VERSION HISTORY — list all stored versions for current project
     // ═══════════════════════════════════════════════════════════════════════════
     const VersionHistory = {
+      refreshIfVisible() {
+        if (!document.getElementById("panel-analysis").classList.contains("hidden")) this.load();
+      },
+
+      _listing: new RequestSlot(),
       _page: 0,
       _versions: [],
       _projectID: null,
@@ -1426,6 +1142,7 @@
       PAGE_SIZE: 10,
 
       invalidate() {
+        this._listing.cancel();
         this._loadSeq++;
         this._projectID = null;
         this._versions = [];
@@ -1437,34 +1154,39 @@
         const container = document.getElementById("version-history-list");
         const projectID = State.projectID;
         this.invalidate();
-        const seq = this._loadSeq;
         if (!projectID) {
           container.innerHTML = `<p class="text-gray-400 italic text-sm">尚未選擇專案</p>`;
           return;
         }
 
+        const request = this._listing.begin({ projectID });
         try {
-          const json = await Api.listVersions(projectID);
-          if (seq !== this._loadSeq || State.projectID !== projectID) return;
+          const json = await Api.listVersions(projectID, request.controller.signal);
+          if (!this._listing.owns(request) || State.projectID !== projectID) return;
           this._projectID = projectID;
           this._versions = json.data ?? [];
           this._page = 0;
           this._render(container);
         } catch (e) {
-          if (seq === this._loadSeq && State.projectID === projectID) {
+          if (this._listing.owns(request) && State.projectID === projectID) {
             container.innerHTML = `<p class="text-red-500 text-sm">載入失敗：${esc(e.message)}</p>`;
           }
+        } finally {
+          this._listing.finish(request);
         }
       },
 
       _render(container) {
         const projectID = this._projectID;
         const seq = this._loadSeq;
+        const selection = Project._selectionGen;
+        const ownsSelection = () => State.projectID === projectID &&
+          Project._selectionGen === selection;
         const isCurrent = () => this._loadSeq === seq &&
-          this._projectID === projectID && State.projectID === projectID;
+          this._projectID === projectID && ownsSelection();
         const refreshIfSelected = () => {
           if (State.projectID === projectID &&
-              document.getElementById("project-select").value === String(projectID)) this.load();
+              document.getElementById("project-select").value === String(projectID)) this.refreshIfVisible();
         };
         const versions = this._versions;
         if (versions.length === 0) {
@@ -1527,13 +1249,13 @@
             if (!newName || newName.trim() === oldName) return;
             try {
               const json = await Api.renameSBOM(projectID, oldName, newName.trim());
+              const updatedName = json?.data?.version;
+              if (!updatedName) return;
+              if (ownsSelection()) Sbom.renameTab(oldName, updatedName);
               if (!isCurrent()) { refreshIfSelected(); return; }
-              if (json?.data?.version) {
-                const entry = this._versions.find(v => v.version === oldName);
-                if (entry) entry.version = newName.trim();
-                this._render(container);
-                Sbom.renameTab(oldName, newName.trim());
-              }
+              const entry = this._versions.find(v => v.version === oldName);
+              if (entry) entry.version = updatedName;
+              this._render(container);
             } catch (e) {
               if (isCurrent()) alert(`重新命名失敗：${e.message}`);
             }
@@ -1547,6 +1269,7 @@
             if (!confirm(`確定要刪除版本「${version}」？`)) return;
             try {
               await Api.deleteSBOM(projectID, version);
+              if (ownsSelection()) Sbom.removeTab(version);
               if (!isCurrent()) { refreshIfSelected(); return; }
               // Remove from in-memory list and re-render without a network round-trip
               this._versions = this._versions.filter(v => v.version !== version);
@@ -1554,8 +1277,6 @@
                 this._page = Math.max(0, this._page - 1);
               }
               this._render(container);
-              // Also remove the tab from 選擇 SBOM 版本 if it is open
-              Sbom.removeTab(version);
             } catch (e) {
               if (isCurrent()) alert(`刪除失敗：${e.message}`);
             }
@@ -1583,25 +1304,29 @@
       _bomTimestamp: null,
       _previewToken: null,
       _existingVersion: null,
-      // identity captured when the preview request is fired; commit and the
-      // preview response are only honoured while they still match
+      // Only this dialog's active project and file can submit its preview.
       _projectID: null,
-      _file: null,
-      _previewSeq: 0,
+      _preview: new RequestSlot(),
+      _saving: null,
 
-      open() {
-        this._previewSeq++;
-        const previewBtn = document.getElementById("sbom-modal-preview-btn");
-        previewBtn.disabled = false;
-        previewBtn.textContent = "預覽";
-        document.getElementById("sbom-modal-commit-btn").textContent = "建立版本";
+      _resetPreview() {
+        this._preview.cancel();
+        this._saving = null;
         this._bomResult = null;
         this._sha256 = null;
         this._bomTimestamp = null;
         this._previewToken = null;
         this._existingVersion = null;
         this._projectID = null;
-        this._file = null;
+      },
+
+      open() {
+        this._resetPreview();
+        const previewBtn = document.getElementById("sbom-modal-preview-btn");
+        previewBtn.disabled = false;
+        previewBtn.textContent = "預覽";
+        document.getElementById("sbom-modal-commit-btn").textContent = "建立版本";
+        document.getElementById("sbom-modal-commit-btn").disabled = false;
         document.getElementById("sbom-file-input").value = "";
         document.getElementById("sbom-filename-display").textContent = "尚未選擇檔案";
         document.getElementById("sbom-modal-step1-error").classList.add("hidden");
@@ -1612,20 +1337,26 @@
 
       close() {
         document.getElementById("sbom-modal").classList.add("hidden");
-        this._previewSeq++;
+        this._resetPreview();
         document.getElementById("sbom-file-input").value = "";
-        this._bomResult = null;
-        this._sha256 = null;
-        this._previewToken = null;
-        this._existingVersion = null;
-        this._projectID = null;
-        this._file = null;
+      },
+
+      back() {
+        this._resetPreview();
+        const button = document.getElementById("sbom-modal-preview-btn");
+        button.disabled = false;
+        button.textContent = "預覽";
+        document.getElementById("sbom-modal-step2").classList.add("hidden");
+        document.getElementById("sbom-modal-step1").classList.remove("hidden");
       },
 
       _onFileSelected(files) {
-        if (files.length > 0) {
-          document.getElementById("sbom-filename-display").textContent = files[0].name;
-        }
+        this._resetPreview();
+        const button = document.getElementById("sbom-modal-preview-btn");
+        button.disabled = false;
+        button.textContent = "預覽";
+        document.getElementById("sbom-filename-display").textContent = files[0]?.name ?? "尚未選擇檔案";
+        document.getElementById("sbom-modal-step1-error").classList.add("hidden");
       },
 
       async preview() {
@@ -1643,25 +1374,15 @@
         previewBtn.disabled = true;
         previewBtn.textContent = "解析中...";
 
-        // freeze request identity: project, file and a sequence number
-        const projectID = State.projectID;
-        const file = fileInput.files[0];
-        const seq = ++this._previewSeq;
-        const isCurrent = () => seq === this._previewSeq;
-
+        this._resetPreview();
+        const req = this._preview.begin({ projectID: State.projectID, file: fileInput.files[0] });
+        const isCurrent = () => this._preview.owns(req) &&
+          State.projectID === req.projectID && fileInput.files[0] === req.file;
         try {
-          const resp = await Api.previewSBOM(projectID, file);
-          const json = await resp.json();
-
-          // a newer preview was fired, or project/file changed while in flight:
-          // this response no longer describes the current selection — drop it
+          const resp = await Api.previewSBOM(req.projectID, req.file, req.controller.signal);
           if (!isCurrent()) return;
-          if (State.projectID !== projectID || fileInput.files[0] !== file) {
-            errEl.textContent = "專案或檔案已變更，請重新預覽";
-            errEl.classList.remove("hidden");
-            return;
-          }
-
+          const json = await resp.json();
+          if (!isCurrent()) return;
           if (!resp.ok) {
             errEl.textContent = json.error || "預覽失敗";
             errEl.classList.remove("hidden");
@@ -1674,8 +1395,7 @@
           this._bomTimestamp = data.bom_timestamp;
           this._previewToken = data.preview_token;
           this._existingVersion = data.existing_version || "";
-          this._projectID = projectID;
-          this._file = file;
+          this._projectID = req.projectID;
 
           const summary = document.getElementById("sbom-preview-summary");
           summary.innerHTML = `
@@ -1685,7 +1405,7 @@
             </div>`;
           this._renderPreviewTopology(summary, data.bom_result);
 
-          const displayName = data.filename || file?.name || "";
+          const displayName = data.filename || req.file.name;
           document.getElementById("sbom-preview-title").innerHTML =
             `預覽結果 <span class="text-gray-400 font-normal text-base">— ${esc(displayName)}</span>`;
           document.getElementById("sbom-version-input").value = "";
@@ -1707,18 +1427,20 @@
           document.getElementById("sbom-modal-step1").classList.add("hidden");
           document.getElementById("sbom-modal-step2").classList.remove("hidden");
         } catch (e) {
-          if (!isCurrent() || State.projectID !== projectID) return;
+          if (!isCurrent()) return;
           errEl.textContent = e.message || "預覽失敗";
           errEl.classList.remove("hidden");
         } finally {
-          if (isCurrent()) {
+          if (this._preview.owns(req)) {
             previewBtn.disabled = false;
             previewBtn.textContent = "預覽";
           }
+          this._preview.finish(req);
         }
       },
 
       async commit() {
+        if (this._saving) return;
         const version = document.getElementById("sbom-version-input").value.trim();
         const errEl = document.getElementById("sbom-modal-step2-error");
         errEl.classList.add("hidden");
@@ -1744,17 +1466,21 @@
 
         const commitBtn = document.getElementById("sbom-modal-commit-btn");
         const projectID = this._projectID;
-        const seq = this._previewSeq;
-        const selection = Project._selectionGen;
-        const isCurrent = () => State.projectID === projectID && this._previewSeq === seq &&
-          Project._selectionGen === selection;
+        const saving = { projectID };
+        this._saving = saving;
+        const isCurrent = () => this._saving === saving &&
+          State.projectID === saving.projectID;
         commitBtn.disabled = true;
         commitBtn.textContent = "建立中...";
 
         try {
           const resp = await Api.commitSBOM(projectID, version, this._bomResult, this._sha256, this._bomTimestamp, this._previewToken);
           const json = await resp.json();
-          if (!isCurrent()) return;
+          if (!isCurrent()) {
+            // The write may already have completed. Refresh only its project.
+            if (resp.ok && State.projectID === projectID) VersionHistory.refreshIfVisible();
+            return;
+          }
           if (resp.status === 409 || !resp.ok) {
             errEl.textContent = json.error || "建立失敗";
             errEl.classList.remove("hidden");
@@ -1769,7 +1495,8 @@
           errEl.textContent = e.message || "建立失敗";
           errEl.classList.remove("hidden");
         } finally {
-          if (this._previewSeq === seq) {
+          if (this._saving === saving) {
+            this._saving = null;
             commitBtn.disabled = false;
             commitBtn.textContent = "建立版本";
           }
@@ -1947,13 +1674,12 @@
       document.getElementById("sbom-file-input").addEventListener("change", e => SbomModal._onFileSelected(e.target.files));
       document.getElementById("sbom-modal-cancel").addEventListener("click", () => SbomModal.close());
       document.getElementById("sbom-modal-preview-btn").addEventListener("click", () => SbomModal.preview());
-      document.getElementById("sbom-modal-back-btn").addEventListener("click", () => {
-        document.getElementById("sbom-modal-step2").classList.add("hidden");
-        document.getElementById("sbom-modal-step1").classList.remove("hidden");
-      });
+      document.getElementById("sbom-modal-back-btn").addEventListener("click", () => SbomModal.back());
       document.getElementById("sbom-modal-commit-btn").addEventListener("click", () => SbomModal.commit());
       document.getElementById("sbom-version-input").addEventListener("keydown", e => {
-        if (e.key === "Enter") SbomModal.commit();
+        if (e.key === "Enter" && !document.getElementById("sbom-modal-commit-btn").disabled) {
+          SbomModal.commit();
+        }
         if (e.key === "Escape") SbomModal.close();
       });
 
@@ -1963,13 +1689,7 @@
       });
 
       // Search (debounced)
-      let searchTimer = null;
-      document.getElementById("search-input").addEventListener("input", e => {
-        clearTimeout(searchTimer);
-        const q = e.target.value.trim();
-        if (!q) { Search.clear(); return; }
-        searchTimer = setTimeout(() => Search.run(q), 300);
-      });
+      document.getElementById("search-input").addEventListener("input", e => Search.schedule(e.target.value));
       document.getElementById("search-input").addEventListener("keydown", e => {
         if (e.key === "Escape") Search.clear();
       });

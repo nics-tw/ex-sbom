@@ -4,14 +4,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import vm from "node:vm";
 
-const appJs = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "../../static/js/app.js"),
-  "utf8",
-);
+const appJs = ["api.js", "request-slot.js", "result-view.js", "app.js"]
+  .map(file => readFileSync(new URL(`../../static/js/${file}`, import.meta.url), "utf8"))
+  .join("\n");
 
 function deferred() {
   let resolve;
@@ -87,11 +84,11 @@ function makeApp() {
   };
   const sandbox = {
     document: { addEventListener() {}, getElementById, createElement: makeElement, body: makeElement() },
-    navigator: { language: "en" }, window: {}, console,
+    navigator: { language: "en" }, window: {}, console, AbortController,
     prompt: () => "renamed", confirm: () => true, alert() {},
   };
   vm.createContext(sandbox);
-  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api, VersionHistory, Sbom, SbomModal };", sandbox);
+  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api, VersionHistory, Sbom, SbomModal, MainTab };", sandbox);
   return { ...sandbox.__test, getElementById };
 }
 
@@ -295,3 +292,100 @@ test("deleting the last project clears its tabs and version history", async () =
   assert.match(getElementById("version-history-list").innerHTML, /尚未選擇專案/);
   assert.equal(getElementById("project-current").textContent, "");
 });
+
+test("changing the selected file cancels an in-flight preview and ignores its result", async () => {
+  const { State, Api, SbomModal, getElementById } = makeApp();
+  const pending = deferred();
+  const old = { name: "old.json" };
+  const next = { name: "next.json" };
+  let signal;
+  let rendered = false;
+
+  State.projectID = "A";
+  SbomModal.open();
+  const fileInput = getElementById("sbom-file-input");
+  fileInput.files = [old];
+  Api.previewSBOM = (_project, _file, activeSignal) => {
+    signal = activeSignal;
+    return pending.promise;
+  };
+  SbomModal._renderPreviewTopology = () => { rendered = true; };
+  const response = SbomModal.preview();
+  fileInput.files = [next];
+  SbomModal._onFileSelected(fileInput.files);
+  pending.resolve({ ok: true, json: async () => ({ data: {
+    bom_result: {}, preview_token: "old-token", summary: { component_count: 1, vuln_count: 0 },
+  } }) });
+  await response;
+
+  assert.equal(signal?.aborted, true);
+  assert.equal(rendered, false);
+  assert.equal(getElementById("sbom-modal-preview-btn").disabled, false);
+  assert.equal(getElementById("sbom-modal-step1-error").classList.contains("hidden"), true);
+});
+
+test("Enter while saving does not start a second version creation", async () => {
+  const { State, Api, SbomModal, getElementById } = makeApp();
+  const pending = deferred();
+  let calls = 0;
+  Api.commitSBOM = () => {
+    calls++;
+    return pending.promise;
+  };
+  State.projectID = "A";
+  Object.assign(SbomModal, { _projectID: "A", _bomResult: {}, _sha256: "hash", _previewToken: "token" });
+  getElementById("sbom-version-input").value = "version";
+  const first = SbomModal.commit();
+  const second = SbomModal.commit();
+  pending.resolve({ ok: false, json: async () => ({ error: "failure" }) });
+  await Promise.all([first, second]);
+  assert.equal(calls, 1);
+});
+
+
+test("closing the upload dialog cancels the request and drops a late preview failure", async () => {
+  const { State, Api, SbomModal, getElementById } = makeApp();
+  let reject;
+  const pending = new Promise((_resolve, rejectPromise) => { reject = rejectPromise; });
+  let signal;
+  Api.previewSBOM = (_project, _file, activeSignal) => {
+    signal = activeSignal;
+    return pending;
+  };
+  State.projectID = "A";
+  SbomModal.open();
+  getElementById("sbom-file-input").files = [{ name: "example.json" }];
+  const response = SbomModal.preview();
+  SbomModal.close();
+  reject(new Error("Late failure"));
+  await response;
+
+  assert.equal(signal.aborted, true);
+  assert.equal(getElementById("sbom-modal").classList.contains("hidden"), true);
+  assert.equal(getElementById("sbom-modal-step1-error").classList.contains("hidden"), true);
+});
+
+for (const action of ["rename", "delete"]) {
+  test(`version ${action} updates an open analysis tab after switching to diff`, async () => {
+    const { Project, Api, MainTab, Sbom, getElementById } = makeApp();
+    Api.getProject = async id => ({ data: { project_id: id } });
+    Api.listVersions = async () => ({ data: [version("old")] });
+    getElementById("project-select").value = "A";
+    await Project.get("A");
+    await flush();
+    Sbom.addTab("old", false);
+
+    const mutation = deferred();
+    Api[action === "rename" ? "renameSBOM" : "deleteSBOM"] = () => mutation.promise;
+    const history = getElementById("version-history-list");
+    const changed = history.buttons.get(`.version-${action}-btn`)[0].fire("click");
+    MainTab.show("diff");
+    mutation.resolve(action === "rename" ? { data: { version: "renamed" } } : {});
+    await changed;
+
+    assert.deepEqual(
+      getElementById("file-tabs").children.map(tab => tab.dataset.version),
+      action === "rename" ? ["renamed"] : [],
+    );
+  });
+}

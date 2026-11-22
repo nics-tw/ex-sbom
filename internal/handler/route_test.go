@@ -125,6 +125,7 @@ func TestSetupRouterGroup_RejectsMissingProjectBeforeDispatch(t *testing.T) {
 	router := buildTestRouter()
 	for _, tc := range []struct{ method, route string }{
 		{http.MethodGet, "/projects/2/versions"},
+		{http.MethodGet, "/projects/2/sboms/release/report"},
 		{http.MethodGet, "/projects/2/sboms"},
 		{http.MethodGet, "/projects/2/search?q=test"},
 		{http.MethodPost, "/projects/2/sboms/preview"},

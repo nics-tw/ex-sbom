@@ -14,6 +14,9 @@ var ErrDuplicateProjectName = errors.New("project name already exists")
 // does not exist. Handlers map it to HTTP 404.
 var ErrProjectNotFound = errors.New("project not found")
 
+// ErrVersionNotFound indicates a missing SBOM version in the selected project.
+var ErrVersionNotFound = errors.New("version not found")
+
 type (
 	ProjectID     = int64  // unique identifier for a project
 	SBOMID        = int64  // unique identifier for an SBOM record
