@@ -5,6 +5,7 @@
 package ssbom
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -103,12 +104,11 @@ func (s *Service) Search(projectID domain.ProjectID, query string) []SearchResul
 	return searchInCache(s.cache.All(projectID), query)
 }
 
-// FindVersionForSBOM checks both the current result checksum and the legacy
-// checksum that omitted fix candidates, preserving duplicate detection for
-// SBOMs saved before fix_versions was persisted.
+// FindVersionForSBOM checks a normalized result against current and historical records.
 func (s *Service) FindVersionForSBOM(projectID domain.ProjectID, checksum string, bom FormattedSBOM) (domain.Version, error) {
+	legacy := legacyHashSBOM(bom)
 	checksums := []string{checksum}
-	if legacy := legacyHashSBOM(bom); legacy != checksum {
+	if legacy != checksum {
 		checksums = append(checksums, legacy)
 	}
 	for _, candidate := range checksums {
@@ -118,6 +118,35 @@ func (s *Service) FindVersionForSBOM(projectID domain.ProjectID, checksum string
 		}
 		if !errors.Is(err, repository.ErrVersionNotFound) {
 			return "", err
+		}
+	}
+	// If no component has multiple findings, the vulnerability sort could not
+	// have changed the stored hash and the exact lookups were sufficient.
+	for _, component := range bom.ComponentInfo {
+		if len(component.Vulns) > 1 {
+			return s.findVersionWithOldVulnOrder(projectID, checksum, legacy)
+		}
+	}
+	return "", nil
+}
+
+// Old checksums used scanner order. Normalize the persisted result for comparison
+// on an exact miss without rewriting existing records.
+func (s *Service) findVersionWithOldVulnOrder(projectID domain.ProjectID, checksum, legacy string) (domain.Version, error) {
+	records, err := s.repo.GetAllByProject(projectID)
+	if err != nil {
+		return "", err
+	}
+	for _, record := range records {
+		var stored FormattedSBOM
+		if err := json.Unmarshal(record.BomResult, &stored); err != nil {
+			continue
+		}
+		sortFormattedSBOM(&stored)
+		// The legacy candidate only matches when the persisted record itself omitted
+		// fix versions. A modern record with different fix versions stays distinct.
+		if hash := HashSBOM(stored); hash == checksum || hash == legacy {
+			return record.Version, nil
 		}
 	}
 	return "", nil

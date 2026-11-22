@@ -155,3 +155,17 @@ test("duplicate in-flight diff comparison makes one request", async () => {
   pending.resolve({ data: { by_level: {} } });
   await Promise.all([first, second]);
 });
+
+test("diff shows vulnerability totals for a destination level without duplicate rows", () => {
+  const { Diff, getElementById } = makeApp();
+  Diff._diffRow = row => `<tr><td>${row.name}</td></tr>`;
+  Diff._renderResult({ by_level: {
+    0: { changed: [{ name: "moved-package" }], total_vulns_a: 6, total_vulns_b: 5 },
+    1: { total_vulns_a: 0, total_vulns_b: 2 },
+  } }, "v1", "v2");
+
+  const html = getElementById("diff-result").innerHTML;
+  assert.match(html, /Level 1[\s\S]*?>0<\/span> → 2/);
+  assert.equal((html.match(/moved-package/g) || []).length, 1);
+  assert.equal((html.match(/<table/g) || []).length, 1);
+});

@@ -20,12 +20,16 @@ func SetupRouterGroup(r *gin.Engine,
 	topoH *topohandler.Handler,
 	reportH *reporthandler.Handler,
 ) {
+	// Route on escaped slashes, then decode named parameters with path semantics.
+	r.UseRawPath = true
+	r.UnescapePathValues = false
+
 	projects := r.Group("/projects")
 	projects.GET("", projectH.List)
 	projects.POST("", middleware.JSONContentType(), projectH.Create)
 
 	proj := projects.Group("/:id")
-	proj.Use(middleware.ProjectID())
+	proj.Use(middleware.ProjectID(), projectH.RequireActive)
 	proj.GET("", projectH.Get)
 	proj.PUT("", middleware.JSONContentType(), projectH.Update)
 	proj.DELETE("", projectH.Delete)
@@ -38,7 +42,7 @@ func SetupRouterGroup(r *gin.Engine,
 	sboms.POST("", middleware.JSONContentType(), sbomH.Create)
 	sboms.POST("/preview", sbomH.Preview)
 
-	namedSBOM := sboms.Group("/:name")
+	namedSBOM := sboms.Group("/:name", middleware.DecodeVersionName())
 	namedSBOM.DELETE("", sbomH.Delete)
 	namedSBOM.PUT("", middleware.JSONContentType(), sbomH.Rename)
 	namedSBOM.GET("/report", reportH.CreatePDF)

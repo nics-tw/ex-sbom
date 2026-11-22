@@ -47,7 +47,10 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 			return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("%w: %w", ErrSPDXParseFailed, err)
 		}
 		bom, sha256Hash, err := s.PreviewSPDX(doc, rawData)
-		return bom, sha256Hash, time.Time{}, err
+		if err != nil {
+			return FormattedSBOM{}, "", time.Time{}, err
+		}
+		return bom, sha256Hash, spdxTimestamp(doc), nil
 
 	case sbomFormatCycloneDX:
 		cdxData := downgradeCDXSpecVersion(rawData)

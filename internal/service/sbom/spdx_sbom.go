@@ -90,7 +90,7 @@ func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, d
 
 	unlock := s.cache.LockProject(projectID)
 	s.cache.Set(projectID, name, final)
-	if err := s.repo.CreateSBOM(projectID, name, final, time.Time{}, sha256Hash); err != nil {
+	if err := s.repo.CreateSBOM(projectID, name, final, spdxTimestamp(document), sha256Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)
 	}
 	unlock()
@@ -103,6 +103,14 @@ func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, d
 	)
 
 	return nil
+}
+
+func spdxTimestamp(doc *spdx.Document) time.Time {
+	if doc.CreationInfo == nil {
+		return time.Time{}
+	}
+	timestamp, _ := time.Parse(time.RFC3339, doc.CreationInfo.Created)
+	return timestamp
 }
 
 func (s *Service) PreviewSPDX(document *spdx.Document, rawData []byte) (FormattedSBOM, string, error) {

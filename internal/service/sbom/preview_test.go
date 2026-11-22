@@ -8,10 +8,28 @@ package ssbom
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
+	"time"
+
+	sbomreader "github.com/spdx/tools-golang/json"
+	"github.com/spdx/tools-golang/spdx"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestSPDXTimestamp(t *testing.T) {
+	fixture, err := os.Open("testdata/spdx-id-not-name.spdx.json")
+	require.NoError(t, err)
+	defer fixture.Close()
+	doc, err := sbomreader.Read(fixture)
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC), spdxTimestamp(doc))
+	assert.True(t, spdxTimestamp(&spdx.Document{}).IsZero())
+	doc.CreationInfo.Created = "invalid"
+	assert.True(t, spdxTimestamp(doc).IsZero())
+}
 
 func TestDetectSBOMFormat(t *testing.T) {
 	tests := []struct {

@@ -73,6 +73,26 @@ func (h *Handler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{msg.RespData: payload})
 }
 
+// RequireActive guards all project-scoped routes before their handlers run.
+func (h *Handler) RequireActive(c *gin.Context) {
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
+
+	exists, err := h.svc.Exists(projectID)
+	if err != nil {
+		slog.Error("Failed to check project", "projectID", projectID, "error", err)
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{msg.RespErr: "Failed to check project"})
+		return
+	}
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{msg.RespErr: msg.ErrProjectNotFound})
+		return
+	}
+	c.Next()
+}
+
 // Get loads the SBOMs of an existing project.
 // GET /projects/:id
 func (h *Handler) Get(c *gin.Context) {

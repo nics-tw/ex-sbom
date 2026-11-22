@@ -4,7 +4,10 @@
 
 package ssbom
 
-import "strconv"
+import (
+	"math"
+	"strconv"
+)
 
 // ComponentDiff represents a single component difference between two SBOMs.
 type ComponentDiff struct {
@@ -65,10 +68,10 @@ func maxVulnScore(vulns []Vuln, getter func(Vuln) string) string {
 			continue
 		}
 		f, err := strconv.ParseFloat(val, 64)
-		if err != nil {
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f < 0 {
 			continue
 		}
-		if f > maxF {
+		if result == "" || f > maxF {
 			maxF = f
 			result = val
 		}
@@ -188,20 +191,24 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 		}
 	}
 
-	// compute vuln totals per level
-	for _, ld := range result.ByLevel {
-
-		for _, c := range ld.Removed {
-			ld.TotalVulnsA += c.VulnsA
-		}
-
-		for _, c := range ld.Changed {
-			ld.TotalVulnsA += c.VulnsA
-			ld.TotalVulnsB += c.VulnsB
-		}
-
-		for _, c := range ld.Added {
-			ld.TotalVulnsB += c.VulnsB
+	// Compare each snapshot at its own levels, including components with no diff row.
+	totals := make(map[int][2]int)
+	for name, component := range a.ComponentInfo {
+		level := a.ComponentToLevel[name]
+		counts := totals[level]
+		counts[0] += component.VulnNumber
+		totals[level] = counts
+	}
+	for name, component := range b.ComponentInfo {
+		level := b.ComponentToLevel[name]
+		counts := totals[level]
+		counts[1] += component.VulnNumber
+		totals[level] = counts
+	}
+	for level, counts := range totals {
+		if result.ByLevel[level] != nil || counts[0] != counts[1] {
+			ld := getOrCreateLevel(&result, level)
+			ld.TotalVulnsA, ld.TotalVulnsB = counts[0], counts[1]
 		}
 	}
 

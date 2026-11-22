@@ -39,6 +39,10 @@ func (s *Service) Create(name domain.ProjectName) (domain.ProjectID, error) {
 	return s.repo.CreateProject(name)
 }
 
+func (s *Service) Exists(id domain.ProjectID) (bool, error) {
+	return s.repo.ProjectExists(id)
+}
+
 // List returns all non-deleted projects.
 func (s *Service) List() ([]domain.ProjectInfo, error) {
 	return s.repo.GetProjects()

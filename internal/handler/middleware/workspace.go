@@ -6,6 +6,7 @@ package middleware
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"ex-sbom/internal/domain"
@@ -19,13 +20,37 @@ const ProjectIDKey = "projectID"
 // and stores it in the context under ProjectIDKey.
 func ProjectID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		rawID := c.Param("id")
+		if c.Request.URL.RawPath != "" {
+			rawID, _ = url.PathUnescape(rawID)
+		}
+		id, err := strconv.ParseInt(rawID, 10, 64)
 		if err != nil || id == 0 {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid project id"})
 			return
 		}
 
 		c.Set(ProjectIDKey, id)
+		c.Next()
+	}
+}
+
+// DecodeVersionName decodes the name only if Gin matched the raw path.
+func DecodeVersionName() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.URL.RawPath != "" {
+			name, err := url.PathUnescape(c.Param("name"))
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid version name"})
+				return
+			}
+			for i := range c.Params {
+				if c.Params[i].Key == "name" {
+					c.Params[i].Value = name
+					break
+				}
+			}
+		}
 		c.Next()
 	}
 }

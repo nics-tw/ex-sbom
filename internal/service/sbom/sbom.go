@@ -5,6 +5,7 @@
 package ssbom
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -110,10 +111,30 @@ func sortFormattedSBOM(sbom *FormattedSBOM) {
 	for name := range sbom.ReverseDependency {
 		sort.Strings(sbom.ReverseDependency[name])
 	}
+
+	for _, component := range sbom.ComponentInfo {
+		slices.SortFunc(component.Vulns, compareVulns)
+	}
+}
+
+// compareVulns orders findings by all persisted fields, with fix candidates last
+// so removing that historical field does not change the order of distinct findings.
+func compareVulns(a, b Vuln) int {
+	return cmp.Or(
+		cmp.Compare(a.ID, b.ID),
+		cmp.Compare(a.Summary, b.Summary),
+		cmp.Compare(a.Details, b.Details),
+		cmp.Compare(a.CVSSScore, b.CVSSScore),
+		cmp.Compare(a.SuggestFixVersion, b.SuggestFixVersion),
+		cmp.Compare(a.OtherFixVersions, b.OtherFixVersions),
+		cmp.Compare(a.EPSS, b.EPSS),
+		cmp.Compare(a.LEV, b.LEV),
+		slices.Compare(a.FixVersions, b.FixVersions),
+	)
 }
 
 // HashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
-// encoding/json sorts map keys deterministically, so the hash is stable for the same content.
+// Call sortFormattedSBOM first to normalize slice order.
 func HashSBOM(sbom FormattedSBOM) string {
 	b, err := json.Marshal(sbom)
 	if err != nil {

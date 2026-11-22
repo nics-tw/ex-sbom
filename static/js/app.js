@@ -1348,9 +1348,8 @@
           const ld = byLevel[level];
           const nA = ld.added?.length || 0, nR = ld.removed?.length || 0, nC = ld.changed?.length || 0;
           const total = nA + nR + nC;
-          if (!total) continue;
-
           const va = ld.total_vulns_a ?? 0, vb = ld.total_vulns_b ?? 0;
+          if (!total && va === vb) continue;
           const vulnColor = vb > va ? "text-red-600" : vb < va ? "text-green-600" : "text-gray-500";
           const levelId = `diff-level-${level}`;
 
@@ -1369,17 +1368,17 @@
 
           html += `
             <div class="mb-4 border border-gray-200 rounded-lg overflow-hidden">
-              <div class="flex items-center justify-between bg-gray-100 px-4 py-2 cursor-pointer select-none hover:bg-gray-200 transition-colors" onclick="(function(el){var b=document.getElementById('${levelId}');b.classList.toggle('hidden');el.querySelector('[data-chevron]').classList.toggle('rotate-90');})(this)">
+              <div class="flex items-center justify-between bg-gray-100 px-4 py-2 ${total ? "cursor-pointer select-none hover:bg-gray-200 transition-colors" : ""}" ${total ? `onclick="(function(el){var b=document.getElementById('${levelId}');b.classList.toggle('hidden');el.querySelector('[data-chevron]').classList.toggle('rotate-90');})(this)"` : ""}>
                 <div class="flex items-center gap-3">
-                  <svg data-chevron class="h-4 w-4 text-gray-500 transition-transform" viewBox="0 0 20 20" fill="currentColor">
+                  ${total ? `<svg data-chevron class="h-4 w-4 text-gray-500 transition-transform" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
-                  </svg>
+                  </svg>` : ""}
                   <span class="font-semibold text-gray-700">${t("diffLevel")} ${level}</span>
                   ${badges}
                 </div>
                 <span class="text-xs font-medium ${vulnColor}">${t("diffVulns")}: <span class="line-through text-gray-400">${va}</span> → ${vb}</span>
               </div>
-              <div id="${levelId}">
+              ${total ? `<div id="${levelId}">
                 <table class="w-full text-sm border-collapse">
                   <thead>
                     <tr class="bg-gray-50 border-b border-gray-200">
@@ -1389,7 +1388,7 @@
                   </thead>
                   <tbody class="divide-y divide-gray-100">${rows}</tbody>
                 </table>
-              </div>
+              </div>` : ""}
             </div>`;
         }
 

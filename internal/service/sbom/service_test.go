@@ -7,6 +7,7 @@
 package ssbom
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"ex-sbom/internal/repository"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ─── stubRepository ──────────────────────────────────────────────────────────
@@ -397,6 +399,7 @@ func TestService_ListVersions_DelegatesToRepo(t *testing.T) {
 type checksumTrackingRepo struct {
 	stubRepository
 	byChecksum map[string]domain.Version
+	records    []domain.SBOMEntry
 	inserts    int
 }
 
@@ -411,6 +414,10 @@ func (r *checksumTrackingRepo) FindVersionBySHA256(_ domain.ProjectID, checksum 
 		return v, nil
 	}
 	return "", repository.ErrVersionNotFound
+}
+
+func (r *checksumTrackingRepo) GetAllByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
+	return r.records, nil
 }
 
 func TestService_SaveParsedDetectsLegacyChecksumDuplicate(t *testing.T) {
@@ -431,6 +438,55 @@ func TestService_SaveParsedDetectsLegacyChecksumDuplicate(t *testing.T) {
 	var duplicate *DuplicateSHA256Error
 	assert.ErrorAs(t, err, &duplicate)
 	assert.Zero(t, repo.inserts)
+}
+
+func TestService_SaveParsedCanonicalizesFindingOrder(t *testing.T) {
+	newBOM := func(vulns ...Vuln) FormattedSBOM {
+		return FormattedSBOM{ComponentInfo: map[string]Component{
+			"pkg": {Vulns: vulns},
+		}}
+	}
+	a := Vuln{ID: "CVE-1", FixVersions: []string{"1.1"}}
+	b := Vuln{ID: "CVE-2", FixVersions: []string{"2.1"}}
+	unsorted := newBOM(b, a)
+	canonical := newBOM(a, b)
+	sortFormattedSBOM(&canonical)
+	checksum := HashSBOM(canonical)
+	require.NotEqual(t, checksum, HashSBOM(unsorted))
+
+	for _, tc := range []struct {
+		name      string
+		stored    FormattedSBOM
+		duplicate bool
+	}{
+		{"older scanner order", newBOM(b, a), true},
+		{"older scanner order without fix versions", newBOM(Vuln{ID: b.ID}, Vuln{ID: a.ID}), true},
+		{"different fix versions remain distinct", newBOM(b, Vuln{ID: a.ID, FixVersions: []string{"1.2"}}), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storedJSON, err := json.Marshal(tc.stored)
+			require.NoError(t, err)
+			storedChecksum := HashSBOM(tc.stored)
+			repo := &checksumTrackingRepo{
+				byChecksum: map[string]domain.Version{storedChecksum: "existing"},
+				records:    []domain.SBOMEntry{{Version: "existing", SHA256: storedChecksum, BomResult: storedJSON}},
+			}
+			svc := NewService(repo, NewInMemoryCache())
+			version, err := svc.FindVersionForSBOM(wsID, checksum, canonical)
+			require.NoError(t, err)
+			err = svc.SaveParsed(wsID, "submitted", newBOM(b, a), checksum, time.Time{})
+			if tc.duplicate {
+				assert.Equal(t, domain.Version("existing"), version)
+				var duplicate *DuplicateSHA256Error
+				assert.ErrorAs(t, err, &duplicate)
+				assert.Zero(t, repo.inserts)
+			} else {
+				assert.Empty(t, version)
+				assert.NoError(t, err)
+				assert.Equal(t, domain.Version("submitted"), repo.byChecksum[checksum])
+			}
+		})
+	}
 }
 
 func TestService_SaveParsed_ConcurrentSameChecksumInsertsOnce(t *testing.T) {

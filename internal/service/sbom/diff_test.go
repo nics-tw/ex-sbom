@@ -67,6 +67,11 @@ func TestMaxVulnScore_SkipsEmptyAndInvalidScores(t *testing.T) {
 	assert.Equal(t, "6.1", result)
 }
 
+func TestMaxVulnScore_PreservesZero(t *testing.T) {
+	vulns := []Vuln{{EPSS: "NaN"}, {EPSS: "0"}, {EPSS: "+Inf"}}
+	assert.Equal(t, "0", maxVulnScore(vulns, func(v Vuln) string { return v.EPSS }))
+}
+
 func TestMaxVulnScore_AllInvalid(t *testing.T) {
 	// Arrange
 	vulns := []Vuln{
@@ -281,6 +286,26 @@ func TestDiffSBOMs_VulnTotalsPerLevel(t *testing.T) {
 	assert.Equal(t, 4, level0.TotalVulnsA)
 	// TotalVulnsB = added(2) + changed(4) = 6
 	assert.Equal(t, 6, level0.TotalVulnsB)
+}
+
+func TestDiffSBOMs_VulnTotalsIncludeUnchangedAndMovedComponents(t *testing.T) {
+	unchanged := Component{VulnNumber: 5}
+	a := makeSBOM(
+		map[string]Component{"unchanged": unchanged, "moved": {VulnNumber: 1}},
+		map[string]int{"unchanged": 0, "moved": 0},
+	)
+	b := makeSBOM(
+		map[string]Component{"unchanged": unchanged, "moved": {VulnNumber: 2}},
+		map[string]int{"unchanged": 0, "moved": 1},
+	)
+
+	result := DiffSBOMs(a, b)
+	assert.Equal(t, 6, result.ByLevel[0].TotalVulnsA)
+	assert.Equal(t, 5, result.ByLevel[0].TotalVulnsB)
+	assert.Len(t, result.ByLevel[0].Changed, 1)
+	assert.Equal(t, 0, result.ByLevel[1].TotalVulnsA)
+	assert.Equal(t, 2, result.ByLevel[1].TotalVulnsB)
+	assert.Empty(t, result.ByLevel[1].Changed)
 }
 
 func TestDiffSBOMs_HasVulnFlagOnChanged(t *testing.T) {

@@ -9,6 +9,7 @@ package handler
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func (r *noopRepository) DeleteProject(_ domain.ProjectID) error { return nil }
 func (r *noopRepository) GetProjects() ([]domain.ProjectInfo, error) {
 	return []domain.ProjectInfo{}, nil
 }
-func (r *noopRepository) ProjectExists(_ domain.ProjectID) (bool, error) { return true, nil }
+func (r *noopRepository) ProjectExists(id domain.ProjectID) (bool, error) { return id == 1, nil }
 func (r *noopRepository) CreateSBOM(_ domain.ProjectID, _ domain.Version, _ any, _ time.Time, _ string) error {
 	return nil
 }
@@ -63,6 +64,9 @@ func (r *noopRepository) FindVersionBySHA256(_ domain.ProjectID, _ domain.SHA256
 func buildTestRouter() *gin.Engine {
 	repo := &noopRepository{}
 	cache := ssbom.NewInMemoryCache()
+	for _, name := range []string{"release/1.2", "release%2F1.2", "release+ candidate/1.2"} {
+		cache.Set(1, name, ssbom.FormattedSBOM{DependencyLevel: map[int][]string{0: {name}}})
+	}
 	sbomSvc := ssbom.NewService(repo, cache)
 	projectSvc := psvc.New(repo, cache)
 
@@ -112,6 +116,38 @@ func TestSetupRouterGroup(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
+		})
+	}
+}
+
+func TestSetupRouterGroup_RejectsMissingProjectBeforeDispatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := buildTestRouter()
+	for _, tc := range []struct{ method, route string }{
+		{http.MethodGet, "/projects/2/versions"},
+		{http.MethodGet, "/projects/2/sboms"},
+		{http.MethodGet, "/projects/2/search?q=test"},
+		{http.MethodPost, "/projects/2/sboms/preview"},
+	} {
+		t.Run(tc.route, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(tc.method, tc.route, nil))
+			assert.Equal(t, http.StatusNotFound, w.Code)
+			assert.JSONEq(t, `{"error":"Project not found"}`, w.Body.String())
+		})
+	}
+}
+
+func TestSetupRouterGroup_DecodesVersionPathOnce(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := buildTestRouter()
+	for _, name := range []string{"release/1.2", "release%2F1.2", "release+ candidate/1.2"} {
+		t.Run(name, func(t *testing.T) {
+			path := "/projects/1/sboms/" + url.PathEscape(name) + "/topology"
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Contains(t, w.Body.String(), name)
 		})
 	}
 }
