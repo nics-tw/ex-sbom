@@ -197,8 +197,6 @@
 
       change(lang) {
         State.language = lang;
-        document.getElementById("lang-en").classList.toggle("active-language", lang === "en");
-        document.getElementById("lang-zh").classList.toggle("active-language", lang === "zh");
         this.apply();
         if (State.activeTab) Sbom.fetchTopology(State.activeTab.dataset.version);
       },
@@ -1937,8 +1935,7 @@
     // ═══════════════════════════════════════════════════════════════════════════
     document.addEventListener("DOMContentLoaded", () => {
       // Language
-      const lang = (navigator.language || "en").startsWith("zh") ? "zh" : "en";
-      i18n.change(lang);
+      bindLanguageSwitcher(lang => i18n.change(lang));
 
       // Main tab switching
       document.getElementById("main-tab-analysis").addEventListener("click", () => MainTab.show("analysis"));
@@ -1959,10 +1956,6 @@
         if (e.key === "Enter") SbomModal.commit();
         if (e.key === "Escape") SbomModal.close();
       });
-
-      // Language switcher
-      document.getElementById("lang-en").addEventListener("click", () => i18n.change("en"));
-      document.getElementById("lang-zh").addEventListener("click", () => i18n.change("zh"));
 
       // Tutorial
       document.getElementById("tutorial-btn").addEventListener("click", () => {
