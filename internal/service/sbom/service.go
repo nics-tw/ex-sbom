@@ -5,7 +5,6 @@
 package ssbom
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -156,16 +155,10 @@ func (s *Service) findVersionWithOldOrder(projectID domain.ProjectID, bom Format
 	}
 	rows := make(map[domain.Version]compatibilityEntry, len(records))
 	for i, record := range records {
-		var stored FormattedSBOM
-		if err := json.Unmarshal(record.BomResult, &stored); err != nil {
-			continue
-		}
-		sortFormattedSBOM(&stored)
-		// Retain stored candidates when present so the legacy checksum can match
-		// only a record that actually omitted them.
-		rows[record.Version] = compatibilityEntry{
-			checksum: HashSBOM(normalizeOldFixVersionDisplay(stored)),
-			order:    i,
+		entry, ok := compatibilityEntryForRecord(record)
+		if ok {
+			entry.order = i
+			rows[record.Version] = entry
 		}
 	}
 	s.cache.setCompatibilityIndex(projectID, rows, len(records))
@@ -220,7 +213,7 @@ func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version,
 		return err
 	}
 
-	s.cache.Set(projectID, version, bom)
+	s.cache.setPersisted(projectID, version, bom, sha256Hash)
 
 	return nil
 }

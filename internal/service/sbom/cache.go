@@ -5,6 +5,8 @@
 package ssbom
 
 import (
+	"encoding/json"
+	"maps"
 	"sync"
 
 	"ex-sbom/internal/domain"
@@ -18,12 +20,14 @@ type Cache interface {
 	Rename(projectID domain.ProjectID, oldName, newName domain.Version)
 	DeleteProject(projectID domain.ProjectID)
 	ReplaceProject(projectID domain.ProjectID, sboms map[domain.Version]FormattedSBOM)
+	ReplaceLoadedProject(projectID domain.ProjectID, sboms map[domain.Version]FormattedSBOM, records []domain.SBOMEntry)
 	Keys(projectID domain.ProjectID) []domain.Version
 	All(projectID domain.ProjectID) map[domain.Version]FormattedSBOM
 
 	// The compatibility index represents all readable rows from an authoritative project load.
 	findCompatibleVersion(projectID domain.ProjectID, checksum, legacy string) (version domain.Version, loaded bool)
 	setCompatibilityIndex(projectID domain.ProjectID, rows map[domain.Version]compatibilityEntry, nextOrder int)
+	setPersisted(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM, persistedSHA domain.SHA256)
 
 	// LockProject serializes save/load/delete sequences that must keep the DB
 	// and the cache consistent for the same project. Callers must invoke the
@@ -35,8 +39,9 @@ type Cache interface {
 }
 
 type compatibilityEntry struct {
-	checksum string
-	order    int
+	checksum     string
+	persistedSHA domain.SHA256
+	order        int
 }
 
 type compatibilityIndex struct {
@@ -86,6 +91,10 @@ func (c *inMemoryCache) Get(projectID domain.ProjectID, name domain.Version) (Fo
 }
 
 func (c *inMemoryCache) Set(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM) {
+	c.setPersisted(projectID, name, sbom, "")
+}
+
+func (c *inMemoryCache) setPersisted(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM, persistedSHA domain.SHA256) {
 	c.mu.Lock()
 	if c.compatibility[projectID] == nil {
 		c.set(projectID, name, sbom)
@@ -100,7 +109,7 @@ func (c *inMemoryCache) Set(projectID domain.ProjectID, name domain.Version, sbo
 	defer c.mu.Unlock()
 	c.set(projectID, name, sbom)
 	if index := c.compatibility[projectID]; index != nil {
-		index.rows[name] = compatibilityEntry{checksum: checksum, order: index.nextOrder}
+		index.rows[name] = compatibilityEntry{checksum: checksum, persistedSHA: persistedSHA, order: index.nextOrder}
 		index.nextOrder++
 	}
 }
@@ -180,6 +189,57 @@ func (c *inMemoryCache) ReplaceProject(projectID domain.ProjectID, sboms map[dom
 	c.data[projectID] = replacement
 	delete(c.compatibility, projectID)
 	c.mu.Unlock()
+}
+
+// ReplaceLoadedProject refreshes a warm compatibility index and keeps a cold
+// index lazy. The caller holds LockProject across the repository read and swap.
+func (c *inMemoryCache) ReplaceLoadedProject(projectID domain.ProjectID, sboms map[domain.Version]FormattedSBOM, records []domain.SBOMEntry) {
+	c.mu.RLock()
+	index := c.compatibility[projectID]
+	c.mu.RUnlock()
+
+	var replacement *compatibilityIndex
+	if index != nil {
+		rows := make(map[domain.Version]compatibilityEntry, len(sboms))
+		for order, record := range records {
+			if _, readable := sboms[record.Version]; !readable {
+				continue
+			}
+			c.mu.RLock()
+			entry, exists := index.rows[record.Version]
+			c.mu.RUnlock()
+			if !exists || record.SHA256 == "" || entry.persistedSHA != record.SHA256 {
+				var ok bool
+				entry, ok = compatibilityEntryForRecord(record)
+				if !ok {
+					continue
+				}
+			}
+			entry.order = order
+			rows[record.Version] = entry
+		}
+		replacement = &compatibilityIndex{rows: rows, nextOrder: len(records)}
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[projectID] = maps.Clone(sboms)
+	if replacement != nil {
+		c.compatibility[projectID] = replacement
+	}
+}
+
+// compatibilityEntryForRecord only normalizes data privately decoded for hashing.
+func compatibilityEntryForRecord(record domain.SBOMEntry) (compatibilityEntry, bool) {
+	var stored FormattedSBOM
+	if err := json.Unmarshal(record.BomResult, &stored); err != nil {
+		return compatibilityEntry{}, false
+	}
+	sortFormattedSBOM(&stored)
+	return compatibilityEntry{
+		checksum:     HashSBOM(normalizeOldFixVersionDisplay(stored)),
+		persistedSHA: record.SHA256,
+	}, true
 }
 
 func (c *inMemoryCache) Keys(projectID domain.ProjectID) []domain.Version {

@@ -123,7 +123,7 @@ func (s *Service) Load(projectID domain.ProjectID) (names, corrupted []domain.Ve
 		replacement[l.version] = l.bom
 		names = append(names, l.version)
 	}
-	s.cache.ReplaceProject(projectID, replacement)
+	s.cache.ReplaceLoadedProject(projectID, replacement, records)
 
 	return names, corrupted, nil
 }

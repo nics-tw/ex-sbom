@@ -9,6 +9,7 @@ package psvc
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ type fakeRepo struct {
 	getAllStarted chan struct{}
 	getAllRelease chan struct{}
 	getAllErr     error
+	getAllCalls   int
 
 	deleteStarted chan struct{}
 	deleteRelease chan struct{}
@@ -69,6 +71,7 @@ func (f *fakeRepo) GetAllByProject(projectID domain.ProjectID) ([]domain.SBOMEnt
 	}
 
 	f.mu.Lock()
+	f.getAllCalls++
 	snapshot := append([]domain.SBOMEntry(nil), f.records[projectID]...)
 	f.mu.Unlock()
 
@@ -164,6 +167,85 @@ func TestPreviewSaveLoadPreservesFixVersions(t *testing.T) {
 	fixes := loaded.ComponentInfo["pkg"].Vulns[0].FixVersions
 	if len(fixes) != 2 || fixes[0] != "1.1" || fixes[1] != "1.2" {
 		t.Fatalf("fix candidates lost in preview/save/reload: %v", fixes)
+	}
+}
+
+func TestLoadKeepsCompatibilityIndexWarmAfterSave(t *testing.T) {
+	const projectID domain.ProjectID = 42
+	repo := newFakeRepo()
+	cache := ssbom.NewInMemoryCache()
+	sbomSvc := ssbom.NewService(repo, cache)
+	projectSvc := New(repo, cache)
+
+	bom := func(id, suggested, other string) ssbom.FormattedSBOM {
+		return ssbom.FormattedSBOM{ComponentInfo: map[string]ssbom.Component{
+			"pkg": {Vulns: []ssbom.Vuln{{
+				ID: id, SuggestFixVersion: suggested, OtherFixVersions: other,
+				FixVersions: []string{"1.2-a", "1.2-b"},
+			}}},
+		}}
+	}
+	record := func(name domain.Version, result ssbom.FormattedSBOM) domain.SBOMEntry {
+		t.Helper()
+		data, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return domain.SBOMEntry{Version: name, BomResult: data, SHA256: ssbom.HashSBOM(result)}
+	}
+	lookup := func(result ssbom.FormattedSBOM, want domain.Version) {
+		t.Helper()
+		version, err := sbomSvc.FindVersionForSBOM(projectID, ssbom.HashSBOM(result), result)
+		if err != nil || version != want {
+			t.Fatalf("lookup = %q, %v; want %q", version, err, want)
+		}
+	}
+	const suggested, other = "1.2-a", "1.2-b"
+	old := bom("CVE-1", other, suggested)
+	incoming := bom("CVE-1", suggested, other)
+	otherSaved := bom("CVE-2", suggested, other)
+	broken := domain.SBOMEntry{Version: "broken", BomResult: json.RawMessage("{")}
+	repo.records[projectID] = []domain.SBOMEntry{record("oldest", old), broken, record("next", old)}
+
+	lookup(incoming, "oldest")
+	if err := sbomSvc.SaveParsed(projectID, "saved", otherSaved, ssbom.HashSBOM(otherSaved), time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	names, corrupted, err := projectSvc.Load(projectID)
+	if err != nil || !slices.Equal(names, []string{"oldest", "next", "saved"}) || !slices.Equal(corrupted, []string{"broken"}) {
+		t.Fatalf("load after save: names=%v corrupted=%v err=%v", names, corrupted, err)
+	}
+	lookup(incoming, "oldest")
+	lookup(bom("CVE-2", other, suggested), "saved")
+	if repo.getAllCalls != 2 {
+		t.Fatalf("read count %d; want initial history load plus workspace reload", repo.getAllCalls)
+	}
+
+	// A new SHA at the same version must use the new contents. Updated row order
+	// must select the first surviving match and corruption must remove old hits.
+	repo.records[projectID] = []domain.SBOMEntry{
+		record("next", old), record("newer", old),
+		record("oldest", bom("CVE-3", other, suggested)),
+		{Version: "saved", BomResult: json.RawMessage("{"), SHA256: ssbom.HashSBOM(otherSaved)},
+	}
+	if _, _, err := projectSvc.Load(projectID); err != nil {
+		t.Fatal(err)
+	}
+	lookup(incoming, "next")
+	lookup(bom("CVE-3", suggested, other), "oldest")
+	lookup(bom("CVE-2", other, suggested), "")
+	if repo.getAllCalls != 3 {
+		t.Fatalf("changed snapshot read count %d; want one additional workspace reload", repo.getAllCalls)
+	}
+
+	repo.records[projectID] = []domain.SBOMEntry{record("newer", old)}
+	if _, _, err := projectSvc.Load(projectID); err != nil {
+		t.Fatal(err)
+	}
+	lookup(incoming, "newer")
+	lookup(bom("CVE-3", suggested, other), "")
+	if repo.getAllCalls != 4 {
+		t.Fatalf("deleted row snapshot read count %d; want one additional workspace reload", repo.getAllCalls)
 	}
 }
 
