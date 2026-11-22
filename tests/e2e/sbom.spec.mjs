@@ -116,6 +116,7 @@ test("upload dialog keeps keyboard focus and returns it when dismissed", async (
   await page.locator("#sbom-modal-preview-btn").focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#sbom-version-input")).toBeFocused();
+  await expect(page.locator("#sbom-version-input")).toHaveAccessibleName("Version name");
   const previewComponent = page.locator("#sbom-preview-summary").getByRole("button", { name: /keyboard-fixture/ });
   await previewComponent.focus();
   await page.keyboard.press("Enter");
