@@ -52,7 +52,6 @@ var staticJS embed.FS
 const (
 	appName    = "ex-sbom"
 	dbFileName = "data.duckdb"
-	osvAPI     = "https://api.osv.dev/"
 )
 
 // defaultDBPath returns the platform-native path for the database file:
@@ -90,7 +89,7 @@ func main() {
 	slog.Info("LocalDB initialized")
 
 	if err := checkNetworkConnectivity(); err != nil {
-		slog.Error("Network check failed", "error", err)
+		slog.Error("OSV preflight failed", "error", err)
 		if runtime.GOOS == "windows" {
 			fmt.Println("按 Enter 鍵關閉...")
 			fmt.Scanln()
@@ -216,29 +215,6 @@ func openBrowser(url string) error {
 	}
 
 	return cmd.Start()
-}
-
-// checkNetworkConnectivity verifies that the OSV API is reachable.
-// osv-scanner requires internet access to query vulnerability data;
-// the program exits if the endpoint is unreachable.
-func checkNetworkConnectivity() error {
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(osvAPI)
-	if err != nil {
-		return fmt.Errorf("unable to reach %s: %w — osv-scanner requires internet access to query vulnerability data", osvAPI, err)
-	}
-	defer resp.Body.Close()
-
-	// Only 5xx indicates a real connectivity/availability problem. The OSV API
-	// root returns 404 even when healthy, so 4xx must NOT be treated as failure
-	// (it would make startup fail on every run). A 5xx means the API itself is
-	// degraded and later scans would fail, so we stop early.
-	if resp.StatusCode >= 500 {
-		return fmt.Errorf("%s returned server error %d — osv-scanner vulnerability data is currently unavailable", osvAPI, resp.StatusCode)
-	}
-
-	slog.Info("Network connectivity OK", "endpoint", osvAPI, "status", resp.StatusCode)
-	return nil
 }
 
 func setupSSR(r *gin.Engine) {
