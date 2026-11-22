@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf16"
 
 	"ex-sbom/internal/domain"
 	ssbom "ex-sbom/internal/service/sbom"
@@ -103,12 +104,13 @@ type reportComponent struct {
 
 type document struct {
 	*gofpdf.Fpdf
-	language      string
-	font          *sfnt.Font
-	fontBuffer    sfnt.Buffer
-	glyphs        map[rune]bool
-	width, bottom float64
-	repeatHeading string
+	language          string
+	font              *sfnt.Font
+	fontBuffer        sfnt.Buffer
+	glyphs            map[rune]bool
+	width, bottom     float64
+	repeatHeading     string
+	usedGlyphFallback bool
 }
 
 func Generate(w io.Writer, report Report) error {
@@ -151,6 +153,9 @@ func Generate(w io.Writer, report Report) error {
 		pdf.CellFormat(doc.width, 5, doc.label("Page ", "頁次 ")+strconv.Itoa(pdf.PageNo()), "", 0, "R", false, 0, "")
 	})
 	pdf.AddPage()
+	// ActualText requires PDF 1.4. Normal, fully opaque blending makes gofpdf
+	// emit that version without changing the appearance of the report.
+	pdf.SetAlpha(1, "Normal")
 
 	doc.SetTextColor(20, 52, 66)
 	doc.SetFont(reportFont, "", 19)
@@ -219,6 +224,12 @@ func Generate(w io.Writer, report Report) error {
 
 	doc.componentTable(components)
 	doc.vulnerabilityDetails(components)
+	if doc.usedGlyphFallback {
+		doc.section(doc.label("Text display note", "文字顯示說明"))
+		doc.write(doc.label(
+			"Some characters are displayed as Unicode code points. The original text is available for search and copy in compatible PDF readers.",
+			"部分字元以 Unicode 碼位顯示。支援此功能的 PDF 閱讀器可搜尋及複製原文。"), lineHeight)
+	}
 	return pdf.Output(w)
 }
 
@@ -336,65 +347,107 @@ func (d *document) ensureSpace(height float64) {
 func (d *document) write(value string, height float64) {
 	for _, line := range d.wrap(value, d.width) {
 		d.ensureSpace(height)
-		d.CellFormat(d.width, height, line, "", 1, "L", false, 0, "")
+		d.textCell(d.width, height, line, 1)
 	}
 }
 
-// Keep each emitted line within its column. Escape unsupported characters
-// visibly so identifiers can still be recovered and unsupported runes cannot
-// trip the PDF library's BMP-only font implementation.
-func (d *document) wrap(value string, width float64) []string {
-	value = strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
-	var lines []string
-	for _, paragraph := range strings.Split(value, "\n") {
-		var normalized strings.Builder
-		for _, char := range paragraph {
-			if char == '\t' {
-				normalized.WriteString("    ")
-				continue
-			}
-			supported, checked := d.glyphs[char]
-			if !checked {
-				index, err := d.font.GlyphIndex(&d.fontBuffer, char)
-				supported = err == nil && index != 0 && char <= 0xffff && !unicode.IsControl(char) && !unicode.Is(unicode.Cf, char)
-				d.glyphs[char] = supported
-			}
-			if supported {
-				normalized.WriteRune(char)
-			} else {
-				fmt.Fprintf(&normalized, "[U+%04X]", char)
-			}
+type textLine struct {
+	display string
+	actual  string
+}
+
+func (d *document) textCell(width, height float64, line textLine, newline int) {
+	if line.actual != "" {
+		// gofpdf can only draw characters in the BMP. PDF ActualText associates
+		// the visible substitute with the original Unicode text.
+		var encoded strings.Builder
+		encoded.WriteString("/Span << /ActualText <FEFF")
+		for _, unit := range utf16.Encode([]rune(line.actual)) {
+			fmt.Fprintf(&encoded, "%04X", unit)
 		}
-		text := []rune(normalized.String())
-		if len(text) == 0 {
-			lines = append(lines, "")
-			continue
+		encoded.WriteString("> >> BDC")
+		d.RawWriteStr(encoded.String())
+	}
+	d.CellFormat(width, height, line.display, "", newline, "L", false, 0, "")
+	if line.actual != "" {
+		d.RawWriteStr("EMC")
+	}
+}
+
+// Keep each emitted line within its column without splitting a code point's
+// visible substitute. Controls and format characters stay escaped when copied.
+func (d *document) wrap(value string, width float64) []textLine {
+	value = strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
+	var lines []textLine
+	for _, paragraph := range strings.Split(value, "\n") {
+		paragraph = strings.ReplaceAll(paragraph, "\t", "    ")
+		var characters []textLine
+		for _, char := range paragraph {
+			characters = append(characters, d.displayCharacter(char))
 		}
 		start, lastSpace, lineWidth := 0, -1, 0.0
-		for i, char := range text {
-			charWidth := d.GetStringWidth(string(char))
+		for i, character := range characters {
+			charWidth := d.GetStringWidth(character.display)
 			if lineWidth+charWidth > width && i > start {
 				end := i
 				if lastSpace >= start {
 					end = lastSpace + 1
 				}
-				lines = append(lines, strings.TrimRight(string(text[start:end]), " "))
+				lines = append(lines, joinTextLine(characters[start:end]))
 				start = end
-				lineWidth = d.GetStringWidth(string(text[start:i]))
-				lastSpace = -1
+				lineWidth, lastSpace = 0, -1
+				for _, remaining := range characters[start:i] {
+					lineWidth += d.GetStringWidth(remaining.display)
+				}
 				if lineWidth+charWidth > width && i > start {
-					lines = append(lines, strings.TrimRight(string(text[start:i]), " "))
+					lines = append(lines, joinTextLine(characters[start:i]))
 					start, lineWidth = i, 0
 				}
 			}
-			if char == ' ' {
+			if character.display == " " {
 				lastSpace = i
 			}
 			lineWidth += charWidth
 		}
-		lines = append(lines, strings.TrimRight(string(text[start:]), " "))
+		lines = append(lines, joinTextLine(characters[start:]))
 	}
 	return lines
+}
+
+func (d *document) displayCharacter(char rune) textLine {
+	if unicode.IsControl(char) || unicode.Is(unicode.Cf, char) {
+		return textLine{display: fmt.Sprintf("[U+%04X]", char)}
+	}
+	supported, checked := d.glyphs[char]
+	if !checked {
+		index, err := d.font.GlyphIndex(&d.fontBuffer, char)
+		supported = err == nil && index != 0 && char <= 0xffff
+		d.glyphs[char] = supported
+	}
+	if supported {
+		return textLine{display: string(char)}
+	}
+	d.usedGlyphFallback = true
+	return textLine{display: fmt.Sprintf("[U+%04X]", char), actual: string(char)}
+}
+
+func joinTextLine(characters []textLine) textLine {
+	var display, actual strings.Builder
+	hasFallback := false
+	for _, character := range characters {
+		display.WriteString(character.display)
+		if character.actual == "" {
+			actual.WriteString(character.display)
+		} else {
+			actual.WriteString(character.actual)
+			hasFallback = true
+		}
+	}
+	line := textLine{display: strings.TrimRight(display.String(), " ")}
+	if hasFallback {
+		line.actual = strings.TrimRight(actual.String(), " ")
+	}
+	return line
 }
 
 func (d *document) componentTable(components []reportComponent) {
@@ -427,7 +480,7 @@ func (d *document) componentTable(components []reportComponent) {
 			scope = d.label("Transitive", "間接")
 		}
 		values := []string{component.sbom.Name, component.sbom.Version, scope, strconv.Itoa(len(component.sbom.Vulns))}
-		lines := make([][]string, len(values))
+		lines := make([][]textLine, len(values))
 		height := 1
 		for i, value := range values {
 			lines[i] = d.wrap(value, widths[i]-3)
@@ -440,11 +493,11 @@ func (d *document) componentTable(components []reportComponent) {
 				header()
 			}
 			for i := range values {
-				value := ""
+				var value textLine
 				if n < len(lines[i]) {
 					value = lines[i][n]
 				}
-				d.CellFormat(widths[i], lineHeight, value, "", 0, "L", false, 0, "")
+				d.textCell(widths[i], lineHeight, value, 0)
 			}
 			d.Ln(lineHeight)
 		}

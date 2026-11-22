@@ -7,14 +7,18 @@ package file
 import (
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/google/osv-scalibr/extractor"
 	"github.com/google/osv-scalibr/purl"
+	purlecosystem "github.com/google/osv-scalibr/purl/ecosystem"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 )
+
+var goMajorVersionSubpath = regexp.MustCompile(`v[0-9]+`)
 
 // here mimic and import the way osv-scanner/v2 scan the vulnerability
 // TODO: refactor to scan directly if possible
@@ -68,7 +72,11 @@ func IdentifyPackage(name, version, locator string) PackageVersion {
 		return PackageVersion{}
 	}
 	info := extractor.Package{PURLType: p.Type}
-	return packageIdentity(name, version, info.Ecosystem().String(), &p)
+	ecosystem := info.Ecosystem()
+	if ecosystem.IsEmpty() {
+		ecosystem = purlecosystem.FromPURL(&p)
+	}
+	return packageIdentity(name, version, ecosystem.String(), &p)
 }
 
 func packageIdentity(name, version, ecosystem string, p *purl.PackageURL) PackageVersion {
@@ -84,9 +92,13 @@ func packageIdentity(name, version, ecosystem string, p *purl.PackageURL) Packag
 	if name == "" || version == "" {
 		return PackageVersion{}
 	}
-	if ecosystem == "PyPI" {
+	// Keep this identity aligned with the name SCALIBR sends to OSV.
+	switch {
+	case ecosystem == "PyPI":
 		name = normalizePythonName(name)
-	} else if p.Namespace != "" {
+	case ecosystem == "Go" && name == "go":
+		return PackageVersion{Ecosystem: ecosystem, Name: "stdlib", Version: version}
+	case p.Namespace != "" && !isOSPURLType(p.Type):
 		separator := "/"
 		if p.Type == purl.TypeMaven {
 			separator = ":"
@@ -96,10 +108,24 @@ func packageIdentity(name, version, ecosystem string, p *purl.PackageURL) Packag
 			name = prefix + name
 		}
 	}
-	if ecosystem == "Go" && name == "go" {
-		name = "stdlib"
+	if ecosystem == "Go" {
+		if major := goMajorVersionSubpath.FindString(p.Subpath); major != "" {
+			name += "/" + major
+		}
 	}
 	return PackageVersion{Ecosystem: ecosystem, Name: name, Version: version}
+}
+
+// SCALIBR leaves the OS distribution namespace out of the queried package name.
+func isOSPURLType(purlType string) bool {
+	switch purlType {
+	case purl.TypeDebian, purl.TypeApk, purl.TypeRPM, purl.TypeAlpm, purl.TypeOpkg,
+		purl.TypeFlatpak, purl.TypeCOS, purl.TypeSnap, purl.TypePacman, purl.TypePortage,
+		purl.TypeNix, purl.TypeDHI:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizePythonName(name string) string {

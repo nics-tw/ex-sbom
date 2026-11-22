@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,7 +23,13 @@ import (
 )
 
 func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, string, time.Time, error) {
-	refToName := getCdxBomRefToName(bom.Components)
+	components := flattenCdxComponents(nil, bom.Components)
+	refToName := getCdxBomRefToName(&components)
+	keys := getCdxComponents(&components)
+	componentInfo, observation, err := getCdxComponentInfo(&components, rawData, name, keys, refToName)
+	if err != nil {
+		return FormattedSBOM{}, "", time.Time{}, err
+	}
 
 	// metadata.component represents the application being described, not a real
 	// dependency. Mirror SPDX's treatment of SPDXRef-DOCUMENT: register the ref so
@@ -41,23 +49,17 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	// from the BOMRef using nameFromBOMRef.
 	resolveMissingRefs(bom.Dependencies, refToName)
 
-	c := getCdxComponents(bom.Components)
 	dependency := getCdxDep(bom.Dependencies, refToName, rootRef)
-	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(bom.Components), refToName, rootRef)
-
-	componentInfo, observation, err := getCdxComponentInfo(bom.Components, rawData, name)
-	if err != nil {
-		return FormattedSBOM{}, "", time.Time{}, err
-	}
+	dependencyLevel := getCdxDependencyDepthMap(bom, getCdxBomRef(&components), refToName, rootRef)
 
 	result := FormattedSBOM{
-		Components:        c,
+		Components:        slices.AppendSeq(make([]string, 0, len(componentInfo)), maps.Keys(componentInfo)),
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
 		ComponentInfo:     componentInfo,
-		ReportSource:      observedSource(cdxReportPackages(bom.Components), componentInfo, observation),
+		ReportSource:      observedSource(cdxReportPackages(components), componentInfo, observation),
 	}
 
 	withVuln := []string{}
@@ -185,7 +187,7 @@ func resolveMissingRefs(deps *[]cdx.Dependency, refToName map[string]string) {
 }
 
 func getCdxComponents(input *[]cdx.Component) []string {
-	var components []string
+	components := []string{}
 
 	if input != nil {
 		for _, c := range *input {
@@ -193,7 +195,7 @@ func getCdxComponents(input *[]cdx.Component) []string {
 		}
 	}
 
-	return util.StringSlice(components)
+	return components
 }
 
 func getCdxBomRef(input *[]cdx.Component) []string {
@@ -379,7 +381,7 @@ func getCdxDep(input *[]cdx.Dependency, refToName map[string]string, rootRef str
 	return dependency
 }
 
-func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) (map[string]Component, file.QueryObservation, error) {
+func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string, names []string, refToName map[string]string) (map[string]Component, file.QueryObservation, error) {
 	componentInfo := make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -401,13 +403,19 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string) 
 		return nil, file.QueryObservation{}, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 
+	reserved := componentNames(names)
 	if input != nil {
 		for _, c := range *input {
-			if _, exists := componentInfo[c.Name]; exists {
-				continue
+			identity := c.PackageURL
+			if identity == "" {
+				identity = c.Version
+			}
+			key := componentKey(c.Name, c.BOMRef, identity, reserved, componentInfo)
+			if c.BOMRef != "" {
+				refToName[c.BOMRef] = key
 			}
 			vulns := packageFindings(vulnPkgs, file.IdentifyPackage(c.Name, c.Version, c.PackageURL))
-			componentInfo[c.Name] = Component{
+			componentInfo[key] = Component{
 				Name:       c.Name,
 				Version:    c.Version,
 				VulnNumber: len(vulns),
@@ -479,14 +487,20 @@ func getCdxLicences(input *cdx.Licenses) string {
 	return licences.String()
 }
 
-func cdxReportPackages(components *[]cdx.Component) []file.PackageVersion {
-	if components == nil {
-		return nil
+func flattenCdxComponents(flat []cdx.Component, components *[]cdx.Component) []cdx.Component {
+	if components != nil {
+		for _, component := range *components {
+			flat = append(flat, component)
+			flat = flattenCdxComponents(flat, component.Components)
+		}
 	}
-	packages := make([]file.PackageVersion, 0, len(*components))
-	for _, component := range *components {
+	return flat
+}
+
+func cdxReportPackages(components []cdx.Component) []file.PackageVersion {
+	packages := make([]file.PackageVersion, 0, len(components))
+	for _, component := range components {
 		packages = append(packages, file.IdentifyPackage(component.Name, component.Version, component.PackageURL))
-		packages = append(packages, cdxReportPackages(component.Components)...)
 	}
 	return packages
 }

@@ -87,6 +87,31 @@ func TestFormatReportFileName(t *testing.T) {
 	require.Equal(t, "sbom_report_20261122_102342.pdf", FileName("   ", created))
 }
 
+func TestGeneratePreservesOriginalTextForUnavailableGlyphs(t *testing.T) {
+	for _, language := range []string{English, TraditionalChinese} {
+		t.Run(language, func(t *testing.T) {
+			var output bytes.Buffer
+			report := Report{
+				Project:  domain.ProjectInfo{Name: "𠮷祥專案"},
+				Version:  "release-🧪-1",
+				Language: language,
+				SBOM:     ssbom.FormattedSBOM{Components: []string{"測試𠮷元件", "control\u202Etest"}},
+			}
+			require.NoError(t, Generate(&output, report))
+			require.True(t, bytes.HasPrefix(output.Bytes(), []byte("%PDF-1.4")))
+			if tool, err := exec.LookPath("pdftotext"); err == nil {
+				command := exec.Command(tool, "-layout", "-", "-")
+				command.Stdin = bytes.NewReader(output.Bytes())
+				result, err := command.CombinedOutput()
+				require.NoError(t, err, string(result))
+				for _, original := range []string{"𠮷祥專案", "release-🧪-1", "測試𠮷元件", "control[U+202E]test"} {
+					require.Contains(t, string(result), original)
+				}
+			}
+		})
+	}
+}
+
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) {

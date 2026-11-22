@@ -31,10 +31,15 @@ const samples = Number(count);
 assert(binary && dbPath && manifestPath && Number.isSafeInteger(samples) && samples > 0,
   "usage: node tests/perf/measure.mjs SERVER_BINARY DUCKDB MANIFEST_JSON [SAMPLES]");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+assert(Number.isSafeInteger(manifest.target_project_id) && manifest.target_project_id > 0,
+  "invalid fixture project ID");
+assert(typeof manifest.first_version === "string" && manifest.first_version.length > 0 &&
+  typeof manifest.second_version === "string" && manifest.second_version.length > 0 &&
+  typeof manifest.search_term === "string", "invalid fixture manifest");
 const root = "/projects/" + manifest.target_project_id;
 const search = root + "/search?" + new URLSearchParams({ q: manifest.search_term });
 const diff = root + "/diff?" + new URLSearchParams({ a: manifest.first_version, b: manifest.second_version });
-const topology = root + "/sboms/" + manifest.first_version + "/topology";
+const topology = root + "/sboms/" + encodeURIComponent(manifest.first_version) + "/topology";
 
 function summarize(values) {
   assert(values.length > 0 && values.every(Number.isFinite));
@@ -89,7 +94,7 @@ async function withServer(action) {
 function operation(path, expected) {
   return async baseURL => {
     const start = performance.now();
-    const response = await fetch(baseURL + path, { signal: AbortSignal.timeout(30_000) });
+    const response = await fetch(baseURL + path, { redirect: "error", signal: AbortSignal.timeout(30_000) });
     const body = await response.arrayBuffer();
     const elapsed = performance.now() - start;
     assert.equal(response.status, 200, path);

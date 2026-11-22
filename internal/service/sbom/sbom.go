@@ -144,6 +144,38 @@ func compareVulns(a, b Vuln) int {
 	)
 }
 
+func componentNames(names []string) map[string]int {
+	reserved := make(map[string]int, len(names))
+	for _, name := range names {
+		reserved[name]++
+	}
+	return reserved
+}
+
+// Keep name keys for unique names. For shared names, use source references so
+// the graph and component records agree even when the input order changes.
+func componentKey(name, ref, fallback string, reserved map[string]int, components map[string]Component) string {
+	if reserved[name] == 1 {
+		return name
+	}
+	if ref == "" {
+		ref = fallback
+	}
+	key := name + " (" + ref + ")"
+	if ref == "" {
+		key = name + " (component)"
+	}
+	candidate := key
+	for suffix := 2; ; suffix++ {
+		_, reservedName := reserved[candidate]
+		_, used := components[candidate]
+		if !reservedName && !used {
+			return candidate
+		}
+		candidate = key + " #" + strconv.Itoa(suffix)
+	}
+}
+
 // HashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
 // Report provenance can change on a repeated scan without changing its identity.
 // Call sortFormattedSBOM first to normalize slice order.

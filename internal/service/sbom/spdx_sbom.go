@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,18 +33,17 @@ const (
 )
 
 func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string, error) {
-	c := getSpdxComponents(*document)
+	names := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
-	dependency := getSpdxDep(*document, refToName)
-	dependencyLevel := getSpdxDependencyDepthMap(*document, refToName)
-
-	componentInfo, observation, err := getSpdxComponentInfo(*document, rawData, name)
+	componentInfo, observation, err := getSpdxComponentInfo(*document, rawData, name, names, refToName)
 	if err != nil {
 		return FormattedSBOM{}, "", err
 	}
 
+	dependency := getSpdxDep(*document, refToName)
+	dependencyLevel := getSpdxDependencyDepthMap(*document, refToName)
 	bom := FormattedSBOM{
-		Components:        c,
+		Components:        slices.AppendSeq(make([]string, 0, len(componentInfo)), maps.Keys(componentInfo)),
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
@@ -219,7 +220,7 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, nameMap map[string]string) ma
 }
 
 func getSpdxComponents(input spdx.Document) []string {
-	var components []string
+	components := []string{}
 
 	for _, p := range input.Packages {
 		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
@@ -227,9 +228,7 @@ func getSpdxComponents(input spdx.Document) []string {
 		}
 	}
 
-	// Currently there's some bugs that will result in duplicated package information existing at the same time for some SBOM scanning tool
-	// ref: https://github.com/aquasecurity/trivy/issues/7824
-	return util.StringSlice(components)
+	return components
 }
 
 func getSpdxIdentifierToName(input spdx.Document) map[string]string {
@@ -280,7 +279,7 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (map[string]Component, file.QueryObservation, error) {
+func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, names []string, refToName map[string]string) (map[string]Component, file.QueryObservation, error) {
 	var result = make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -302,13 +301,14 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (m
 		return nil, file.QueryObservation{}, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 
+	reserved := componentNames(names)
 	for _, p := range input.Packages {
-		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
-			if _, exists := result[p.PackageName]; exists {
-				continue
-			}
+		ref := string(p.PackageSPDXIdentifier)
+		if ref != "" && !isGeneratedRoot(ref) {
+			key := componentKey(p.PackageName, ref, p.PackageVersion, reserved, result)
+			refToName[ref] = key
 			vulns := packageFindings(vulnPkgs, spdxReportPackage(p))
-			result[p.PackageName] = Component{
+			result[key] = Component{
 				Name:       p.PackageName,
 				Version:    p.PackageVersion,
 				VulnNumber: len(vulns),
