@@ -105,11 +105,10 @@ const (
 )
 
 // maxSupportedCDXSpec is the highest CycloneDX spec version the decoder library supports.
-const maxSupportedCDXSpec = cdx.SpecVersion1_6
+const maxSupportedCDXSpec = cdx.SpecVersion1_7
 
-// downgradeCDXSpecVersion replaces the specVersion field with the highest supported version
-// when the file declares a newer spec that the decoder library does not yet recognise.
-// CycloneDX minor versions are backward-compatible, so newer fields are simply ignored.
+// downgradeCDXSpecVersion leaves supported inputs intact. For newer versions,
+// it substitutes the highest supported version for a best-effort import.
 func downgradeCDXSpecVersion(data []byte) []byte {
 	var generic map[string]json.RawMessage
 	if err := json.Unmarshal(data, &generic); err != nil {

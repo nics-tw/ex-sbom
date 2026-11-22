@@ -7,11 +7,16 @@
 package ssbom
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
 	"time"
 
+	cdx "github.com/CycloneDX/cyclonedx-go"
+	"github.com/google/osv-scalibr/extractor/filesystem"
+	scancdx "github.com/google/osv-scalibr/extractor/filesystem/sbom/cdx"
 	sbomreader "github.com/spdx/tools-golang/json"
 	"github.com/spdx/tools-golang/spdx"
 
@@ -355,8 +360,6 @@ func TestCompareSpecVersions(t *testing.T) {
 }
 
 func TestDowngradeCDXSpecVersion(t *testing.T) {
-	supported := "1.6"
-
 	extract := func(data []byte) string {
 		var generic map[string]json.RawMessage
 		if err := json.Unmarshal(data, &generic); err != nil {
@@ -368,22 +371,20 @@ func TestDowngradeCDXSpecVersion(t *testing.T) {
 	}
 
 	t.Run("newer double-digit spec is downgraded", func(t *testing.T) {
-		// Regression: "1.10" is newer than "1.6" and must be downgraded.
+		// Regression: "1.10" is newer than "1.7" and must be downgraded.
 		data := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.10"}`)
 		out := downgradeCDXSpecVersion(data)
-		assert.Equal(t, supported, extract(out))
+		assert.Equal(t, "1.7", extract(out))
 	})
 
-	t.Run("supported spec is unchanged", func(t *testing.T) {
+	t.Run("1.6 input is unchanged", func(t *testing.T) {
 		data := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.6"}`)
-		out := downgradeCDXSpecVersion(data)
-		assert.Equal(t, supported, extract(out))
+		assert.Equal(t, data, downgradeCDXSpecVersion(data))
 	})
 
 	t.Run("older spec is unchanged", func(t *testing.T) {
 		data := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.4"}`)
-		out := downgradeCDXSpecVersion(data)
-		assert.Equal(t, "1.4", extract(out))
+		assert.Equal(t, data, downgradeCDXSpecVersion(data))
 	})
 
 	t.Run("unparseable version is left untouched", func(t *testing.T) {
@@ -397,4 +398,39 @@ func TestDowngradeCDXSpecVersion(t *testing.T) {
 		out := downgradeCDXSpecVersion(data)
 		assert.Equal(t, data, out)
 	})
+}
+
+func TestCycloneDX17ImportInput(t *testing.T) {
+	path := "testdata/cyclonedx-1.7.cdx.json"
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	input := downgradeCDXSpecVersion(raw)
+	require.Equal(t, raw, input, "native 1.7 input must reach the decoder and scanner unchanged")
+
+	var bom cdx.BOM
+	decoder := cdx.NewBOMDecoder(bytes.NewReader(input), cdx.BOMFileFormatJSON)
+	require.NoError(t, decoder.Decode(&bom))
+	require.Equal(t, cdx.SpecVersion1_7, bom.SpecVersion)
+	require.NotNil(t, bom.Citations)
+	require.Len(t, *bom.Citations, 1)
+	citation := (*bom.Citations)[0]
+	require.NotNil(t, citation.AttributedTo)
+	assert.Equal(t, "fixture-app", string(*citation.AttributedTo))
+
+	inventory, err := (&scancdx.Extractor{}).Extract(context.Background(), &filesystem.ScanInput{
+		Path:   path,
+		Reader: bytes.NewReader(input),
+	})
+	require.NoError(t, err)
+	var packages []string
+	for _, pkg := range inventory.Packages {
+		packages = append(packages, pkg.PURLType+"/"+pkg.Name+"@"+pkg.Version)
+	}
+	assert.ElementsMatch(t, []string{"npm/lodash@4.17.20", "npm/minimist@1.2.5"}, packages)
+}
+
+func TestCycloneDX17PreviewRejectsMalformedComponents(t *testing.T) {
+	service := NewService(nil, nil)
+	_, _, _, err := service.Preview([]byte(`{"bomFormat":"CycloneDX","specVersion":"1.7","components":{}}`))
+	require.ErrorIs(t, err, ErrCycloneDXParseFailed)
 }

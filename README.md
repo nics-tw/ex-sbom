@@ -23,6 +23,7 @@ ex-sbom is packaged as a single executable that embeds the application pages, lo
 
 - **Multi-project management** — organize your SBOMs into named projects, so you can manage them per software product or system.
 - **Dual-format import** — parse and normalize both CycloneDX JSON and SPDX JSON into a unified internal representation.
+  CycloneDX JSON is read directly through 1.7. For a newer declared version, ex-sbom attempts import using 1.7 compatibility and may ignore fields introduced after 1.7.
 - **Dependency graph visualization** — explore the full dependency tree layer by layer, and see the relationships between components.
 - **Vulnerability impact chains** — reverse-dependency traversal shows how a vulnerable component impacts the rest of your system along the supply chain.
 - **Version control** — each scan result is persisted as a version, keeping the history so you can trace and compare over time.
