@@ -1,0 +1,12 @@
+{
+  "name": "ex-sbom-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}

@@ -32,3 +32,37 @@ jobs:
 
       - name: Frontend tests
         run: node --test "tests/js/*.test.mjs"
+
+      - name: Browser test dependencies
+        working-directory: tests/e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: tests/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Corrupted SBOM recovery
+        run: go test -tags e2e -run "^TestCorruptedRecordsStayOutOfAnalysis$" .
+
+      - name: Build browser test service
+        run: go test -tags e2e -c -o "${RUNNER_TEMP}/ex-sbom-browser.test" .
+
+      - name: Browser smoke test
+        working-directory: tests/e2e
+        env:
+          EX_SBOM_E2E_BINARY: ${{ runner.temp }}/ex-sbom-browser.test
+        run: npm run test:smoke
+
+      - name: Verify performance measurement entry point
+        run: |
+          perf_dir="$(mktemp -d)"
+          go run ./tests/perf/cmd/seed -db "$perf_dir/data.duckdb" -versions 2 -components 8 > "$perf_dir/fixture.json"
+          node tests/perf/measure.mjs "${RUNNER_TEMP}/ex-sbom-browser.test" "$perf_dir/data.duckdb" "$perf_dir/fixture.json" 1
+
+      - name: Upload browser failure details
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-test-failures
+          path: tests/e2e/test-results/
+          if-no-files-found: ignore
