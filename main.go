@@ -46,8 +46,8 @@ var image embed.FS
 //go:embed static/img/apple-touch-icon-precomposed.png
 var image2 embed.FS
 
-//go:embed static/js
-var staticJS embed.FS
+//go:embed static/js static/css
+var staticAssets embed.FS
 
 const (
 	appName    = "ex-sbom"
@@ -245,6 +245,6 @@ func setupSSR(r *gin.Engine) {
 		precomposedHandler.ServeHTTP(c.Writer, c.Request)
 	})
 
-	jsFS, _ := fs.Sub(staticJS, "static/js")
-	r.StaticFS("/static/js", http.FS(jsFS))
+	assetsFS, _ := fs.Sub(staticAssets, "static")
+	r.StaticFS("/static", http.FS(assetsFS))
 }

@@ -93,6 +93,43 @@ function versionRow(page, version) {
   });
 }
 
+test("upload dialog keeps keyboard focus and returns it when dismissed", async ({ page, service }) => {
+  await page.goto(service.url);
+  const trigger = page.locator("#select-sbom-btn");
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAccessibleName(/Select SBOM file|選擇 SBOM 檔案/);
+  await expect(page.locator("#sbom-pick-file-btn")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#sbom-modal-cancel")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.locator("#sbom-pick-file-btn")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await page.locator("#sbom-file-input").setInputFiles(sbom("keyboard-fixture", "1.0.0"));
+  await page.locator("#sbom-modal-preview-btn").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#sbom-version-input")).toBeFocused();
+  const previewComponent = page.locator("#sbom-preview-summary").getByRole("button", { name: /keyboard-fixture/ });
+  await previewComponent.focus();
+  await page.keyboard.press("Enter");
+  const componentDialog = page.getByRole("dialog", { name: /Component details.*keyboard-fixture/i });
+  await expect(componentDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(componentDialog).toBeHidden();
+  await expect(previewComponent).toBeFocused();
+  await page.locator("#sbom-modal-back-btn").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#sbom-pick-file-btn")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+});
+
 test("@smoke creates a project, uploads and previews an SBOM, saves it and downloads it after reload", async ({ page, service }) => {
   await page.goto(service.url);
   const project = await createProject(page, "Browser fixture");
@@ -100,10 +137,21 @@ test("@smoke creates a project, uploads and previews an SBOM, saves it and downl
   await page.reload();
   await selectProject(page, project, "Browser fixture");
   await versionRow(page, "First release").locator(".version-load-btn").click();
+  const reportButton = page.getByRole("button", { name: "Download PDF Report" });
+  const reportStatus = page.locator("#tab-content").getByRole("status");
+  await page.route("**/report?*", route => route.fulfill({ status: 500 }), { times: 1 });
+  await reportButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(reportStatus).toHaveText(/Could not create (?:the )?PDF report/i);
+  await expect(reportButton).toBeEnabled();
+  await expect(reportButton).toBeFocused();
+
   const downloadEvent = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download PDF Report" }).click();
+  await page.keyboard.press("Enter");
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toMatch(/^First release.*\.pdf$/i);
+  await expect(reportStatus).toContainText(download.suggestedFilename());
+  await expect(reportStatus).toContainText(/browser.*downloads/i);
   const handle = await open(await download.path(), "r");
   try {
     const result = await handle.read(Buffer.alloc(5));
@@ -120,21 +168,80 @@ test("searches, compares, renames and deletes versions across windows and a serv
   await upload(page, sbom("fixture-library", "2.0.0"), "After");
 
   await page.locator("#search-input").fill("fixture-library");
-  await expect(page.locator("#search-results")).toContainText("fixture-library");
+  const searchResult = page.locator("#search-results").getByRole("button", { name: /fixture-library.*After/ });
+  await expect(searchResult).toBeVisible();
+  await searchResult.focus();
+  await page.keyboard.press("Enter");
+  const componentDialog = page.getByRole("dialog", { name: /Component details.*fixture-library/i });
+  await expect(componentDialog).toBeVisible();
+  await expect(componentDialog.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(componentDialog).toBeHidden();
+  await expect(searchResult).toBeFocused();
   await page.locator("#main-tab-diff").click();
   await page.locator("#diff-select-a").selectOption("Before");
   await page.locator("#diff-select-b").selectOption("After");
   await page.locator("#diff-compare-btn").click();
   await expect(page.locator("#diff-result")).toContainText("fixture-library");
+  const comparison = page.getByRole("region", { name: /Version comparison at dependency level/ }).first();
+  await expect(comparison.getByRole("columnheader", { name: "Before" })).toBeVisible();
+  await expect(comparison.getByRole("columnheader", { name: "After" })).toBeVisible();
+  const diffSummary = page.locator("#diff-result summary").first();
+  await diffSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(comparison).toBeHidden();
+  await expect(diffSummary).toBeFocused();
+  await page.keyboard.press("Enter");
+  const newVersion = comparison.getByRole("button", { name: /2\.0\.0.*fixture-library.*After/ });
+  await newVersion.focus();
+  await page.keyboard.press("Space");
+  await expect(componentDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(newVersion).toBeFocused();
 
   const second = await context.newPage();
   await second.goto(service.url);
   await selectProject(second, project, "Two releases");
+  await second.route("**/sboms/After/topology", async route => {
+    const response = await route.fetch();
+    const json = await response.json();
+    const level = json.data.find(entry => entry.components.some(component => component.includes("fixture-library")));
+    for (let i = 1; i <= 10; i++) level.components.push(`extra-component-${i}`);
+    await route.fulfill({ response, json });
+  });
   await versionRow(second, "After").locator(".version-load-btn").click();
   await expect(second.locator("#tab-content")).toContainText("fixture-library");
+  const topologyLevel = second.locator("#tab-content button[aria-controls^='topology-level-']").first();
+  await expect(topologyLevel).toHaveAttribute("aria-expanded", "true");
+  await topologyLevel.focus();
+  await second.keyboard.press("Space");
+  await expect(topologyLevel).toHaveAttribute("aria-expanded", "false");
+  await second.keyboard.press("Enter");
+  const showAll = second.locator("#tab-content").getByRole("button", { name: /Show all 11 components/ });
+  const extraComponent = second.getByRole("button", { name: "extra-component-10", exact: true });
+  await expect(showAll).toHaveAttribute("aria-expanded", "false");
+  await expect(extraComponent).toBeHidden();
+  await showAll.focus();
+  await second.keyboard.press("Enter");
+  const showLess = second.locator("#tab-content").getByRole("button", { name: /Show less/ });
+  await expect(showLess).toHaveAttribute("aria-expanded", "true");
+  await expect(showLess).toBeFocused();
+  await second.keyboard.press("Tab");
+  await expect(extraComponent).toBeFocused();
+  await showLess.focus();
+  await second.keyboard.press("Space");
+  await expect(extraComponent).toBeHidden();
+  await expect(showAll).toBeFocused();
+  const topologyComponent = second.locator("#tab-content").getByRole("button", { name: /fixture-library/ });
+  await topologyComponent.focus();
+  await second.keyboard.press("Enter");
+  await expect(second.getByRole("dialog", { name: /Component details.*fixture-library/i })).toBeVisible();
+  await second.keyboard.press("Escape");
+  await expect(topologyComponent).toBeFocused();
   second.once("dialog", dialog => dialog.accept("Renamed"));
   await versionRow(second, "After").locator(".version-rename-btn").click();
   await expect(versionRow(second, "Renamed")).toBeVisible();
+  await second.close();
   await page.reload();
   await selectProject(page, project, "Two releases");
   await expect(versionRow(page, "Renamed")).toBeVisible();
@@ -158,6 +265,7 @@ test("searches, compares, renames and deletes versions across windows and a serv
   await page.locator("#project-delete-btn").click();
   await expect(page.locator("#project-select option").filter({ hasText: "Renamed project" })).toHaveCount(0);
   await expect(page.locator("#project-current")).toHaveText("(default)");
+  await page.close();
 });
 
 test("cancels the previous project request and keeps the latest project selected", async ({ page, service }) => {
@@ -220,9 +328,11 @@ test("keeps the latest version visible during slow topology requests", async ({ 
     }
   }, { times: 1 });
   try {
-    await page.locator('#file-tabs [data-version="Earlier"]').click();
+    await page.locator('#file-tabs [data-version="Earlier"] .sbom-tab-label').focus();
+    await page.keyboard.press('Enter');
     await requested;
-    await page.locator('#file-tabs [data-version="Later"]').click();
+    await page.locator('#file-tabs [data-version="Later"] .sbom-tab-label').focus();
+    await page.keyboard.press('Space');
     await expect(content).toContainText("later-library");
     expect((await earlierResponse).failure()?.errorText).toContain("ERR_ABORTED");
     allowEarlier();
@@ -331,4 +441,32 @@ test("preserves a chosen interface language across navigation and reload", async
   await page.locator("#back-btn").click();
   await expect(page).toHaveURL(new URL("/", service.url).href);
   await expect(html).toHaveAttribute("lang", "en");
+});
+
+test("provides bilingual landmarks, field names, and keyboard skip links", async ({ page, service }) => {
+  await page.goto(service.url);
+  const main = page.getByRole("main");
+  const skipLink = page.getByRole("link", { name: "Skip to main content" });
+
+  await expect(page.getByRole("navigation", { name: "Site navigation" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Project", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "New project name" })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search components or CVEs" })).toBeVisible();
+
+  await page.keyboard.press("Tab");
+  await expect(skipLink).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(main).toBeFocused();
+
+  await page.getByRole("button", { name: "正體中文" }).click();
+  await expect(page.getByRole("searchbox", { name: "搜尋元件或 CVE" })).toBeVisible();
+  await page.getByRole("link", { name: "操作教學" }).click();
+  await expect(page).toHaveTitle("ex-sbom · 操作教學");
+  await expect(main.getByRole("heading", { level: 1, name: "ex-sbom 操作教學" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "網站導覽" })).toBeVisible();
+
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "跳至主要內容" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(main).toBeFocused();
 });
