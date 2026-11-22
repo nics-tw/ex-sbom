@@ -5,9 +5,14 @@
 package report
 
 import (
-	"fmt"
+	"bytes"
+	"errors"
+	"log/slog"
+	"mime"
 	"net/http"
+	"time"
 
+	"ex-sbom/internal/domain"
 	"ex-sbom/internal/handler/middleware"
 	"ex-sbom/internal/service/pdf"
 	ssbom "ex-sbom/internal/service/sbom"
@@ -21,51 +26,46 @@ type Handler struct {
 	svc *ssbom.Service
 }
 
-// New creates a new report Handler.
 func New(svc *ssbom.Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// CreatePDF generates a PDF report for the given SBOM and sends it as a download.
+// CreatePDF generates a PDF for one project and version.
 // GET /projects/:id/sboms/:name/report
 func (h *Handler) CreatePDF(c *gin.Context) {
-	name, bom, err := h.validate(c)
+	projectID, ok := middleware.GetProjectID(c)
+	if !ok {
+		return
+	}
+	version := c.Param("name")
+	project, bom, err := h.svc.GetReportSnapshot(projectID, version)
 	if err != nil {
-		if !c.IsAborted() {
-			c.JSON(http.StatusBadRequest, gin.H{msg.RespErr: err.Error()})
+		if errors.Is(err, domain.ErrVersionNotFound) || errors.Is(err, domain.ErrProjectNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{msg.RespErr: err.Error()})
+			return
 		}
+		slog.Error("Failed to load SBOM report", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: "failed to load SBOM report"})
 		return
 	}
 
-	d := pdf.GetReportData(bom)
-	m := pdf.GetMaroto(d)
-
-	doc, err := m.Generate()
-	if err != nil {
+	language := pdf.Language(c.Query("lang"))
+	createdAt := time.Now().UTC()
+	report := pdf.Report{
+		Project: project, Version: version, GeneratedAt: createdAt,
+		Language: language, SBOM: bom,
+	}
+	var body bytes.Buffer
+	if err := pdf.Generate(&body, report); err != nil {
+		slog.Error("Failed to create PDF report", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: "failed to create PDF"})
 		return
 	}
 
-	filename := pdf.GetFileName(name)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
-	c.Data(http.StatusOK, "application/pdf", doc.GetBytes())
-}
-
-func (h *Handler) validate(c *gin.Context) (string, ssbom.FormattedSBOM, error) {
-	name := c.Param("name")
-	if name == "" {
-		return "", ssbom.FormattedSBOM{}, fmt.Errorf("sbom name is required")
-	}
-
-	projectID, ok := middleware.GetProjectID(c)
-	if !ok {
-		return "", ssbom.FormattedSBOM{}, fmt.Errorf("project id not found in context")
-	}
-
-	bom, err := h.svc.Get(projectID, name)
-	if err != nil {
-		return "", ssbom.FormattedSBOM{}, fmt.Errorf("sbom %s not found", name)
-	}
-
-	return name, bom, nil
+	filename := pdf.FileName(version, createdAt)
+	disposition := mime.FormatMediaType("attachment", map[string]string{"filename": filename})
+	c.Header("Cache-Control", "no-store")
+	c.Header("Content-Disposition", disposition)
+	c.Header("Content-Language", language)
+	c.Data(http.StatusOK, "application/pdf", body.Bytes())
 }

@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,7 +18,7 @@ import (
 	"ex-sbom/util"
 	"ex-sbom/util/file"
 
-	"github.com/google/osv-scanner/v2/pkg/models"
+	"github.com/google/osv-scalibr/purl"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 	"github.com/spdx/tools-golang/spdx"
 	"github.com/spdx/tools-golang/spdx/v2/common"
@@ -31,23 +33,23 @@ const (
 )
 
 func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string, error) {
-	c := getSpdxComponents(*document)
+	names := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
-	dependency := getSpdxDep(*document, refToName)
-	dependencyLevel := getSpdxDependencyDepthMap(*document, refToName)
-
-	componentInfo, err := getSpdxComponentInfo(*document, rawData, name)
+	componentInfo, observation, err := getSpdxComponentInfo(*document, rawData, name, names, refToName)
 	if err != nil {
 		return FormattedSBOM{}, "", err
 	}
 
+	dependency := getSpdxDep(*document, refToName)
+	dependencyLevel := getSpdxDependencyDepthMap(*document, refToName)
 	bom := FormattedSBOM{
-		Components:        c,
+		Components:        slices.AppendSeq(make([]string, 0, len(componentInfo)), maps.Keys(componentInfo)),
 		DependencyLevel:   dependencyLevel,
 		Dependency:        dependency,
 		ReverseDependency: getReverseDep(dependency),
 		ComponentToLevel:  getComponentToLevel(dependencyLevel),
 		ComponentInfo:     componentInfo,
+		ReportSource:      observedSource(spdxReportPackages(document), componentInfo, observation),
 	}
 
 	compWithVuln := []string{}
@@ -218,7 +220,7 @@ func getSpdxDependencyDepthMap(sbom spdx.Document, nameMap map[string]string) ma
 }
 
 func getSpdxComponents(input spdx.Document) []string {
-	var components []string
+	components := []string{}
 
 	for _, p := range input.Packages {
 		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
@@ -226,9 +228,7 @@ func getSpdxComponents(input spdx.Document) []string {
 		}
 	}
 
-	// Currently there's some bugs that will result in duplicated package information existing at the same time for some SBOM scanning tool
-	// ref: https://github.com/aquasecurity/trivy/issues/7824
-	return util.StringSlice(components)
+	return components
 }
 
 func getSpdxIdentifierToName(input spdx.Document) map[string]string {
@@ -279,7 +279,7 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (map[string]Component, error) {
+func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, names []string, refToName map[string]string) (map[string]Component, file.QueryObservation, error) {
 	var result = make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -287,7 +287,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (m
 		Data:  files,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
+		return nil, file.QueryObservation{}, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
 	}
 
 	defer func() {
@@ -296,20 +296,23 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (m
 		}
 	}()
 
-	vulnPkgs, err := file.GetScanResult(path)
+	vulnPkgs, observation, err := file.GetScanResult(path)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
-		return nil, fmt.Errorf("%w: %w", ErrScanFailed, err)
+		return nil, file.QueryObservation{}, fmt.Errorf("%w: %w", ErrScanFailed, err)
 	}
 
-	trimmedVulnPkgs := trimPublicationPrefix(vulnPkgs)
-
+	reserved := componentNames(names)
 	for _, p := range input.Packages {
-		if p.PackageSPDXIdentifier != "" && !isGeneratedRoot(string(p.PackageSPDXIdentifier)) {
-			result[p.PackageName] = Component{
+		ref := string(p.PackageSPDXIdentifier)
+		if ref != "" && !isGeneratedRoot(ref) {
+			key := componentKey(p.PackageName, ref, p.PackageVersion, reserved, result)
+			refToName[ref] = key
+			vulns := packageFindings(vulnPkgs, spdxReportPackage(p))
+			result[key] = Component{
 				Name:       p.PackageName,
 				Version:    p.PackageVersion,
-				VulnNumber: getVulnNumber(p.PackageName, trimmedVulnPkgs),
-				Vulns:      getVulns(p.PackageName, p.PackageVersion, trimmedVulnPkgs),
+				VulnNumber: len(vulns),
+				Vulns:      vulns,
 				Licences:   getSpdxLicences(p.PackageLicenseDeclared),
 			}
 		}
@@ -349,7 +352,7 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string) (m
 		}
 	}
 
-	return result, nil
+	return result, observation, nil
 }
 
 // the implement of the common.DocElementID interface containing three possible ID
@@ -395,30 +398,41 @@ func isSPDXSpecialValue(input string) bool {
 	return input == spdxNoAssertion || input == spdxNone
 }
 
-// some document will have publication naming as prefix for the component name containing vulnerability
-// for example, `maven:guava`
-// but the vulnerability database will only contain the component name without the prefix
-// so we need to trim the prefix for better matching
-func trimPublicationPrefix(pkgMap map[string]models.PackageVulns) map[string]models.PackageVulns {
-	var result = make(map[string]models.PackageVulns)
-
-	for k, v := range pkgMap {
-		if strings.Contains(k, ":") {
-			parts := strings.SplitN(k, ":", 2)
-
-			result[parts[1]] = v
-		}
-
-		result[k] = v
-	}
-
-	return result
-}
-
 func getSpdxLicences(licenceInfo string) string {
 	if len(licenceInfo) == 0 || licenceInfo == "NOASSERTION" {
 		return licenceInfo
 	}
 
 	return licenceInfo
+}
+
+func spdxReportPackages(document *spdx.Document) []file.PackageVersion {
+	packages := make([]file.PackageVersion, 0, len(document.Packages))
+	for _, pkg := range document.Packages {
+		if pkg.PackageSPDXIdentifier == "" || isGeneratedRoot(string(pkg.PackageSPDXIdentifier)) {
+			continue
+		}
+		packages = append(packages, spdxReportPackage(pkg))
+	}
+	return packages
+}
+
+func spdxReportPackage(pkg *spdx.Package) file.PackageVersion {
+	var chosen *purl.PackageURL
+	for _, ref := range pkg.PackageExternalReferences {
+		if ref == nil || (ref.RefType != "purl" && ref.RefType != "http://spdx.org/rdf/references/purl") {
+			continue
+		}
+		if parsed, err := purl.FromString(ref.Locator); err == nil {
+			chosen = &parsed
+		}
+	}
+	if chosen == nil {
+		return file.PackageVersion{}
+	}
+	version := chosen.Version
+	if version == "" {
+		version = pkg.PackageVersion
+	}
+	return file.IdentifyPackage(chosen.Name, version, chosen.String())
 }

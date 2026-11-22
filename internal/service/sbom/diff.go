@@ -11,6 +11,7 @@ import (
 
 // ComponentDiff represents a single component difference between two SBOMs.
 type ComponentDiff struct {
+	KeyB     string `json:"key_b,omitempty"`
 	Name     string `json:"name"`
 	VersionA string `json:"version_a,omitempty"`
 	VersionB string `json:"version_b,omitempty"`
@@ -111,15 +112,99 @@ func sameVulnRisks(a, b []Vuln) bool {
 	return true
 }
 
+type diffIdentity struct {
+	name    string
+	version string
+}
+
+type diffCandidates struct {
+	key   string
+	count int
+}
+
+func diffName(key string, component Component) string {
+	if component.Name != "" {
+		return component.Name
+	}
+	return key
+}
+
+func hasDiffAliases(components map[string]Component) bool {
+	for key, component := range components {
+		if diffName(key, component) != key {
+			return true
+		}
+	}
+	return false
+}
+
+func matchDiffComponents(a, b map[string]Component) (map[string]string, map[string]struct{}) {
+	matches := make(map[string]string)
+	matchedB := make(map[string]struct{})
+	// Preserve a matching source alias before looking for survivors by version
+	// across different aliases. Two packages can upgrade to versions that were
+	// used by a sibling in the previous document.
+	for key, compA := range a {
+		if compB, ok := b[key]; ok && diffName(key, compA) == diffName(key, compB) {
+			matches[key] = key
+			matchedB[key] = struct{}{}
+		}
+	}
+
+	pairUnique := func(includeVersion bool) {
+		indexA := unmatchedDiffComponents(a, matches, includeVersion)
+		indexB := unmatchedDiffComponents(b, matchedB, includeVersion)
+		for identity, keysA := range indexA {
+			keysB := indexB[identity]
+			if keysA.count == 1 && keysB.count == 1 {
+				matches[keysA.key] = keysB.key
+				matchedB[keysB.key] = struct{}{}
+			}
+		}
+	}
+
+	pairUnique(true)
+	pairUnique(false)
+	return matches, matchedB
+}
+
+func unmatchedDiffComponents[T any](components map[string]Component, matched map[string]T, includeVersion bool) map[diffIdentity]diffCandidates {
+	index := make(map[diffIdentity]diffCandidates)
+	for key, component := range components {
+		if _, ok := matched[key]; ok {
+			continue
+		}
+		identity := diffIdentity{name: diffName(key, component)}
+		if includeVersion {
+			identity.version = component.Version
+		}
+		entry := index[identity]
+		entry.key = key
+		entry.count++
+		index[identity] = entry
+	}
+	return index
+}
+
 // DiffSBOMs compares two FormattedSBOMs and returns added/removed/changed components grouped by level.
 func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 	result := DiffResult{ByLevel: make(map[int]*LevelDiff)}
+	var matches map[string]string
+	var matchedB map[string]struct{}
+	if hasDiffAliases(a.ComponentInfo) || hasDiffAliases(b.ComponentInfo) {
+		matches, matchedB = matchDiffComponents(a.ComponentInfo, b.ComponentInfo)
+	}
 
 	for name, compA := range a.ComponentInfo {
 		levelA := a.ComponentToLevel[name]
 		cvssA, epssA, levA, severeA := riskFields(compA)
 
+		keyB := name
 		compB, exists := b.ComponentInfo[name]
+		if matches != nil {
+			keyB, exists = matches[name]
+			compB = b.ComponentInfo[keyB]
+		}
 		if !exists {
 			getOrCreateLevel(&result, levelA).Removed = append(
 				getOrCreateLevel(&result, levelA).Removed,
@@ -139,7 +224,7 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 		}
 
 		cvssB, epssB, levB, severeB := riskFields(compB)
-		levelB := b.ComponentToLevel[name]
+		levelB := b.ComponentToLevel[keyB]
 		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber ||
 			levelA != levelB || compA.ContainsVulnDep != compB.ContainsVulnDep ||
 			!sameVulnRisks(compA.Vulns, compB.Vulns) {
@@ -163,6 +248,9 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 				SevereB:    severeB,
 			}
 
+			if keyB != name {
+				diff.KeyB = keyB
+			}
 			getOrCreateLevel(&result, levelA).Changed = append(
 				getOrCreateLevel(&result, levelA).Changed, diff,
 			)
@@ -170,7 +258,11 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 	}
 
 	for name, compB := range b.ComponentInfo {
-		if _, exists := a.ComponentInfo[name]; !exists {
+		_, exists := a.ComponentInfo[name]
+		if matchedB != nil {
+			_, exists = matchedB[name]
+		}
+		if !exists {
 			levelB := b.ComponentToLevel[name]
 			cvssB, epssB, levB, severeB := riskFields(compB)
 

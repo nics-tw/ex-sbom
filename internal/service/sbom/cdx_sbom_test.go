@@ -541,7 +541,7 @@ func TestGetCdxComponents(t *testing.T) {
 					Name: "component-a", // Duplicate
 				},
 			},
-			expected: []string{"component-a", "component-b"}, // Should be deduplicated
+			expected: []string{"component-a", "component-a", "component-b"},
 		},
 		{
 			name: "empty component names",
@@ -556,7 +556,7 @@ func TestGetCdxComponents(t *testing.T) {
 					Name: "", // Duplicate empty name
 				},
 			},
-			expected: []string{"", "component-b"}, // Empty names should be included but deduplicated
+			expected: []string{"", "", "component-b"},
 		},
 		{
 			name: "mixed case",
@@ -580,7 +580,7 @@ func TestGetCdxComponents(t *testing.T) {
 					Name: "component-c",
 				},
 			},
-			expected: []string{"", "component-a", "component-b", "component-c"},
+			expected: []string{"", "", "component-a", "component-a", "component-b", "component-c"},
 		},
 	}
 

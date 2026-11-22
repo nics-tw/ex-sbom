@@ -210,6 +210,71 @@ func TestDiffSBOMs_ChangedVersion(t *testing.T) {
 	assert.Equal(t, "1.25.0", level0.Changed[0].VersionB)
 }
 
+func TestDiffSBOMs_ChangedComponentUsesEachSnapshotKey(t *testing.T) {
+	a := makeSBOM(map[string]Component{
+		"fixture": {Name: "fixture", Version: "1.0"},
+	}, map[string]int{"fixture": 1})
+	b := makeSBOM(map[string]Component{
+		"fixture (first)":  {Name: "fixture", Version: "1.0"},
+		"fixture (second)": {Name: "fixture", Version: "2.0"},
+	}, map[string]int{"fixture (first)": 2, "fixture (second)": 3})
+
+	result := DiffSBOMs(a, b)
+	if assert.Len(t, result.ByLevel[1].Changed, 1) {
+		changed := result.ByLevel[1].Changed[0]
+		assert.Equal(t, "fixture", changed.Name)
+		assert.Equal(t, "fixture (first)", changed.KeyB)
+		assert.Equal(t, 2, *changed.LevelB)
+	}
+	assert.Equal(t, "fixture (second)", result.ByLevel[3].Added[0].Name)
+}
+
+func TestDiffSBOMs_DoesNotGuessAmbiguousSameNameUpgrades(t *testing.T) {
+	a := makeSBOM(map[string]Component{
+		"fixture (first)":  {Name: "fixture", Version: "1.0"},
+		"fixture (second)": {Name: "fixture", Version: "2.0"},
+	}, nil)
+	b := makeSBOM(map[string]Component{
+		"fixture": {Name: "fixture", Version: "3.0"},
+	}, nil)
+
+	result := DiffSBOMs(a, b)
+	assert.Len(t, result.ByLevel[0].Removed, 2)
+	assert.Len(t, result.ByLevel[0].Added, 1)
+	assert.Empty(t, result.ByLevel[0].Changed)
+}
+
+func TestDiffSBOMs_MultipleSameNameUpgradesWithStableAliases(t *testing.T) {
+	a := makeSBOM(map[string]Component{
+		"fixture (first)":  {Name: "fixture", Version: "1.0"},
+		"fixture (second)": {Name: "fixture", Version: "2.0"},
+	}, nil)
+	tests := []struct {
+		name   string
+		first  string
+		second string
+	}{
+		{name: "distinct versions", first: "1.1", second: "2.1"},
+		{name: "overlapping versions", first: "2.0", second: "3.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := makeSBOM(map[string]Component{
+				"fixture (first)":  {Name: "fixture", Version: tt.first},
+				"fixture (second)": {Name: "fixture", Version: tt.second},
+			}, nil)
+
+			level := DiffSBOMs(a, b).ByLevel[0]
+			assert.Empty(t, level.Added)
+			assert.Empty(t, level.Removed)
+			assert.ElementsMatch(t, []ComponentDiff{
+				{Name: "fixture (first)", VersionA: "1.0", VersionB: tt.first, LevelA: new(int), LevelB: new(int)},
+				{Name: "fixture (second)", VersionA: "2.0", VersionB: tt.second, LevelA: new(int), LevelB: new(int)},
+			}, level.Changed)
+		})
+	}
+}
+
 func TestDiffSBOMs_ChangedVulnCount(t *testing.T) {
 	// Arrange
 	sbomA := makeSBOM(

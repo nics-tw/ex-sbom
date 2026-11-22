@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"ex-sbom/util"
+	"ex-sbom/util/file"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
@@ -35,6 +36,7 @@ type (
 		// in this case it is used for topology drawing
 		ComponentToLevel map[string]int
 		ComponentInfo    map[string]Component
+		ReportSource     *ReportSource `json:"report_source,omitempty"`
 	}
 
 	// Component is a struct that contains the information from both the original SBOM file and scanned info from the osv-scanner util
@@ -142,9 +144,43 @@ func compareVulns(a, b Vuln) int {
 	)
 }
 
+func componentNames(names []string) map[string]int {
+	reserved := make(map[string]int, len(names))
+	for _, name := range names {
+		reserved[name]++
+	}
+	return reserved
+}
+
+// Keep name keys for unique names. For shared names, use source references so
+// the graph and component records agree even when the input order changes.
+func componentKey(name, ref, fallback string, reserved map[string]int, components map[string]Component) string {
+	if reserved[name] == 1 {
+		return name
+	}
+	if ref == "" {
+		ref = fallback
+	}
+	key := name + " (" + ref + ")"
+	if ref == "" {
+		key = name + " (component)"
+	}
+	candidate := key
+	for suffix := 2; ; suffix++ {
+		_, reservedName := reserved[candidate]
+		_, used := components[candidate]
+		if !reservedName && !used {
+			return candidate
+		}
+		candidate = key + " #" + strconv.Itoa(suffix)
+	}
+}
+
 // HashSBOM returns the SHA-256 hex string of the JSON-serialized FormattedSBOM.
+// Report provenance can change on a repeated scan without changing its identity.
 // Call sortFormattedSBOM first to normalize slice order.
 func HashSBOM(sbom FormattedSBOM) string {
+	sbom.ReportSource = nil
 	b, err := json.Marshal(sbom)
 	if err != nil {
 		slog.Error("HashSBOM: unreachable marshal failure", "error", err)
@@ -372,42 +408,40 @@ func getCVSS(id string, groups []models.GroupInfo) string {
 	return ""
 }
 
-func getVulnNumber(name string, vulnMap map[string]models.PackageVulns) int {
-	if vuln, ok := vulnMap[name]; ok {
-		return len(vuln.Vulnerabilities)
-	}
+func getVulns(pkg models.PackageVulns, version string) []Vuln {
+	var vulns []Vuln
+	for _, v := range pkg.Vulnerabilities {
+		if v == nil {
+			continue
+		}
+		allFixVers := getAllFixVersions(v)
+		slices.Sort(allFixVers)
+		suggestFix := findNearestVersions(version, allFixVers)
+		otherFixVer := getDiff(allFixVers, suggestFix)
 
-	return 0
+		identifier := getCVEFromAliases(v.Aliases)
+		if identifier == "" {
+			identifier = v.Id
+		}
+		vulns = append(vulns, Vuln{
+			ID:                identifier,
+			Summary:           v.Summary,
+			Details:           v.Details,
+			CVSSScore:         getCVSS(v.Id, pkg.Groups),
+			SuggestFixVersion: getVersionString(suggestFix),
+			OtherFixVersions:  getVersionString(otherFixVer),
+
+			FixVersions: allFixVers,
+		})
+	}
+	return vulns
 }
 
-func getVulns(name string, version string, vulnMap map[string]models.PackageVulns) []Vuln {
-	if vuln, ok := vulnMap[name]; ok {
-		var vulns []Vuln
-		for _, v := range vuln.Vulnerabilities {
-			if v == nil {
-				continue
-			}
-			allFixVers := getAllFixVersions(v)
-			slices.Sort(allFixVers)
-			suggestFix := findNearestVersions(version, allFixVers)
-			otherFixVer := getDiff(allFixVers, suggestFix)
-
-			vulns = append(vulns, Vuln{
-				ID:                getCVEFromAliases(v.Aliases),
-				Summary:           v.Summary,
-				Details:           v.Details,
-				CVSSScore:         getCVSS(v.Id, vuln.Groups),
-				SuggestFixVersion: getVersionString(suggestFix),
-				OtherFixVersions:  getVersionString(otherFixVer),
-
-				FixVersions: allFixVers,
-			})
-		}
-
-		return vulns
+func packageFindings(pkgs map[file.PackageVersion]models.PackageVulns, key file.PackageVersion) []Vuln {
+	if key.Name == "" {
+		return nil
 	}
-
-	return nil
+	return getVulns(pkgs[key], key.Version)
 }
 
 func getCVEFromAliases(aliases []string) string {

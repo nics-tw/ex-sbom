@@ -66,11 +66,9 @@ func TestGetVulnsFixVersionsIgnoreScannerOrder(t *testing.T) {
 		for _, candidate := range candidates {
 			events = append(events, &osvschema.Event{Fixed: candidate})
 		}
-		return getVulns("pkg", "1.0", map[string]models.PackageVulns{
-			"pkg": {Vulnerabilities: []*osvschema.Vulnerability{{
-				Affected: []*osvschema.Affected{{Ranges: []*osvschema.Range{{Events: events}}}},
-			}}},
-		})
+		return getVulns(models.PackageVulns{Vulnerabilities: []*osvschema.Vulnerability{{
+			Affected: []*osvschema.Affected{{Ranges: []*osvschema.Range{{Events: events}}}},
+		}}}, "1.0")
 	}
 
 	forward := makeVulns("3.0", "1.2-b", "2.0", "1.2-a")
@@ -800,7 +798,7 @@ func TestGetVulns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getVulns(tt.packageName, tt.packageVer, mockVulnMap)
+			result := getVulns(mockVulnMap[tt.packageName], tt.packageVer)
 
 			// Check the length of result
 			assert.Equal(t, tt.expectedCount, len(result))
@@ -837,75 +835,6 @@ func TestGetVulns(t *testing.T) {
 			} else if tt.expectedCount == 0 {
 				// For packages with no vulns or nonexistent packages
 				assert.Nil(t, result)
-			}
-		})
-	}
-}
-
-func TestGetVulnNumber(t *testing.T) {
-	// Setup test data
-	mockVulnMap := map[string]models.PackageVulns{
-		"package1": {
-			Vulnerabilities: []*osvschema.Vulnerability{
-				{Id: "CVE-2023-1111"},
-				{Id: "CVE-2023-2222"},
-				{Id: "CVE-2023-3333"},
-			},
-		},
-		"package2": {
-			Vulnerabilities: []*osvschema.Vulnerability{
-				{Id: "CVE-2023-4444"},
-			},
-		},
-		"package3": {
-			Vulnerabilities: []*osvschema.Vulnerability{},
-		},
-	}
-
-	tests := []struct {
-		name         string
-		packageName  string
-		vulnMap      map[string]models.PackageVulns
-		expectedVuln int
-	}{
-		{
-			name:         "package with multiple vulnerabilities",
-			packageName:  "package1",
-			vulnMap:      mockVulnMap,
-			expectedVuln: 3,
-		},
-		{
-			name:         "package with single vulnerability",
-			packageName:  "package2",
-			vulnMap:      mockVulnMap,
-			expectedVuln: 1,
-		},
-		{
-			name:         "package with no vulnerabilities",
-			packageName:  "package3",
-			vulnMap:      mockVulnMap,
-			expectedVuln: 0,
-		},
-		{
-			name:         "package not in vulnerability map",
-			packageName:  "nonexistent",
-			vulnMap:      mockVulnMap,
-			expectedVuln: 0,
-		},
-		{
-			name:         "empty vulnerability map",
-			packageName:  "package1",
-			vulnMap:      map[string]models.PackageVulns{},
-			expectedVuln: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getVulnNumber(tt.packageName, tt.vulnMap)
-			if !assert.Equal(t, tt.expectedVuln, result) {
-				t.Errorf("getVulnNumber(%s, vulnMap) = %d, want %d",
-					tt.packageName, result, tt.expectedVuln)
 			}
 		})
 	}

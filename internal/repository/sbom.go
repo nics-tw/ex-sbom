@@ -21,7 +21,7 @@ import (
 var ErrVersionExists = errors.New("version already exists")
 
 // ErrVersionNotFound is returned by DeleteSBOM when no matching version exists.
-var ErrVersionNotFound = errors.New("version not found")
+var ErrVersionNotFound = domain.ErrVersionNotFound
 
 const activeProjectSBOMs = "project_id IN (SELECT id FROM projects WHERE deleted_at IS NULL)"
 

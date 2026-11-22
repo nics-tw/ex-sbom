@@ -635,7 +635,7 @@ func TestGetSpdxComponents(t *testing.T) {
 					{PackageSPDXIdentifier: "SPDXRef-pkg1-dup", PackageName: "pkg1"}, // Duplicate name
 				},
 			},
-			expected: []string{"pkg1", "pkg2"},
+			expected: []string{"pkg1", "pkg1", "pkg2"},
 		},
 		{
 			name: "document with mixed packages",
@@ -649,7 +649,7 @@ func TestGetSpdxComponents(t *testing.T) {
 					{PackageSPDXIdentifier: "DocumentRoot-something", PackageName: "doc-root"}, // Should be filtered out
 				},
 			},
-			expected: []string{"pkg1", "pkg2"},
+			expected: []string{"pkg1", "pkg1", "pkg2"},
 		},
 		{
 			name: "document with only filtered packages",

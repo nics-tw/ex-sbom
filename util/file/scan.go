@@ -6,18 +6,32 @@ package file
 
 import (
 	"errors"
+	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/google/osv-scalibr/extractor"
+	"github.com/google/osv-scalibr/purl"
+	purlecosystem "github.com/google/osv-scalibr/purl/ecosystem"
 
 	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 )
 
+var goMajorVersionSubpath = regexp.MustCompile(`v[0-9]+`)
+
 // here mimic and import the way osv-scanner/v2 scan the vulnerability
 // TODO: refactor to scan directly if possible
-func GetScanResult(localPath string) (map[string]models.PackageVulns, error) {
+func GetScanResult(localPath string) (map[PackageVersion]models.PackageVulns, QueryObservation, error) {
+	transport := &scanTransport{base: http.DefaultTransport, seen: make(map[osvRequest]osvResponse)}
 	scannerAction := osvscanner.ScannerActions{
 		SBOMPaths: []string{localPath},
+		ExperimentalScannerActions: osvscanner.ExperimentalScannerActions{
+			HTTPClient: &http.Client{
+				Transport:     transport,
+				CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+			},
+		},
 		CallAnalysisStates: map[string]bool{
 			"go":   true,
 			"rust": false,
@@ -26,39 +40,107 @@ func GetScanResult(localPath string) (map[string]models.PackageVulns, error) {
 
 	result, err := osvscanner.DoScan(scannerAction)
 	if err != nil && !errors.Is(err, osvscanner.ErrVulnerabilitiesFound) {
-		return nil, err
+		return nil, QueryObservation{}, err
 	}
 
-	nameMap := make(map[string]models.PackageVulns)
-
-	if len(result.Results) > 0 {
-		for _, r := range result.Results {
-			if len(r.Packages) > 0 {
-				for _, pkg := range r.Packages {
-					pkgName := getPackageName(pkg.Package.Name)
-
-					if pkgName != "" {
-						nameMap[pkgName] = pkg
-					}
-				}
+	// The scanner can log enrichment failures without returning them.
+	observation, err := transport.observation()
+	if err != nil {
+		return nil, QueryObservation{}, err
+	}
+	findings := make(map[PackageVersion]models.PackageVulns)
+	for _, source := range result.Results {
+		for _, pkg := range source.Packages {
+			if len(pkg.Vulnerabilities) == 0 || pkg.Package.Inventory == nil {
+				continue
+			}
+			info := pkg.Package.Inventory
+			key := packageIdentity(info.Name, info.Version, info.Ecosystem().String(), info.PURL())
+			if key.Name != "" {
+				findings[key] = pkg
 			}
 		}
 	}
-
-	return nameMap, nil
+	return findings, observation, nil
 }
 
-func getPackageName(input string) string {
-	// the pattern is like this: `symfony/http-foundation``, and we need to extract the name `http-foundation`
-	pattern := regexp.MustCompile(`(?m)\/([^\/]+)$`)
-	matches := pattern.FindStringSubmatch(input)
-	if len(matches) > 1 && matches[1] != "" {
-		return matches[1]
+// IdentifyPackage matches an uploaded package and the scanner's findings by
+// ecosystem, scoped name and version. Unsupported identities stay unmatched.
+func IdentifyPackage(name, version, locator string) PackageVersion {
+	p, err := purl.FromString(locator)
+	if err != nil {
+		return PackageVersion{}
 	}
-
-	if strings.HasSuffix(input, "/") {
-		return ""
+	info := extractor.Package{PURLType: p.Type}
+	ecosystem := info.Ecosystem()
+	if ecosystem.IsEmpty() {
+		ecosystem = purlecosystem.FromPURL(&p)
 	}
+	return packageIdentity(name, version, ecosystem.String(), &p)
+}
 
-	return input
+func packageIdentity(name, version, ecosystem string, p *purl.PackageURL) PackageVersion {
+	if p == nil || ecosystem == "" {
+		return PackageVersion{}
+	}
+	if name == "" {
+		name = p.Name
+	}
+	if version == "" {
+		version = p.Version
+	}
+	if name == "" || version == "" {
+		return PackageVersion{}
+	}
+	// Keep this identity aligned with the name SCALIBR sends to OSV.
+	switch {
+	case ecosystem == "PyPI":
+		name = normalizePythonName(name)
+	case ecosystem == "Go" && name == "go":
+		return PackageVersion{Ecosystem: ecosystem, Name: "stdlib", Version: version}
+	case p.Namespace != "" && !isOSPURLType(p.Type):
+		separator := "/"
+		if p.Type == purl.TypeMaven {
+			separator = ":"
+		}
+		prefix := p.Namespace + separator
+		if !strings.HasPrefix(name, prefix) {
+			name = prefix + name
+		}
+	}
+	if ecosystem == "Go" {
+		if major := goMajorVersionSubpath.FindString(p.Subpath); major != "" {
+			name += "/" + major
+		}
+	}
+	return PackageVersion{Ecosystem: ecosystem, Name: name, Version: version}
+}
+
+// SCALIBR leaves the OS distribution namespace out of the queried package name.
+func isOSPURLType(purlType string) bool {
+	switch purlType {
+	case purl.TypeDebian, purl.TypeApk, purl.TypeRPM, purl.TypeAlpm, purl.TypeOpkg,
+		purl.TypeFlatpak, purl.TypeCOS, purl.TypeSnap, purl.TypePacman, purl.TypePortage,
+		purl.TypeNix, purl.TypeDHI:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizePythonName(name string) string {
+	var normalized strings.Builder
+	lastSeparator := false
+	for _, char := range strings.ToLower(name) {
+		if strings.ContainsRune("-_.", char) {
+			if !lastSeparator {
+				normalized.WriteByte('-')
+			}
+			lastSeparator = true
+			continue
+		}
+		normalized.WriteRune(char)
+		lastSeparator = false
+	}
+	return normalized.String()
 }

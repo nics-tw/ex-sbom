@@ -49,6 +49,28 @@ func (s *Service) Get(projectID domain.ProjectID, name domain.Version) (Formatte
 	return bom, nil
 }
 
+// GetReportSnapshot reads the project name and selected SBOM from the same
+// project scope while version writes and project deletion are serialized.
+func (s *Service) GetReportSnapshot(projectID domain.ProjectID, version domain.Version) (domain.ProjectInfo, FormattedSBOM, error) {
+	unlock := s.cache.LockProject(projectID)
+	defer unlock()
+
+	bom, ok := s.cache.Get(projectID, version)
+	if !ok {
+		return domain.ProjectInfo{}, FormattedSBOM{}, domain.ErrVersionNotFound
+	}
+	projects, err := s.repo.GetProjects()
+	if err != nil {
+		return domain.ProjectInfo{}, FormattedSBOM{}, fmt.Errorf("read project for report: %w", err)
+	}
+	for _, project := range projects {
+		if project.ID == projectID {
+			return project, bom, nil
+		}
+	}
+	return domain.ProjectInfo{}, FormattedSBOM{}, domain.ErrProjectNotFound
+}
+
 // List returns the filenames of all SBOMs currently loaded for a project.
 func (s *Service) List(projectID domain.ProjectID) []domain.Version {
 	return s.cache.Keys(projectID)

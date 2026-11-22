@@ -139,7 +139,7 @@ func TestCreateOnMissingProjectReturns404(t *testing.T) {
 		h.Create(c)
 	})
 
-	token, err := h.previewToken(999, "any", time.Time{})
+	token, err := h.previewToken(999, "any", time.Time{}, nil)
 	assert.NoError(t, err)
 	body := bytes.NewBufferString(fmt.Sprintf(`{"version":"v1","bom_result":{},"sha256":"any","preview_token":%q}`, token))
 	req := httptest.NewRequest(http.MethodPost, "/sboms", body)
@@ -155,19 +155,19 @@ func TestCreateOnMissingProjectReturns404(t *testing.T) {
 func TestPreviewTokenBinding(t *testing.T) {
 	h := New(nil, nil)
 	timestamp := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	token, err := h.previewToken(7, "checksum", timestamp)
+	token, err := h.previewToken(7, "checksum", timestamp, nil)
 	assert.NoError(t, err)
-	assert.True(t, h.validPreviewToken(token, 7, "checksum", timestamp))
-	assert.False(t, h.validPreviewToken(token, 8, "checksum", timestamp))
-	assert.False(t, h.validPreviewToken(token, 7, "changed", timestamp))
-	assert.False(t, h.validPreviewToken(token, 7, "checksum", timestamp.Add(time.Second)))
-	assert.False(t, h.validPreviewToken("invalid", 7, "checksum", timestamp))
+	assert.True(t, h.validPreviewToken(token, 7, "checksum", timestamp, nil))
+	assert.False(t, h.validPreviewToken(token, 8, "checksum", timestamp, nil))
+	assert.False(t, h.validPreviewToken(token, 7, "changed", timestamp, nil))
+	assert.False(t, h.validPreviewToken(token, 7, "checksum", timestamp.Add(time.Second), nil))
+	assert.False(t, h.validPreviewToken("invalid", 7, "checksum", timestamp, nil))
 }
 
 func TestCreateRejectsMissingOrInvalidPreviewToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := New(ssbom.NewService(missingProjectRepo{}, ssbom.NewInMemoryCache()), nil)
-	otherProjectToken, err := h.previewToken(2, "any", time.Time{})
+	otherProjectToken, err := h.previewToken(2, "any", time.Time{}, nil)
 	assert.NoError(t, err)
 	router := gin.New()
 	router.POST("/sboms", func(c *gin.Context) {
@@ -183,4 +183,20 @@ func TestCreateRejectsMissingOrInvalidPreviewToken(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "invalid preview token")
 	}
+}
+
+func TestPreviewTokenBindsReportSource(t *testing.T) {
+	h := New(nil, nil)
+	source := &ssbom.ReportSource{FileName: "input.json", FileSHA256: "source hash", Status: ssbom.QueryCompleted}
+	token, err := h.previewToken(1, "analysis hash", time.Time{}, source)
+	assert.NoError(t, err)
+	assert.True(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, source))
+	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, nil))
+
+	changed := *source
+	changed.FileSHA256 = "other hash"
+	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &changed))
+	changed = *source
+	changed.Status = ssbom.QueryPartial
+	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &changed))
 }
