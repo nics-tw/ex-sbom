@@ -398,9 +398,11 @@ func TestService_ListVersions_DelegatesToRepo(t *testing.T) {
 // `go test -race` will fail if it does not.
 type checksumTrackingRepo struct {
 	stubRepository
-	byChecksum map[string]domain.Version
-	records    []domain.SBOMEntry
-	inserts    int
+	byChecksum   map[string]domain.Version
+	records      []domain.SBOMEntry
+	inserts      int
+	historyReads int
+	historyErr   error
 }
 
 func (r *checksumTrackingRepo) CreateSBOM(_ domain.ProjectID, version domain.Version, _ any, _ time.Time, checksum string) error {
@@ -416,8 +418,12 @@ func (r *checksumTrackingRepo) FindVersionBySHA256(_ domain.ProjectID, checksum 
 	return "", repository.ErrVersionNotFound
 }
 
-func (r *checksumTrackingRepo) GetAllByProject(_ domain.ProjectID) ([]domain.SBOMEntry, error) {
-	return r.records, nil
+func (r *checksumTrackingRepo) GetAllByProject(projectID domain.ProjectID) ([]domain.SBOMEntry, error) {
+	r.historyReads++
+	if projectID != wsID {
+		return nil, nil
+	}
+	return r.records, r.historyErr
 }
 
 func TestService_SaveParsedDetectsLegacyChecksumDuplicate(t *testing.T) {
@@ -572,6 +578,82 @@ func TestService_FindVersionForSBOMMatchesLegacyPrefixedTie(t *testing.T) {
 	version, err := svc.FindVersionForSBOM(wsID, HashSBOM(canonical), canonical)
 	require.NoError(t, err)
 	assert.Equal(t, domain.Version("existing"), version)
+}
+
+func TestService_CompatibilityIndexTracksHistoryAndMutations(t *testing.T) {
+	makeBOM := func(id, suggested, other string, candidates ...string) FormattedSBOM {
+		return FormattedSBOM{ComponentInfo: map[string]Component{
+			"pkg": {Vulns: []Vuln{{ID: id, SuggestFixVersion: suggested, OtherFixVersions: other, FixVersions: candidates}}},
+		}}
+	}
+	oldData := makeBOM("CVE-1", "1.2-b", "1.2-a")
+	oldJSON, err := json.Marshal(oldData)
+	require.NoError(t, err)
+	oldChecksum := HashSBOM(oldData)
+	loadErr := errors.New("temporary history read failure")
+	repo := &checksumTrackingRepo{
+		byChecksum: map[string]domain.Version{oldChecksum: "oldest"},
+		records: []domain.SBOMEntry{
+			{Version: "corrupt", BomResult: json.RawMessage("{")},
+			{Version: "oldest", SHA256: oldChecksum, BomResult: oldJSON},
+			{Version: "next", SHA256: oldChecksum, BomResult: oldJSON},
+		},
+		historyErr: loadErr,
+	}
+	cache := NewInMemoryCache()
+	svc := NewService(repo, cache)
+
+	legacy := makeBOM("CVE-1", "1.2-a", "1.2-b", "1.2-a", "1.2-b")
+	first := makeBOM("CVE-2", "1.2-a", "1.2-b", "1.2-a", "1.2-b")
+	second := makeBOM("CVE-3", "1.2-a", "1.2-b", "1.2-a", "1.2-b")
+
+	lookup := func(projectID domain.ProjectID, bom FormattedSBOM, want string) {
+		t.Helper()
+		got, err := svc.FindVersionForSBOM(projectID, HashSBOM(bom), bom)
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	}
+	_, err = svc.FindVersionForSBOM(wsID, HashSBOM(first), first)
+	require.ErrorIs(t, err, loadErr)
+	repo.historyErr = nil
+
+	lookup(wsID, legacy, "oldest")
+	lookup(wsID, first, "")
+	lookup(wsID, second, "")
+	require.NoError(t, svc.SaveParsed(wsID, "saved", first, HashSBOM(first), time.Time{}))
+
+	// Different historical display order misses the saved exact checksum.
+	alias := makeBOM("CVE-2", "1.2-b", "1.2-a", "1.2-a", "1.2-b")
+	lookup(wsID, alias, "saved")
+	require.NoError(t, svc.Rename(wsID, "saved", "renamed"))
+	lookup(wsID, alias, "renamed")
+	require.NoError(t, svc.Delete(wsID, "renamed"))
+	lookup(wsID, alias, "")
+
+	// Oldest matching entry stays first when renamed and gives way when deleted.
+	require.NoError(t, svc.Rename(wsID, "oldest", "first"))
+	lookup(wsID, legacy, "first")
+	require.NoError(t, svc.Delete(wsID, "first"))
+	lookup(wsID, legacy, "next")
+	require.NoError(t, svc.Delete(wsID, "next"))
+	lookup(wsID, legacy, "")
+	assert.Equal(t, 2, repo.historyReads, "one retry, then only digest lookups")
+
+	lookup(wsID+1, legacy, "")
+	lookup(wsID+1, legacy, "")
+	assert.Equal(t, 3, repo.historyReads, "an empty index is cached per project")
+	cache.ReplaceProject(wsID, nil)
+	repo.records = nil
+	lookup(wsID, legacy, "")
+	assert.Equal(t, 4, repo.historyReads, "workspace reload invalidates the index")
+	cache.DeleteProject(wsID)
+	repo.historyErr = loadErr
+	_, err = svc.FindVersionForSBOM(wsID, HashSBOM(legacy), legacy)
+	require.ErrorIs(t, err, loadErr, "project deletion cannot leave a warm index")
+	repo.historyErr = nil
+	lookup(wsID, legacy, "")
+	lookup(wsID, legacy, "")
+	assert.Equal(t, 6, repo.historyReads, "the project index is rebuilt after recovery")
 }
 
 func TestService_SaveParsed_ConcurrentSameChecksumInsertsOnce(t *testing.T) {

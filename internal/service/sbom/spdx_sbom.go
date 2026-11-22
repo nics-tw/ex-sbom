@@ -89,9 +89,10 @@ func (s *Service) ProcessSPDX(projectID domain.ProjectID, name domain.Version, d
 	}
 
 	unlock := s.cache.LockProject(projectID)
-	s.cache.Set(projectID, name, final)
 	if err := s.repo.CreateSBOM(projectID, name, final, spdxTimestamp(document), sha256Hash); err != nil {
 		slog.Error("Failed to save SBOM to DB", "error", err)
+	} else {
+		s.cache.Set(projectID, name, final)
 	}
 	unlock()
 

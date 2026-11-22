@@ -15,10 +15,15 @@ type Cache interface {
 	Get(projectID domain.ProjectID, name domain.Version) (FormattedSBOM, bool)
 	Set(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM)
 	Delete(projectID domain.ProjectID, name domain.Version)
+	Rename(projectID domain.ProjectID, oldName, newName domain.Version)
 	DeleteProject(projectID domain.ProjectID)
 	ReplaceProject(projectID domain.ProjectID, sboms map[domain.Version]FormattedSBOM)
 	Keys(projectID domain.ProjectID) []domain.Version
 	All(projectID domain.ProjectID) map[domain.Version]FormattedSBOM
+
+	// The compatibility index represents all readable rows from an authoritative project load.
+	findCompatibleVersion(projectID domain.ProjectID, checksum, legacy string) (version domain.Version, loaded bool)
+	setCompatibilityIndex(projectID domain.ProjectID, rows map[domain.Version]compatibilityEntry, nextOrder int)
 
 	// LockProject serializes save/load/delete sequences that must keep the DB
 	// and the cache consistent for the same project. Callers must invoke the
@@ -29,9 +34,20 @@ type Cache interface {
 	LockProject(projectID domain.ProjectID) (unlock func())
 }
 
+type compatibilityEntry struct {
+	checksum string
+	order    int
+}
+
+type compatibilityIndex struct {
+	rows      map[domain.Version]compatibilityEntry
+	nextOrder int
+}
+
 type inMemoryCache struct {
-	mu   sync.RWMutex
-	data map[domain.ProjectID]map[domain.Version]FormattedSBOM
+	mu            sync.RWMutex
+	data          map[domain.ProjectID]map[domain.Version]FormattedSBOM
+	compatibility map[domain.ProjectID]*compatibilityIndex
 
 	lockMu       sync.Mutex
 	projectLocks map[domain.ProjectID]*sync.Mutex
@@ -40,8 +56,9 @@ type inMemoryCache struct {
 // NewInMemoryCache returns a new in-memory Cache implementation.
 func NewInMemoryCache() Cache {
 	return &inMemoryCache{
-		data:         make(map[domain.ProjectID]map[domain.Version]FormattedSBOM),
-		projectLocks: make(map[domain.ProjectID]*sync.Mutex),
+		data:          make(map[domain.ProjectID]map[domain.Version]FormattedSBOM),
+		compatibility: make(map[domain.ProjectID]*compatibilityIndex),
+		projectLocks:  make(map[domain.ProjectID]*sync.Mutex),
 	}
 }
 
@@ -70,25 +87,85 @@ func (c *inMemoryCache) Get(projectID domain.ProjectID, name domain.Version) (Fo
 
 func (c *inMemoryCache) Set(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	if c.compatibility[projectID] == nil {
+		c.set(projectID, name, sbom)
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
 
+	// Hash without holding the cache-wide mutex. Runtime writers hold LockProject.
+	checksum := HashSBOM(normalizeOldFixVersionDisplay(sbom))
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.set(projectID, name, sbom)
+	if index := c.compatibility[projectID]; index != nil {
+		index.rows[name] = compatibilityEntry{checksum: checksum, order: index.nextOrder}
+		index.nextOrder++
+	}
+}
+
+// set writes the display cache with mu held.
+func (c *inMemoryCache) set(projectID domain.ProjectID, name domain.Version, sbom FormattedSBOM) {
 	if c.data[projectID] == nil {
 		c.data[projectID] = make(map[domain.Version]FormattedSBOM)
 	}
-
 	c.data[projectID][name] = sbom
+}
+
+func (c *inMemoryCache) findCompatibleVersion(projectID domain.ProjectID, checksum, legacy string) (domain.Version, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	index := c.compatibility[projectID]
+	if index == nil {
+		return "", false
+	}
+
+	var version domain.Version
+	oldest := index.nextOrder
+	for name, row := range index.rows {
+		if (row.checksum == checksum || row.checksum == legacy) && row.order < oldest {
+			version, oldest = name, row.order
+		}
+	}
+	return version, true
+}
+
+func (c *inMemoryCache) setCompatibilityIndex(projectID domain.ProjectID, rows map[domain.Version]compatibilityEntry, nextOrder int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.compatibility[projectID] = &compatibilityIndex{rows: rows, nextOrder: nextOrder}
 }
 
 func (c *inMemoryCache) Delete(projectID domain.ProjectID, name domain.Version) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.data[projectID], name)
+	if index := c.compatibility[projectID]; index != nil {
+		delete(index.rows, name)
+	}
+}
+
+func (c *inMemoryCache) Rename(projectID domain.ProjectID, oldName, newName domain.Version) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if sbom, ok := c.data[projectID][oldName]; ok {
+		delete(c.data[projectID], oldName)
+		c.data[projectID][newName] = sbom
+	}
+	if index := c.compatibility[projectID]; index != nil {
+		if row, ok := index.rows[oldName]; ok {
+			delete(index.rows, oldName)
+			index.rows[newName] = row
+		}
+	}
 }
 
 func (c *inMemoryCache) DeleteProject(projectID domain.ProjectID) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.data, projectID)
+	delete(c.compatibility, projectID)
 }
 
 // ReplaceProject swaps a complete project snapshot in one write. Copying the
@@ -101,6 +178,7 @@ func (c *inMemoryCache) ReplaceProject(projectID domain.ProjectID, sboms map[dom
 
 	c.mu.Lock()
 	c.data[projectID] = replacement
+	delete(c.compatibility, projectID)
 	c.mu.Unlock()
 }
 

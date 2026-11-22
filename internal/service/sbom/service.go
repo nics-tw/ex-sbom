@@ -64,10 +64,7 @@ func (s *Service) Rename(projectID domain.ProjectID, oldVersion, newVersion doma
 		return err
 	}
 
-	if bom, ok := s.cache.Get(projectID, oldVersion); ok {
-		s.cache.Delete(projectID, oldVersion)
-		s.cache.Set(projectID, newVersion, bom)
-	}
+	s.cache.Rename(projectID, oldVersion, newVersion)
 
 	return nil
 }
@@ -107,6 +104,16 @@ func (s *Service) Search(projectID domain.ProjectID, query string) []SearchResul
 
 // FindVersionForSBOM checks a normalized result against current and historical records.
 func (s *Service) FindVersionForSBOM(projectID domain.ProjectID, checksum string, bom FormattedSBOM) (domain.Version, error) {
+	version, fallback, err := s.findExactVersion(projectID, checksum, bom)
+	if err != nil || !fallback {
+		return version, err
+	}
+	unlock := s.cache.LockProject(projectID)
+	defer unlock()
+	return s.findVersionWithOldOrder(projectID, bom)
+}
+
+func (s *Service) findExactVersion(projectID domain.ProjectID, checksum string, bom FormattedSBOM) (domain.Version, bool, error) {
 	legacy := legacyHashSBOM(bom)
 	checksums := []string{checksum}
 	if legacy != checksum {
@@ -115,47 +122,55 @@ func (s *Service) FindVersionForSBOM(projectID domain.ProjectID, checksum string
 	for _, candidate := range checksums {
 		version, err := s.repo.FindVersionBySHA256(projectID, candidate)
 		if err == nil {
-			return version, nil
+			return version, false, nil
 		}
 		if !errors.Is(err, repository.ErrVersionNotFound) {
-			return "", err
+			return "", false, err
 		}
 	}
 	// An old checksum can differ when scanner order affected findings or fix candidates.
 	for _, component := range bom.ComponentInfo {
 		if len(component.Vulns) > 1 {
-			return s.findVersionWithOldOrder(projectID, bom)
+			return "", true, nil
 		}
 		for _, vuln := range component.Vulns {
 			if len(vuln.FixVersions) > 1 || strings.Contains(vuln.OtherFixVersions, ", ") {
-				return s.findVersionWithOldOrder(projectID, bom)
+				return "", true, nil
 			}
 		}
 	}
-	return "", nil
+	return "", false, nil
 }
 
-// Normalize old results for lookup without rewriting the stored checksum.
+// findVersionWithOldOrder loads the compatibility index once under LockProject.
 func (s *Service) findVersionWithOldOrder(projectID domain.ProjectID, bom FormattedSBOM) (domain.Version, error) {
+	bom = normalizeOldFixVersionDisplay(bom)
+	checksum, legacy := HashSBOM(bom), legacyHashSBOM(bom)
+	if version, loaded := s.cache.findCompatibleVersion(projectID, checksum, legacy); loaded {
+		return version, nil
+	}
+
 	records, err := s.repo.GetAllByProject(projectID)
 	if err != nil {
 		return "", err
 	}
-	bom = normalizeOldFixVersionDisplay(bom)
-	checksum, legacy := HashSBOM(bom), legacyHashSBOM(bom)
-	for _, record := range records {
+	rows := make(map[domain.Version]compatibilityEntry, len(records))
+	for i, record := range records {
 		var stored FormattedSBOM
 		if err := json.Unmarshal(record.BomResult, &stored); err != nil {
 			continue
 		}
 		sortFormattedSBOM(&stored)
-		// Only a stored result that omitted all fix candidates can match the legacy hash.
-		hash := HashSBOM(normalizeOldFixVersionDisplay(stored))
-		if hash == checksum || hash == legacy {
-			return record.Version, nil
+		// Retain stored candidates when present so the legacy checksum can match
+		// only a record that actually omitted them.
+		rows[record.Version] = compatibilityEntry{
+			checksum: HashSBOM(normalizeOldFixVersionDisplay(stored)),
+			order:    i,
 		}
 	}
-	return "", nil
+	s.cache.setCompatibilityIndex(projectID, rows, len(records))
+	version, _ := s.cache.findCompatibleVersion(projectID, checksum, legacy)
+	return version, nil
 }
 
 // ListVersions returns all non-deleted SBOM versions for a project, newest first.
@@ -190,7 +205,10 @@ func (s *Service) SaveParsed(projectID domain.ProjectID, version domain.Version,
 		return ErrSHA256Mismatch
 	}
 
-	existing, err := s.FindVersionForSBOM(projectID, sha256Hash, bom)
+	existing, fallback, err := s.findExactVersion(projectID, sha256Hash, bom)
+	if fallback {
+		existing, err = s.findVersionWithOldOrder(projectID, bom)
+	}
 	if err != nil {
 		return err
 	}
