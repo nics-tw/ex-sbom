@@ -148,6 +148,13 @@ body .main-tab[aria-pressed="true"] {
   color: var(--site-accent);
 }
 
+.sbom-tab-label[aria-pressed="true"] {
+  color: var(--site-accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+
 .search-controls > div {
   min-inline-size: min(12rem, 100%);
 }

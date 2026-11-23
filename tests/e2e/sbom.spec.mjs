@@ -549,3 +549,65 @@ test("provides bilingual landmarks, field names, and keyboard skip links", async
   await page.keyboard.press("Enter");
   await expect(main).toBeFocused();
 });
+
+test("keeps selected version visible and Chinese open label in its accessible name", async ({ page, service }) => {
+  await page.goto(service.url);
+  await createProject(page, "Selected versions");
+  await upload(page, sbom("selection-fixture", "1.0.0"), "Before");
+  await upload(page, sbom("selection-fixture", "2.0.0"), "After");
+  await versionRow(page, "Before").locator(".version-load-btn").click();
+  await versionRow(page, "After").locator(".version-load-btn").click();
+  const before = page.getByRole("button", { name: "Before", exact: true });
+  const after = page.getByRole("button", { name: "After", exact: true });
+  await expect(after).toHaveAttribute("aria-pressed", "true");
+  await expect(after).toHaveCSS("text-decoration-line", "underline");
+  await expect(before).toHaveCSS("text-decoration-line", "none");
+  await page.locator("#lang-zh").click();
+  const open = versionRow(page, "Before").locator(".version-load-btn");
+  await expect(open).toHaveText("開啟分析");
+  await expect(open).toHaveAccessibleName(/^開啟分析.*Before/);
+});
+
+test("preserves comparison disclosures and horizontal scroll when translating", async ({ page, service }) => {
+  await page.goto(service.url);
+  await createProject(page, "Comparison state");
+  await upload(page, sbom("diff-fixture", "1.0.0"), "Before");
+  await upload(page, sbom("diff-fixture", "2.0.0"), "After");
+  await page.locator("#main-tab-diff").click();
+  await page.addStyleTag({ content: "#diff-result [role=region]{width:160px;overflow-x:auto} #diff-result table{min-width:600px}" });
+  await page.locator("#diff-select-a").selectOption("Before");
+  await page.locator("#diff-select-b").selectOption("After");
+  await page.locator("#diff-compare-btn").click();
+  const region = page.locator("#diff-result [role=region]").first();
+  await expect(region).toBeVisible();
+  const scroll = await region.evaluate(el => { el.scrollLeft = 90; return el.scrollLeft; });
+  expect(scroll).toBeGreaterThan(0);
+  await page.locator("#lang-zh").click();
+  expect(await region.evaluate(el => el.scrollLeft)).toBe(scroll);
+  await page.locator("#diff-result summary").first().click();
+  await expect(region).toBeHidden();
+  await page.locator("#lang-en").click();
+  await expect(region).toBeHidden();
+});
+
+test("translates pending and failed version history without interpreting error text", async ({ page, service }) => {
+  let finish;
+  const pending = new Promise(resolve => { finish = resolve; });
+  await page.route("**/projects/*/versions", async route => {
+    await pending;
+    await route.fulfill({ status: 500, json: { error: 'Failure <b>quoted</b> "&"' } });
+  });
+  await page.goto(service.url);
+  const history = page.locator("#version-history-list");
+  try {
+    await expect(history).toHaveText("Loading versions…");
+    await page.locator("#lang-zh").click();
+    await expect(history).toHaveText("正在載入版本…");
+  } finally {
+    finish();
+  }
+  await expect(history).toContainText('無法載入版本：Failure <b>quoted</b> "&"');
+  await page.locator("#lang-en").click();
+  await expect(history).toContainText('Could not load versions: Failure <b>quoted</b> "&"');
+  await expect(history.locator("b")).toHaveCount(0);
+});

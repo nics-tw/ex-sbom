@@ -167,7 +167,7 @@
           historyLoadError: "無法載入版本：{0}",
           historyEmpty: "尚無版本，請先新增版本。",
           historyOpen: "開啟分析",
-          historyOpenVersion: "開啟「{0}」的分析",
+          historyOpenVersion: "開啟分析「{0}」",
           historyRename: "重新命名",
           historyRenameVersion: "重新命名「{0}」",
           historyDelete: "刪除",
@@ -1205,13 +1205,13 @@
         const swap = document.getElementById("diff-swap-btn");
         swap.title = t("diffSwap");
         swap.setAttribute("aria-label", t("diffSwap"));
-        if (this._displayed) this._render(this._displayed);
+        if (this._displayed) this._render(this._displayed, { preserveView: true });
       },
 
-      _render(comparison) {
+      _render(comparison, options) {
         this._displayed = comparison;
         const result = document.getElementById("diff-result");
-        ResultView.diff(result, comparison.data, comparison.a, comparison.b);
+        ResultView.diff(result, comparison.data, comparison.a, comparison.b, options);
         document.getElementById("diff-status").textContent = result.firstElementChild?.textContent?.trim() ?? "";
       },
 
@@ -1400,7 +1400,7 @@
         this._projectID = null;
         this._versions = [];
         document.getElementById("version-history-list").innerHTML =
-          `<p class="text-gray-600 italic text-sm">${t("historyLoading")}</p>`;
+          `<p class="text-gray-600 italic text-sm" data-i18n="historyLoading">${t("historyLoading")}</p>`;
       },
 
       async load() {
@@ -1408,7 +1408,7 @@
         const projectID = State.projectID;
         this.invalidate();
         if (!projectID) {
-          container.innerHTML = `<p class="text-gray-600 italic text-sm">${t("historyNoProject")}</p>`;
+          container.innerHTML = `<p class="text-gray-600 italic text-sm" data-i18n="historyNoProject">${t("historyNoProject")}</p>`;
           return;
         }
 
@@ -1422,7 +1422,7 @@
           this._render(container);
         } catch (e) {
           if (this._listing.owns(request) && State.projectID === projectID) {
-            container.innerHTML = `<p class="text-red-500 text-sm">${t("historyLoadError", esc(e.message))}</p>`;
+            container.innerHTML = `<p class="text-red-500 text-sm" data-i18n="historyLoadError" data-i18n-args="${esc(JSON.stringify([e.message]))}">${t("historyLoadError", esc(e.message))}</p>`;
           }
         } finally {
           this._listing.finish(request);

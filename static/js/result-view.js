@@ -119,7 +119,17 @@ const ResultView = {
     </tr>`;
   },
 
-  diff(resultEl, data, sbomA, sbomB) {
+  diff(resultEl, data, sbomA, sbomB, { preserveView = false } = {}) {
+    const regions = () => resultEl.querySelectorAll("details > [role=region]");
+    const state = new Map();
+    if (preserveView) {
+      for (const region of regions()) {
+        state.set(region.getAttribute("aria-labelledby"), {
+          open: region.parentElement.open,
+          scrollLeft: region.scrollLeft,
+        });
+      }
+    }
     const byLevel  = data.by_level || {};
     const levels   = Object.keys(byLevel).map(Number).sort((a, b) => a - b);
 
@@ -192,5 +202,13 @@ const ResultView = {
     }
 
     resultEl.innerHTML = html;
+    if (state.size) {
+      for (const region of regions()) {
+        const previous = state.get(region.getAttribute("aria-labelledby"));
+        if (!previous) continue;
+        region.parentElement.open = previous.open;
+        if (previous.open) region.scrollLeft = previous.scrollLeft;
+      }
+    }
   },
 };
