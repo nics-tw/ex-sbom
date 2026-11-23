@@ -47,7 +47,10 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", EPSS: "0.02", LEV: "0.937221",
 					Summary: "弱點摘要", Details: strings.Repeat("跨頁內容 Mixed-language text. ", 400) + "末頁標記"}}},
 			"urgent": {Name: "urgent-package", Version: "1.0", Vulns: []ssbom.Vuln{
-				{ID: "CVE-2024-0001", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"}},
+				{ID: "CVE-2024-0001", CVSSScore: "8.0", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"},
+					RepairEvidence: &ssbom.RepairEvidence{AdvisoryID: "CVE-2024-0001", Ecosystem: "npm", Package: "urgent-package", Installed: "1.0",
+						Ranges: []ssbom.RepairInterval{{Start: "0", Fixed: "1.2.3"}}}},
+				{ID: "CVE-2024-0002", CVSSScore: "6.5", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0002", CVEIDs: []string{"CVE-2024-0002"}},
 			}},
 		},
 		ReportSource: &ssbom.ReportSource{
@@ -75,14 +78,20 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				text := string(result)
 				require.GreaterOrEqual(t, strings.Count(text, "\f"), 3)
 				require.Contains(t, text, tc.title)
-				require.Contains(t, text, tc.count+" | 2")
+				require.Contains(t, text, tc.count+" | 3")
 				require.NotContains(t, text, "0.937221")
 				if tc.language == TraditionalChinese {
 					require.Contains(t, strings.Split(text, "\f")[0], "1. 立即查證 | urgent-package 1.0")
+					require.Contains(t, strings.Split(text, "\f")[0], "建議驗測版本 | 1.2.3")
+					require.Contains(t, strings.Split(text, "\f")[0], "累計預計處理的元件弱點紀錄 | 1")
+					require.Contains(t, strings.Split(text, "\f")[0], "仍待處理的 KEV 弱點 | CVE-2024-0002")
 					require.Contains(t, text, "LEV | 未取得或未驗證")
 					require.Contains(t, text, "至少 2%（資料未齊）")
 				} else {
 					require.Contains(t, strings.Split(text, "\f")[0], "1. Verify immediately | urgent-package 1.0")
+					require.Contains(t, strings.Split(text, "\f")[0], "Upgrade to test | 1.2.3")
+					require.Contains(t, strings.Split(text, "\f")[0], "Cumulative findings expected to be addressed | 1")
+					require.Contains(t, strings.Split(text, "\f")[0], "KEV findings still to address | CVE-2024-0002")
 					require.Contains(t, text, "LEV | Unavailable or unverified")
 					require.Contains(t, text, "At least 2% (incomplete data)")
 				}

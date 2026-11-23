@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: MIT
+
+package ssbom
+
+import (
+	"cmp"
+	"slices"
+	"strings"
+
+	"ex-sbom/util/file"
+	"github.com/ossf/osv-schema/bindings/go/osvschema"
+	"golang.org/x/mod/semver"
+)
+
+// RepairEvidence retains the advisory ranges for the exact scanned package.
+type RepairEvidence struct {
+	AdvisoryID string           `json:"advisory_id"`
+	Ecosystem  string           `json:"ecosystem"`
+	Package    string           `json:"package"`
+	Installed  string           `json:"installed"`
+	Ranges     []RepairInterval `json:"ranges"`
+	Versions   []string         `json:"versions,omitempty"`
+}
+
+type RepairInterval struct {
+	Start string `json:"introduced"`
+	Fixed string `json:"fixed,omitempty"`
+	Last  string `json:"last_affected,omitempty"`
+}
+
+func matchedRepairEvidence(advisory *osvschema.Vulnerability, identity file.PackageVersion) *RepairEvidence {
+	switch identity.Ecosystem {
+	case "npm", "Go", "crates.io":
+	default:
+		return nil
+	}
+	e := &RepairEvidence{AdvisoryID: advisory.GetId(), Ecosystem: identity.Ecosystem, Package: identity.Name, Installed: identity.Version}
+	for _, affected := range advisory.GetAffected() {
+		pkg := affected.GetPackage()
+		if pkg.GetEcosystem() != identity.Ecosystem || pkg.GetName() != identity.Name {
+			continue
+		}
+		e.Versions = append(e.Versions, affected.GetVersions()...)
+		for _, r := range affected.GetRanges() {
+			// A limit does not establish a repair version. Unknown range
+			// types also prevent a verified coverage claim.
+			if r.GetType() != osvschema.Range_SEMVER && r.GetType() != osvschema.Range_ECOSYSTEM {
+				return nil
+			}
+			intervals, valid := repairIntervals(r.GetEvents())
+			if !valid {
+				return nil
+			}
+			e.Ranges = append(e.Ranges, intervals...)
+		}
+	}
+	slices.Sort(e.Versions)
+	e.Versions = slices.Compact(e.Versions)
+	if len(e.Ranges) == 0 || !semver.IsValid(repairVersion(e.Installed)) || !e.affects(e.Installed) {
+		return nil
+	}
+	return e
+}
+
+func repairVersion(value string) string {
+	if strings.HasPrefix(value, "v") {
+		return value
+	}
+	return "v" + value
+}
+
+func repairIntervals(events []*osvschema.Event) ([]RepairInterval, bool) {
+	var intervals []RepairInterval
+	var interval RepairInterval
+	for _, event := range events {
+		start, fixed, last := event.GetIntroduced(), event.GetFixed(), event.GetLastAffected()
+		switch {
+		case start != "" && interval.Start == "" && (start == "0" || semver.IsValid(repairVersion(start))):
+			interval.Start = start
+		case interval.Start != "" && (fixed != "" || last != ""):
+			end := cmp.Or(fixed, last)
+			if !semver.IsValid(repairVersion(end)) || (interval.Start != "0" && semver.Compare(repairVersion(interval.Start), repairVersion(end)) > 0) {
+				return nil, false
+			}
+			interval.Fixed, interval.Last = fixed, last
+			intervals = append(intervals, interval)
+			interval = RepairInterval{}
+		default:
+			return nil, false
+		}
+	}
+	if interval.Start != "" {
+		intervals = append(intervals, interval)
+	}
+	return intervals, len(intervals) > 0
+}
+
+func (e RepairEvidence) affects(value string) bool {
+	version := repairVersion(value)
+	for _, explicitlyAffected := range e.Versions {
+		if !semver.IsValid(repairVersion(explicitlyAffected)) || semver.Compare(version, repairVersion(explicitlyAffected)) == 0 {
+			return true
+		}
+	}
+	for _, r := range e.Ranges {
+		if r.Start != "0" && semver.Compare(version, repairVersion(r.Start)) < 0 {
+			continue
+		}
+		if r.Fixed != "" && semver.Compare(version, repairVersion(r.Fixed)) >= 0 {
+			continue
+		}
+		if r.Last != "" && semver.Compare(version, repairVersion(r.Last)) > 0 {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func verifiedRepair(findings []FindingAssessment) (string, []FindingAssessment) {
+	if len(findings) == 0 {
+		return "", nil
+	}
+	var targets []FindingAssessment
+	for _, item := range findings {
+		if !item.HasCVSS || item.CVSS >= CVSSThreshold {
+			targets = append(targets, item)
+		}
+	}
+	if len(targets) == 0 {
+		targets = findings
+	}
+	var candidates []string
+	identity := targets[0].Finding.RepairEvidence
+	if identity == nil {
+		return "", nil
+	}
+	for _, item := range targets {
+		e := item.Finding.RepairEvidence
+		if e == nil || e.Ecosystem != identity.Ecosystem || e.Package != identity.Package || e.Installed != identity.Installed {
+			return "", nil
+		}
+		for _, r := range e.Ranges {
+			candidate := repairVersion(r.Fixed)
+			current := repairVersion(e.Installed)
+			if semver.IsValid(candidate) && semver.Prerelease(candidate) == "" &&
+				semver.Major(candidate) == semver.Major(current) && semver.Compare(candidate, current) > 0 {
+				candidates = append(candidates, r.Fixed)
+			}
+		}
+	}
+	slices.SortFunc(candidates, func(a, b string) int {
+		return cmp.Or(semver.Compare(repairVersion(a), repairVersion(b)), cmp.Compare(a, b))
+	})
+	for _, candidate := range slices.Compact(candidates) {
+		if slices.ContainsFunc(targets, func(item FindingAssessment) bool {
+			return item.Finding.RepairEvidence.affects(candidate)
+		}) {
+			continue
+		}
+		var covered []FindingAssessment
+		for _, item := range findings {
+			e := item.Finding.RepairEvidence
+			if e != nil && e.Ecosystem == identity.Ecosystem && e.Package == identity.Package &&
+				e.Installed == identity.Installed && !e.affects(candidate) {
+				covered = append(covered, item)
+			}
+		}
+		return candidate, covered
+	}
+	return "", nil
+}

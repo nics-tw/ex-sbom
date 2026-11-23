@@ -76,7 +76,8 @@ type (
 		KEV       KEVStatus `json:"kev,omitempty"`
 		KEVCVE    string    `json:"kev_cve,omitempty"`
 
-		FixVersions []string `json:"fix_versions,omitempty"`
+		RepairEvidence *RepairEvidence `json:"repair_evidence,omitempty"`
+		FixVersions    []string        `json:"fix_versions,omitempty"`
 	}
 
 	version struct {
@@ -418,12 +419,20 @@ func getCVSS(id string, groups []models.GroupInfo) string {
 }
 
 func getVulns(pkg models.PackageVulns, version string) []Vuln {
+	return buildVulns(pkg, version, nil)
+}
+
+func buildVulns(pkg models.PackageVulns, version string, identity *file.PackageVersion) []Vuln {
 	var vulns []Vuln
 	for _, v := range pkg.Vulnerabilities {
 		if v == nil {
 			continue
 		}
 		allFixVers := getAllFixVersions(v)
+		var evidence *RepairEvidence
+		if identity != nil {
+			evidence = matchedRepairEvidence(v, *identity)
+		}
 		slices.Sort(allFixVers)
 		suggestFix := findNearestVersions(version, allFixVers)
 		otherFixVer := getDiff(allFixVers, suggestFix)
@@ -441,7 +450,8 @@ func getVulns(pkg models.PackageVulns, version string) []Vuln {
 			SuggestFixVersion: getVersionString(suggestFix),
 			OtherFixVersions:  getVersionString(otherFixVer),
 
-			FixVersions: allFixVers,
+			FixVersions:    allFixVers,
+			RepairEvidence: evidence,
 		})
 	}
 	return vulns
@@ -451,7 +461,7 @@ func packageFindings(pkgs map[file.PackageVersion]models.PackageVulns, key file.
 	if key.Name == "" {
 		return nil
 	}
-	return getVulns(pkgs[key], key.Version)
+	return buildVulns(pkgs[key], key.Version, &key)
 }
 
 func getCVEFromAliases(aliases []string) string {

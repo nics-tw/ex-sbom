@@ -26,25 +26,39 @@ type FindingAssessment struct {
 }
 
 type ComponentAssessment struct {
-	Key         string
-	Name        string
-	Version     string
-	Driver      FindingAssessment
-	NeedsReview int
-	UrgentCVEs  []string
+	Key                        string
+	Name                       string
+	Version                    string
+	Driver                     FindingAssessment
+	NeedsReview                int
+	UrgentCVEs                 []string
+	Upgrade                    string
+	Covered                    int
+	CumulativeCovered          int
+	CumulativeFullyCoveredCVEs int
+	coveredCVEs                []string
+	RemainingUrgent            int
+	ResidualUrgentCVEs         []string
+	resolvedUrgent             bool
 }
 
 // RemediationAssessments ranks each stored component/version by its highest
 // priority finding. A nil threshold leaves policy-based levels unassigned.
 func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentAssessment {
 	var result []ComponentAssessment
+	remainingByCVE := make(map[string]int)
 	for key, component := range bom.ComponentInfo {
 		if len(component.Vulns) == 0 {
 			continue
 		}
 		entry := ComponentAssessment{Key: key, Name: component.Name, Version: component.Version}
+		findings := make([]FindingAssessment, 0, len(component.Vulns))
 		for i, finding := range component.Vulns {
 			item := assessFinding(finding, component.Version, threshold)
+			findings = append(findings, item)
+			for _, cve := range finding.CVEIDs {
+				remainingByCVE[cve]++
+			}
 			if i == 0 || compareFindings(item, entry.Driver) < 0 {
 				entry.Driver = item
 			}
@@ -57,11 +71,59 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 		}
 		slices.Sort(entry.UrgentCVEs)
 		entry.UrgentCVEs = slices.Compact(entry.UrgentCVEs)
+		upgrade, covered := verifiedRepair(findings)
+		entry.Upgrade = upgrade
+		entry.Covered = len(covered)
+		for _, item := range covered {
+			entry.coveredCVEs = append(entry.coveredCVEs, item.Finding.CVEIDs...)
+		}
+		entry.ResidualUrgentCVEs = append([]string(nil), entry.UrgentCVEs...)
+		if upgrade != "" {
+			for _, id := range entry.UrgentCVEs {
+				total, resolved := 0, 0
+				for _, item := range findings {
+					if item.Finding.KEVCVE == id {
+						total++
+					}
+				}
+				for _, item := range covered {
+					if item.Finding.KEVCVE == id {
+						resolved++
+					}
+				}
+				if total == resolved {
+					entry.ResidualUrgentCVEs = slices.DeleteFunc(entry.ResidualUrgentCVEs, func(remaining string) bool { return remaining == id })
+				}
+			}
+		}
+		entry.resolvedUrgent = len(entry.UrgentCVEs) > 0 && len(entry.ResidualUrgentCVEs) == 0
 		result = append(result, entry)
 	}
 	slices.SortFunc(result, func(a, b ComponentAssessment) int {
-		return cmp.Or(compareAssessment(a.Driver, b.Driver), cmp.Compare(a.Key, b.Key))
+		return cmp.Or(compareAssessment(a.Driver, b.Driver), cmp.Compare(b.Covered, a.Covered), cmp.Compare(a.Key, b.Key))
 	})
+	remainingUrgent, cumulative, fullyCovered := 0, 0, 0
+	for _, entry := range result {
+		if len(entry.UrgentCVEs) > 0 {
+			remainingUrgent++
+		}
+	}
+	for i := range result {
+		entry := &result[i]
+		cumulative += entry.Covered
+		if entry.resolvedUrgent {
+			remainingUrgent--
+		}
+		entry.CumulativeCovered = cumulative
+		for _, cve := range entry.coveredCVEs {
+			remainingByCVE[cve]--
+			if remainingByCVE[cve] == 0 {
+				fullyCovered++
+			}
+		}
+		entry.CumulativeFullyCoveredCVEs = fullyCovered
+		entry.RemainingUrgent = remainingUrgent
+	}
 	return result
 }
 

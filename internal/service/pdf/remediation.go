@@ -77,6 +77,19 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment) {
 	if len(entry.UrgentCVEs) > 0 {
 		d.field(d.label("Listed by CISA KEV", "列入 CISA KEV"), strings.Join(entry.UrgentCVEs, ", "))
 	}
+	upgrade := entry.Upgrade
+	if upgrade == "" {
+		upgrade = d.label("Verify candidate or mitigation", "查證候選版本或評估緩解措施")
+	}
+	d.field(d.label("Upgrade to test", "建議驗測版本"), upgrade)
+	d.field(d.label("Cumulative findings expected to be addressed", "累計預計處理的元件弱點紀錄"), strconv.Itoa(entry.CumulativeCovered))
+	d.field(d.label("CVEs covered across all known affected components", "已知受影響元件均有方案的 CVE 數"), strconv.Itoa(entry.CumulativeFullyCoveredCVEs))
+	d.field(d.label("Urgent components still to address", "仍待處理的立即查證元件"), strconv.Itoa(entry.RemainingUrgent))
+	if len(entry.ResidualUrgentCVEs) > 0 {
+		d.SetTextColor(128, 26, 36)
+		d.field(d.label("KEV findings still to address", "仍待處理的 KEV 弱點"), strings.Join(entry.ResidualUrgentCVEs, ", "))
+		d.SetTextColor(24, 37, 42)
+	}
 }
 
 func (d *document) exploitationValue(signal ssbom.ExploitationSignal) string {
