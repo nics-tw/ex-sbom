@@ -537,6 +537,21 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			} else {
 				d.field("LEV", d.label("Unavailable or unverified", "未取得或未驗證"))
 			}
+			signal := vulnerability.ExploitationSignal(ssbom.KEVUnknown)
+			value := d.label("Insufficient data", "資料不足")
+			if signal.Available {
+				percent := strconv.FormatFloat(signal.Value*100, 'f', -1, 64) + "%"
+				if signal.Complete {
+					value = percent
+				} else {
+					value = fmt.Sprintf(d.label("At least %s (incomplete data)", "至少 %s（資料未齊）"), percent)
+				}
+				if len(signal.Sources) > 0 {
+					value += " · " + strings.Join(signal.Sources, ", ")
+				}
+			}
+			d.field(d.label("Exploitation signal", "綜合利用指標"), value)
+			d.field("KEV", d.label("Not checked", "尚未查核"))
 			d.field(d.label("Suggested fix versions", "建議修補版本"), vulnerability.SuggestFixVersion)
 			d.field(d.label("Other fix versions", "其他修補版本"), vulnerability.OtherFixVersions)
 			d.field(d.label("Details", "詳細說明"), vulnerability.Details)
