@@ -162,6 +162,11 @@ body .main-tab[aria-pressed="true"] {
 
 .diff-version-field select {
   inline-size: 100%;
+  border-color: var(--site-border);
+}
+
+#diff-swap-btn {
+  border-color: var(--site-border);
 }
 
 .history-actions button {
