@@ -106,13 +106,7 @@ func (d *document) exploitationValue(signal ssbom.ExploitationSignal) string {
 	if !signal.Available {
 		return d.label("Insufficient data", "資料不足")
 	}
-	value := signal.Value * 100
-	if signal.Value < 1 && value >= 99.99 {
-		value = 99.99
-	} else if !signal.Complete {
-		value = math.Floor(math.Nextafter(value*100, math.Inf(1))) / 100
-	}
-	percent := strings.TrimRight(strings.TrimRight(strconv.FormatFloat(value, 'f', 2, 64), "0"), ".") + "%"
+	percent := probabilityPercent(signal.Value, !signal.Complete)
 	if !signal.Complete {
 		percent = fmt.Sprintf(d.label("At least %s (incomplete data)", "至少 %s（資料未齊）"), percent)
 	}
@@ -120,4 +114,14 @@ func (d *document) exploitationValue(signal ssbom.ExploitationSignal) string {
 		percent += " · " + strings.Join(signal.Sources, ", ")
 	}
 	return percent
+}
+
+func probabilityPercent(score float64, lowerBound bool) string {
+	value := score * 100
+	if score < 1 && value >= 99.99 {
+		value = 99.99
+	} else if lowerBound {
+		value = math.Floor(math.Nextafter(value*100, math.Inf(1))) / 100
+	}
+	return strings.TrimRight(strings.TrimRight(strconv.FormatFloat(value, 'f', 2, 64), "0"), ".") + "%"
 }

@@ -26,6 +26,7 @@ const (
 )
 
 type FindingAssessment struct {
+	index    int
 	Finding  Vuln
 	Signal   ExploitationSignal
 	CVSS     float64
@@ -41,6 +42,7 @@ type ComponentAssessment struct {
 	NeedsReview                int
 	UrgentCVEs                 []string
 	Upgrade                    string
+	CoveredFindings            []bool
 	Covered                    int
 	coveredPriority            int
 	Package                    string
@@ -73,6 +75,7 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 		findings := make([]FindingAssessment, 0, len(component.Vulns))
 		for i, finding := range component.Vulns {
 			item := assessFinding(finding, component.Version, threshold)
+			item.index = i
 			findings = append(findings, item)
 			for _, cve := range finding.CVEIDs {
 				remainingByCVE[cve]++
@@ -95,7 +98,9 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 			entry.Package, entry.Ecosystem = evidence.Package, evidence.Ecosystem
 		}
 		entry.Covered = len(covered)
+		entry.CoveredFindings = make([]bool, len(findings))
 		for _, item := range covered {
+			entry.CoveredFindings[item.index] = true
 			entry.coveredCVEs = append(entry.coveredCVEs, item.Finding.CVEIDs...)
 			if item.Priority >= RemediationElevated || (item.HasCVSS && item.CVSS >= CVSSThreshold) {
 				entry.coveredPriority++

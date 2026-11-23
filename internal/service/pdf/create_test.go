@@ -87,6 +87,8 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 					require.Contains(t, strings.Split(text, "\f")[0], "仍待處理的 KEV 弱點 | CVE-2024-0002")
 					require.Contains(t, text, "LEV | 未取得或未驗證")
 					require.Contains(t, text, "至少 2%（資料未齊）")
+					require.Contains(t, text, "建議升級的涵蓋情形 | 1.2.3 · 預計可處理此弱點")
+					require.Contains(t, text, "建議升級的涵蓋情形 | 1.2.3 · 尚未確認涵蓋")
 				} else {
 					require.Contains(t, strings.Split(text, "\f")[0], "1. Verify immediately | urgent-package 1.0")
 					require.Contains(t, strings.Split(text, "\f")[0], "Upgrade to test | 1.2.3")
@@ -94,6 +96,8 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 					require.Contains(t, strings.Split(text, "\f")[0], "KEV findings still to address | CVE-2024-0002")
 					require.Contains(t, text, "LEV | Unavailable or unverified")
 					require.Contains(t, text, "At least 2% (incomplete data)")
+					require.Contains(t, text, "Coverage of proposed upgrade | 1.2.3 · Expected to address this finding")
+					require.Contains(t, text, "Coverage of proposed upgrade | 1.2.3 · Coverage not established")
 				}
 				for _, value := range []string{"測試專案", "候選版", "來源測試.json", strings.Repeat("e", 64), "TEST-EX-SBOM-0001", "末頁標記"} {
 					require.Contains(t, text, value)

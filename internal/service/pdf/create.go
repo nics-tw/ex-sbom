@@ -18,6 +18,7 @@ import (
 	"unicode"
 	"unicode/utf16"
 
+	"ex-sbom/client/first"
 	"ex-sbom/internal/domain"
 	ssbom "ex-sbom/internal/service/sbom"
 
@@ -98,6 +99,7 @@ type Report struct {
 }
 
 type reportComponent struct {
+	key   string
 	sbom  ssbom.Component
 	scope string
 }
@@ -240,7 +242,7 @@ func Generate(w io.Writer, report Report) error {
 
 	doc.remediationContinuation(assessments)
 	doc.componentTable(components)
-	doc.vulnerabilityDetails(components)
+	doc.vulnerabilityDetails(components, assessments)
 	if doc.usedGlyphFallback {
 		doc.section(doc.label("Text display note", "文字顯示說明"))
 		doc.write(doc.label(
@@ -273,7 +275,7 @@ func sortedComponents(bom ssbom.FormattedSBOM) []reportComponent {
 				scope = "transitive"
 			}
 		}
-		result = append(result, reportComponent{sbom: list[key], scope: scope})
+		result = append(result, reportComponent{key: key, sbom: list[key], scope: scope})
 	}
 	return result
 }
@@ -523,14 +525,19 @@ func (d *document) componentTable(components []reportComponent) {
 	}
 }
 
-func (d *document) vulnerabilityDetails(components []reportComponent) {
+func (d *document) vulnerabilityDetails(components []reportComponent, assessments []ssbom.ComponentAssessment) {
+	byComponent := make(map[string]ssbom.ComponentAssessment, len(assessments))
+	for _, entry := range assessments {
+		byComponent[entry.Key] = entry
+	}
 	title := d.label("Vulnerability details", "弱點明細")
 	d.section(title)
 	d.repeatHeading = title
 	defer func() { d.repeatHeading = "" }()
 	var count int
 	for _, component := range components {
-		for _, vulnerability := range component.sbom.Vulns {
+		assessment := byComponent[component.key]
+		for i, vulnerability := range component.sbom.Vulns {
 			count++
 			d.ensureSpace(3 * lineHeight)
 			d.Ln(3)
@@ -541,7 +548,10 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field("CVSS", vulnerability.CVSSScore)
 			d.field(d.label("CVSS version", "CVSS 指標版本"), vulnerability.CVSSVersion)
 			d.field(d.label("EPSS score date", "EPSS 評分日期"), vulnerability.EPSSDate)
-			epss := vulnerability.EPSS
+			epss := ""
+			if score, valid := first.ParseProbability(vulnerability.EPSS); valid {
+				epss = probabilityPercent(score, vulnerability.EPSSPartial)
+			}
 			if epss != "" && vulnerability.EPSSPartial {
 				epss = fmt.Sprintf(d.label("At least %s (missing alias scores)", "至少 %s（別名分數未齊）"), epss)
 			}
@@ -549,8 +559,8 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			if vulnerability.EPSSCVE != "" && vulnerability.EPSSCVE != vulnerability.ID {
 				d.field(d.label("EPSS source CVE", "EPSS 來源 CVE"), vulnerability.EPSSCVE)
 			}
-			if _, valid := vulnerability.VerifiedLEV(); valid {
-				value := vulnerability.LEV
+			if score, valid := vulnerability.VerifiedLEV(); valid {
+				value := probabilityPercent(score, vulnerability.LEVPartial)
 				if vulnerability.LEVPartial {
 					value = fmt.Sprintf(d.label("At least %s (historical gaps)", "至少 %s（歷史資料有缺口）"), value)
 				}
@@ -577,6 +587,13 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 				d.field("KEV", d.label("Checked, not listed", "已查核，未列入"))
 			default:
 				d.field("KEV", d.label("Not checked", "尚未查核"))
+			}
+			if assessment.Upgrade != "" {
+				coverage := d.label("Coverage not established", "尚未確認涵蓋")
+				if assessment.CoveredFindings[i] {
+					coverage = d.label("Expected to address this finding", "預計可處理此弱點")
+				}
+				d.field(d.label("Coverage of proposed upgrade", "建議升級的涵蓋情形"), assessment.Upgrade+" · "+coverage)
 			}
 			d.field(d.label("Suggested fix versions", "建議修補版本"), vulnerability.SuggestFixVersion)
 			d.field(d.label("Other fix versions", "其他修補版本"), vulnerability.OtherFixVersions)
