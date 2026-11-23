@@ -1377,7 +1377,11 @@
     const VersionHistory = {
       translate() {
         if (this._projectID !== null && this._projectID === State.projectID) {
-          this._render(document.getElementById("version-history-list"));
+          const container = document.getElementById("version-history-list");
+          const scrollLeft = container.querySelector(".history-scroll")?.scrollLeft;
+          this._render(container);
+          const region = container.querySelector(".history-scroll");
+          if (region && scrollLeft !== undefined) region.scrollLeft = scrollLeft;
         }
       },
 

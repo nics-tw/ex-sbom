@@ -622,8 +622,15 @@ test("provides a labelled and keyboard-scrollable version history region", async
   await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
   await page.keyboard.press("ArrowLeft");
   await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBe(0);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+  const position = await tableRegion.evaluate(el => el.scrollLeft);
   await page.locator("#lang-zh").click();
-  await expect(page.getByRole("region", { name: "版本歷程", exact: true }).getByRole("table")).toBeVisible();
+  const translatedRegion = page.getByRole("region", { name: "版本歷程", exact: true });
+  await expect(translatedRegion.getByRole("table")).toBeVisible();
+  await expect.poll(() => translatedRegion.evaluate(el => el.scrollLeft)).toBe(position);
+  await page.locator("#lang-en").click();
+  await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBe(position);
 });
 
 test("translates pending and failed version history without interpreting error text", async ({ page, service }) => {
