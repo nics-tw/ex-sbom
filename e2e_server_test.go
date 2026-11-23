@@ -6,6 +6,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,9 @@ func TestE2EServer(t *testing.T) {
 	transport := http.DefaultTransport
 	http.DefaultTransport = e2eOSVTransport{fail: os.Getenv("EX_SBOM_E2E_FAIL_SCAN") == "1"}
 	t.Cleanup(func() { http.DefaultTransport = transport })
+	if os.Getenv("EX_SBOM_E2E_HISTORY") == "1" {
+		seedE2EEPSSHistory(t)
+	}
 
 	if err := db.Init(path); err != nil {
 		t.Fatal(err)
@@ -76,6 +80,28 @@ func TestE2EServer(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func seedE2EEPSSHistory(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	asOf := time.Now().UTC().AddDate(0, 0, -1)
+	start := asOf.AddDate(0, 0, -29)
+	archive, err := os.Create(filepath.Join(dir, "epss_scores-"+start.Format(time.DateOnly)+".csv.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compressed := gzip.NewWriter(archive)
+	_, writeErr := fmt.Fprintf(compressed, "#model_version:fixture,score_date:%sT00:00:00+0000\ncve,epss,percentile\nCVE-2025-99999,0.37,0.95\n", start.Format(time.DateOnly))
+	if err := errors.Join(writeErr, compressed.Close(), archive.Close()); err != nil {
+		t.Fatal(err)
+	}
+	reservations := filepath.Join(dir, "reservations.json")
+	if err := os.WriteFile(reservations, []byte(fmt.Sprintf(`{"CVE-2025-99999":%q}`, start.Format(time.DateOnly))), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EPSS_ARCHIVE_DIR", dir)
+	t.Setenv("CVE_RESERVATIONS_FILE", reservations)
 }
 
 // e2eOSVTransport exercises the real scanner with deterministic query results.

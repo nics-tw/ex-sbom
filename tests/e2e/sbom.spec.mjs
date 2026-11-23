@@ -600,9 +600,21 @@ test("preserves comparison disclosures and horizontal scroll when translating", 
 });
 
 test("downloads verified remediation findings after storing and reopening an SBOM", async ({ page, service }, testInfo) => {
+  await service.restart({ historicalLEV: true });
   await page.goto(service.url);
   const project = await createProject(page, "Remediation fixture");
-  await upload(page, sbom("fixture-remediation", "1.0.0"), "Repair exercise");
+  const [preview] = await Promise.all([
+    page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+    upload(page, sbom("fixture-remediation", "1.0.0"), "Repair exercise"),
+  ]);
+  const finding = (await preview.json()).data.bom_result.ComponentInfo["fixture-remediation"].vulns[0];
+  expect(finding).toMatchObject({
+    lev: "0.37",
+    lev_method: "nist-cswp41-eq10-v1",
+    lev_cve: "CVE-2025-99999",
+  });
+  expect(finding.lev_first).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(finding.lev_as_of).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   await service.restart();
   await page.goto(service.url);
   await selectProject(page, project, "Remediation fixture");

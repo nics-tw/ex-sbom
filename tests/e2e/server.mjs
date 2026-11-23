@@ -4,9 +4,14 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 
-export async function startServer(binary, dbPath, { failScan = false } = {}) {
+export async function startServer(binary, dbPath, { failScan = false, historicalLEV = false } = {}) {
   const server = spawn(binary, ["-test.run", "^TestE2EServer$", "-test.v"], {
-    env: { ...process.env, DB_PATH: dbPath, EX_SBOM_E2E_FAIL_SCAN: failScan ? "1" : "0" },
+    env: {
+      ...process.env,
+      DB_PATH: dbPath,
+      EX_SBOM_E2E_FAIL_SCAN: failScan ? "1" : "0",
+      EX_SBOM_E2E_HISTORY: historicalLEV ? "1" : "0",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let log = "";
