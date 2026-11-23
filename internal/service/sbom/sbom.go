@@ -70,18 +70,20 @@ type (
 		SuggestFixVersion string `json:"suggest_fix_version"`
 		OtherFixVersions  string `json:"other_fix_versions"`
 
-		EPSS       string    `json:"epss,omitempty"`
-		EPSSDate   string    `json:"epss_date,omitempty"`
-		LEV        string    `json:"lev,omitempty"`
-		LEVMethod  string    `json:"lev_method,omitempty"`
-		LEVFirst   string    `json:"lev_first,omitempty"`
-		LEVAsOf    string    `json:"lev_as_of,omitempty"`
-		LEVPartial bool      `json:"lev_partial,omitempty"`
-		LEVCVE     string    `json:"lev_cve,omitempty"`
-		CVEIDs     []string  `json:"cve_ids,omitempty"`
-		KEV        KEVStatus `json:"kev,omitempty"`
-		KEVCVE     string    `json:"kev_cve,omitempty"`
-		KEVCVEs    []string  `json:"kev_cves,omitempty"`
+		EPSS        string    `json:"epss,omitempty"`
+		EPSSDate    string    `json:"epss_date,omitempty"`
+		EPSSCVE     string    `json:"epss_cve,omitempty"`
+		EPSSPartial bool      `json:"epss_partial,omitempty"`
+		LEV         string    `json:"lev,omitempty"`
+		LEVMethod   string    `json:"lev_method,omitempty"`
+		LEVFirst    string    `json:"lev_first,omitempty"`
+		LEVAsOf     string    `json:"lev_as_of,omitempty"`
+		LEVPartial  bool      `json:"lev_partial,omitempty"`
+		LEVCVE      string    `json:"lev_cve,omitempty"`
+		CVEIDs      []string  `json:"cve_ids,omitempty"`
+		KEV         KEVStatus `json:"kev,omitempty"`
+		KEVCVE      string    `json:"kev_cve,omitempty"`
+		KEVCVEs     []string  `json:"kev_cves,omitempty"`
 
 		RepairEvidence *RepairEvidence `json:"repair_evidence,omitempty"`
 		FixVersions    []string        `json:"fix_versions,omitempty"`
@@ -155,6 +157,8 @@ func compareVulns(a, b Vuln) int {
 		cmp.Compare(a.OtherFixVersions, b.OtherFixVersions),
 		cmp.Compare(a.EPSS, b.EPSS),
 		cmp.Compare(a.EPSSDate, b.EPSSDate),
+		cmp.Compare(a.EPSSCVE, b.EPSSCVE),
+		cmp.Compare(strconv.FormatBool(a.EPSSPartial), strconv.FormatBool(b.EPSSPartial)),
 		cmp.Compare(a.LEV, b.LEV),
 		cmp.Compare(a.LEVMethod, b.LEVMethod),
 		cmp.Compare(a.LEVFirst, b.LEVFirst),

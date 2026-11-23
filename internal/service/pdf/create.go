@@ -541,13 +541,23 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field("CVSS", vulnerability.CVSSScore)
 			d.field(d.label("CVSS version", "CVSS 指標版本"), vulnerability.CVSSVersion)
 			d.field(d.label("EPSS score date", "EPSS 評分日期"), vulnerability.EPSSDate)
-			d.field("EPSS", vulnerability.EPSS)
+			epss := vulnerability.EPSS
+			if epss != "" && vulnerability.EPSSPartial {
+				epss = fmt.Sprintf(d.label("At least %s (missing alias scores)", "至少 %s（別名分數未齊）"), epss)
+			}
+			d.field("EPSS", epss)
+			if vulnerability.EPSSCVE != "" && vulnerability.EPSSCVE != vulnerability.ID {
+				d.field(d.label("EPSS source CVE", "EPSS 來源 CVE"), vulnerability.EPSSCVE)
+			}
 			if _, valid := vulnerability.VerifiedLEV(); valid {
 				value := vulnerability.LEV
 				if vulnerability.LEVPartial {
 					value = fmt.Sprintf(d.label("At least %s (historical gaps)", "至少 %s（歷史資料有缺口）"), value)
 				}
 				d.field("LEV", value)
+				if vulnerability.LEVCVE != "" && vulnerability.LEVCVE != vulnerability.ID {
+					d.field(d.label("LEV source CVE", "LEV 來源 CVE"), vulnerability.LEVCVE)
+				}
 				d.field(d.label("LEV calculation method", "LEV 計算方法"), vulnerability.LEVMethod)
 				if vulnerability.LEVFirst != "" && vulnerability.LEVAsOf != "" {
 					d.field(d.label("LEV period (UTC)", "LEV 歷史期間（UTC）"), vulnerability.LEVFirst+" – "+vulnerability.LEVAsOf)

@@ -52,16 +52,27 @@ func setHistoricalLEV(bom *FormattedSBOM, scores map[string]first.HistoricalLEV)
 	for _, component := range bom.ComponentInfo {
 		for i := range component.Vulns {
 			finding := &component.Vulns[i]
-			best, available := scores[finding.ID]
-			if !available {
+			var best first.HistoricalLEV
+			var bestID string
+			partial := false
+			for _, id := range finding.CVEIDs {
+				score, available := scores[id]
+				partial = partial || !available || score.Partial
+				if !available || (bestID != "" && (score.Score < best.Score ||
+					(score.Score == best.Score && id >= bestID))) {
+					continue
+				}
+				best, bestID = score, id
+			}
+			if bestID == "" {
 				continue
 			}
 			finding.LEV = strconv.FormatFloat(best.Score, 'f', -1, 64)
 			finding.LEVMethod = first.LEVMethod
 			finding.LEVFirst = best.First
 			finding.LEVAsOf = best.AsOf
-			finding.LEVPartial = best.Partial
-			finding.LEVCVE = finding.ID
+			finding.LEVPartial = partial
+			finding.LEVCVE = bestID
 		}
 	}
 }
