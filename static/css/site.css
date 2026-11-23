@@ -148,6 +148,11 @@ body .main-tab[aria-pressed="true"] {
   color: var(--site-accent);
 }
 
+.history-scroll {
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
+
 .sbom-tab-label[aria-pressed="true"] {
   color: var(--site-accent);
   font-weight: 700;

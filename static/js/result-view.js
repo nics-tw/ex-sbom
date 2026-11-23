@@ -2,6 +2,7 @@
 
 // Render completed search and diff results. Request handlers own when to update the view.
 const ResultView = {
+  _diffScroll: new WeakMap(),
   search(container, clearBtn, data) {
     if (!data || data.total === 0) {
       container.innerHTML = `<p class="px-4 py-3 text-sm text-gray-600">${t("searchNoResults")}</p>`;
@@ -126,7 +127,8 @@ const ResultView = {
       for (const region of regions()) {
         state.set(region.getAttribute("aria-labelledby"), {
           open: region.parentElement.open,
-          scrollLeft: region.scrollLeft,
+          // A closed disclosure does not expose a usable scroll offset.
+          scrollLeft: region.parentElement.open ? region.scrollLeft : this._diffScroll.get(region),
         });
       }
     }
@@ -202,13 +204,20 @@ const ResultView = {
     }
 
     resultEl.innerHTML = html;
-    if (state.size) {
-      for (const region of regions()) {
-        const previous = state.get(region.getAttribute("aria-labelledby"));
-        if (!previous) continue;
-        region.parentElement.open = previous.open;
-        if (previous.open) region.scrollLeft = previous.scrollLeft;
+    for (const region of regions()) {
+      const disclosure = region.parentElement;
+      const previous = state.get(region.getAttribute("aria-labelledby"));
+      if (previous) {
+        disclosure.open = previous.open;
+        if (previous.scrollLeft !== undefined) this._diffScroll.set(region, previous.scrollLeft);
+        if (disclosure.open) region.scrollLeft = previous.scrollLeft ?? 0;
       }
+      region.addEventListener("scroll", () => {
+        if (disclosure.open) this._diffScroll.set(region, region.scrollLeft);
+      });
+      disclosure.addEventListener("toggle", () => {
+        if (disclosure.open && this._diffScroll.has(region)) region.scrollLeft = this._diffScroll.get(region);
+      });
     }
   },
 };

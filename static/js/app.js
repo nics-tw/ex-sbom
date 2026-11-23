@@ -1315,9 +1315,8 @@
         const compare = document.getElementById("diff-compare-btn");
         const swap = document.getElementById("diff-swap-btn");
         const result = document.getElementById("diff-result");
-        this._displayed = null;
+        this._selectionChanged();
         this.translate();
-        result.innerHTML = "";
         for (const select of selects) {
           select.innerHTML = "";
           select.disabled = true;
@@ -1325,7 +1324,6 @@
         compare.disabled = true;
         swap.disabled = true;
 
-        this._comparison.cancel();
         const request = this._versions.begin({ projectID: State.projectID });
         const isCurrent = () => this._versions.owns(request) && State.projectID === request.projectID;
         try {
@@ -1474,7 +1472,8 @@
           </div>` : "";
 
         container.innerHTML = `
-          <table class="w-full border border-gray-200 rounded-lg overflow-hidden text-left">
+          <div class="history-scroll w-full border border-gray-200 rounded-lg" role="region" aria-labelledby="version-history-heading" tabindex="0">
+          <table class="w-full text-left">
             <thead class="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
               <tr>
                 <th scope="col" class="px-4 py-3">${t("historyVersion")}</th>

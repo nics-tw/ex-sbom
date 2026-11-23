@@ -588,6 +588,40 @@ test("preserves comparison disclosures and horizontal scroll when translating", 
   await expect(region).toBeHidden();
   await page.locator("#lang-en").click();
   await expect(region).toBeHidden();
+  await page.locator("#diff-result summary").first().click();
+  await expect.poll(() => region.evaluate(el => el.scrollLeft)).toBe(scroll);
+});
+
+test("clears comparison status on reopening", async ({ page, service }) => {
+  await page.goto(service.url);
+  await createProject(page, "History and comparison");
+  await upload(page, sbom("history-fixture", "1.0.0"), "Before");
+  await upload(page, sbom("history-fixture", "2.0.0"), "After");
+  await page.locator("#main-tab-diff").click();
+  await page.locator("#diff-select-a").selectOption("Before");
+  await page.locator("#diff-select-b").selectOption("After");
+  await page.locator("#diff-compare-btn").click();
+  await expect(page.locator("#diff-status")).not.toBeEmpty();
+  await page.locator("#main-tab-analysis").click();
+  await page.locator("#main-tab-diff").click();
+  await expect(page.locator("#diff-result")).toBeEmpty();
+  await expect(page.locator("#diff-status")).toBeEmpty();
+});
+
+test("provides a labelled and keyboard-scrollable version history region", async ({ page, service }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(service.url);
+  await createProject(page, "Version history region");
+  await upload(page, sbom("history-fixture", "1.0.0"), "First release");
+  await page.addStyleTag({ content: "#version-history-list table { min-width: 600px; }" });
+  const tableRegion = page.getByRole("region", { name: "Version History", exact: true });
+  await expect(tableRegion.getByRole("table")).toBeVisible();
+  await expect(tableRegion).toHaveAttribute("tabindex", "0");
+  await tableRegion.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+  await page.locator("#lang-zh").click();
+  await expect(page.getByRole("region", { name: "版本歷程", exact: true }).getByRole("table")).toBeVisible();
 });
 
 test("translates pending and failed version history without interpreting error text", async ({ page, service }) => {
