@@ -8,6 +8,8 @@ package ssbom
 
 import (
 	"encoding/json"
+
+	"ex-sbom/client/first"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -112,7 +114,7 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 	base := Component{
 		Version: "1.0.0", VulnNumber: 2,
 		Vulns: []Vuln{
-			{ID: "CVE-1", CVSSScore: "7.1", EPSS: "0.1", LEV: "0.2"},
+			{ID: "CVE-1", CVSSScore: "7.1", EPSS: "0.1", LEV: "0.2", LEVMethod: first.LEVMethod},
 			{ID: "CVE-2", CVSSScore: "4.0", EPSS: "0.3", LEV: "0.4"},
 		},
 	}
@@ -126,6 +128,8 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 		{"changed CVSS", func(c *Component) { c.Vulns[0].CVSSScore = "7.2" }, true},
 		{"changed EPSS", func(c *Component) { c.Vulns[0].EPSS = "0.2" }, true},
 		{"changed LEV", func(c *Component) { c.Vulns[0].LEV = "0.3" }, true},
+		{"changed LEV certainty", func(c *Component) { c.Vulns[0].LEVPartial = true }, true},
+		{"changed unverified LEV", func(c *Component) { c.Vulns[1].LEV = "0.9" }, false},
 		{"changed dependency risk", func(c *Component) { c.ContainsVulnDep = true }, true},
 	}
 	for _, tt := range tests {
@@ -438,4 +442,14 @@ func TestDiffSBOMs_ChangedLevelToZeroIsPreserved(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `"level_a":1`)
 	assert.Contains(t, string(data), `"level_b":0`, "level 0 must not be dropped by omitempty")
+}
+
+func TestRiskFieldsIgnoreUnverifiedAndPartialLEV(t *testing.T) {
+	comp := Component{Vulns: []Vuln{
+		{LEV: "1"},
+		{LEV: "0.8", LEVMethod: first.LEVMethod, LEVPartial: true},
+		{LEV: "0.2", LEVMethod: first.LEVMethod},
+	}}
+	_, _, lev, _ := riskFields(comp)
+	assert.Equal(t, "0.2", lev)
 }

@@ -619,6 +619,13 @@ test("downloads verified remediation findings after storing and reopening an SBO
   await page.goto(service.url);
   await selectProject(page, project, "Remediation fixture");
   await versionRow(page, "Repair exercise").locator(".version-load-btn").click();
+  const component = await page.request.get(
+    new URL(`/projects/${project}/sboms/Repair%20exercise/topology/component?component=fixture-remediation`, service.url).href,
+  );
+  expect(component.ok()).toBe(true);
+  expect((await component.json()).data.vulns[0]).toMatchObject({
+    lev: "0.37", lev_first: finding.lev_first, lev_as_of: finding.lev_as_of,
+  });
   for (const [lang, button] of [["en", "Download PDF Report"], ["zh", "下載 PDF 報告"]]) {
     await page.locator("#lang-" + lang).click();
     const [download, response] = await Promise.all([

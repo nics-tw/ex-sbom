@@ -135,6 +135,8 @@
           projectRenamePrompt: "Enter new project name:",
           projectDeleteConfirm: "Delete this project from the app? Its SBOMs will remain in the database.",
           projectNameRequired: "Enter a new project name.",
+          levLowerBound: "At least {0} (historical gaps)",
+          levUnavailable: "Unavailable or unverified",
           diffFiles: "Diff Files",
           diffSbomTitle: "Compare SBOMs",
           diffSbomA: "SBOM A (before)",
@@ -282,6 +284,8 @@
           projectRenamePrompt: "輸入新的專案名稱：",
           projectDeleteConfirm: "確定從應用程式刪除此專案？SBOM 資料仍保留在資料庫。",
           projectNameRequired: "請輸入新專案名稱。",
+          levLowerBound: "至少 {0}（歷史資料有缺口）",
+          levUnavailable: "未取得或未驗證",
           diffFiles: "Diff 檔案",
           diffSbomTitle: "比較 SBOM",
           diffSbomA: "SBOM A（舊版）",
@@ -1070,7 +1074,7 @@
                   <span class="flex flex-wrap items-center gap-y-1">
                     ${vuln.cvss_score ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${esc(vuln.cvss_score)}</span>` : ""}
                     ${vuln.epss       ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${esc(vuln.epss)}</span>` : ""}
-                    ${vuln.lev        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${esc(vuln.lev)}</span>` : ""}
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${vuln.lev ? (vuln.lev_partial ? esc(t("levLowerBound", vuln.lev)) : esc(vuln.lev)) : t("levUnavailable")}</span>
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${sevClass}">${t("severity" + severity)}</span>
                     <svg aria-hidden="true" id="vuln-chevron-${i}" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 transform motion-safe:transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />

@@ -220,11 +220,19 @@ func toComponentResp(c ssbom.Component) map[string]any {
 	}
 
 	suggest := ssbom.GetSuggestFixVersions(c.Version, versions...)
+	vulns := slices.Clone(c.Vulns)
+	for i := range vulns {
+		if _, valid := vulns[i].VerifiedLEV(); !valid {
+			vulns[i].LEV = ""
+			vulns[i].LEVPartial = false
+		}
+	}
+
 	return map[string]any{
 		"name":                  c.Name,
 		"version":               c.Version,
 		"vuln_number":           c.VulnNumber,
-		"vulns":                 c.Vulns,
+		"vulns":                 vulns,
 		"contain_vuln_dep":      c.ContainsVulnDep,
 		"suggested_fix_version": suggest,
 		"is_breaking_change":    ssbom.IsBreakingChange(c.Version, suggest),

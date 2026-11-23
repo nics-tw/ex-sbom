@@ -18,7 +18,6 @@ import (
 	"unicode"
 	"unicode/utf16"
 
-	"ex-sbom/client/first"
 	"ex-sbom/internal/domain"
 	ssbom "ex-sbom/internal/service/sbom"
 
@@ -199,7 +198,7 @@ func Generate(w io.Writer, report Report) error {
 		for _, vuln := range component.sbom.Vulns {
 			severities[severity(vuln.CVSSScore)]++
 			countRiskThresholds(&epssBands, vuln.EPSS)
-			if _, valid := first.ParseProbability(vuln.LEV); valid && vuln.LEVMethod == first.LEVMethod {
+			if _, valid := vuln.VerifiedLEV(); valid {
 				countRiskThresholds(&levBands, vuln.LEV)
 			} else {
 				unavailableLEV++
@@ -543,7 +542,7 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field(d.label("CVSS version", "CVSS 指標版本"), vulnerability.CVSSVersion)
 			d.field(d.label("EPSS score date", "EPSS 評分日期"), vulnerability.EPSSDate)
 			d.field("EPSS", vulnerability.EPSS)
-			if _, valid := first.ParseProbability(vulnerability.LEV); valid && vulnerability.LEVMethod == first.LEVMethod {
+			if _, valid := vulnerability.VerifiedLEV(); valid {
 				value := vulnerability.LEV
 				if vulnerability.LEVPartial {
 					value = fmt.Sprintf(d.label("At least %s (historical gaps)", "至少 %s（歷史資料有缺口）"), value)

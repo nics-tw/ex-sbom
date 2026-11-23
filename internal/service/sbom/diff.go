@@ -83,13 +83,24 @@ func maxVulnScore(vulns []Vuln, getter func(Vuln) string) string {
 func riskFields(comp Component) (maxCvss, maxEpss, maxLev string, severe bool) {
 	maxCvss = maxVulnScore(comp.Vulns, func(v Vuln) string { return v.CVSSScore })
 	maxEpss = maxVulnScore(comp.Vulns, func(v Vuln) string { return v.EPSS })
-	maxLev = maxVulnScore(comp.Vulns, func(v Vuln) string { return v.LEV })
+	maxLev = maxVulnScore(comp.Vulns, func(v Vuln) string {
+		if v.LEVPartial {
+			return ""
+		}
+		return v.verifiedLEVText()
+	})
 	severe = HasSevereVuln(comp.Vulns)
 	return
 }
 
 type vulnRiskKey struct {
 	id, cvss, epss, lev string
+	levPartial          bool
+}
+
+func diffVulnRisk(v Vuln) vulnRiskKey {
+	lev := v.verifiedLEVText()
+	return vulnRiskKey{v.ID, v.CVSSScore, v.EPSS, lev, lev != "" && v.LEVPartial}
 }
 
 // sameVulnRisks compares findings as a multiset, so source ordering cannot
@@ -100,10 +111,10 @@ func sameVulnRisks(a, b []Vuln) bool {
 	}
 	counts := make(map[vulnRiskKey]int, len(a))
 	for _, vuln := range a {
-		counts[vulnRiskKey{vuln.ID, vuln.CVSSScore, vuln.EPSS, vuln.LEV}]++
+		counts[diffVulnRisk(vuln)]++
 	}
 	for _, vuln := range b {
-		key := vulnRiskKey{vuln.ID, vuln.CVSSScore, vuln.EPSS, vuln.LEV}
+		key := diffVulnRisk(vuln)
 		if counts[key] == 0 {
 			return false
 		}
