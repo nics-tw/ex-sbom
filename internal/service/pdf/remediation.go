@@ -13,8 +13,9 @@ import (
 
 const remediationPreviewLimit = 3
 
-func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, source *ssbom.ReportSource) {
+func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, bom ssbom.FormattedSBOM) {
 	d.section(d.label("Remediation priorities", "修補處理順序"))
+	source := bom.ReportSource
 	var status ssbom.QueryStatus
 	if source != nil {
 		status = source.Status
@@ -59,21 +60,21 @@ func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, sourc
 		d.write(d.label("See Remediation priorities (continued) for remaining components.", "其餘元件請見「修補處理順序（續）」。"), lineHeight)
 	}
 	for i, entry := range entries[:min(len(entries), remediationPreviewLimit)] {
-		d.remediationEntry(i+1, entry)
+		d.remediationEntry(i+1, entry, bom.ComponentToLevel)
 	}
 }
 
-func (d *document) remediationContinuation(entries []ssbom.ComponentAssessment) {
+func (d *document) remediationContinuation(entries []ssbom.ComponentAssessment, levels map[string]int) {
 	if len(entries) <= remediationPreviewLimit {
 		return
 	}
 	d.section(d.label("Remediation priorities (continued)", "修補處理順序（續）"))
 	for i := remediationPreviewLimit; i < len(entries); i++ {
-		d.remediationEntry(i+1, entries[i])
+		d.remediationEntry(i+1, entries[i], levels)
 	}
 }
 
-func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment) {
+func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, levels map[string]int) {
 	d.ensureSpace(3 * lineHeight)
 	finding := entry.Driver.Finding
 	label := d.label("Assess next", "待評估")
@@ -91,7 +92,7 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment) {
 	}
 	d.field(fmt.Sprintf("%d. %s", rank, label), strings.TrimSpace(entry.Name+" "+entry.Version))
 	d.SetTextColor(24, 37, 42)
-	if entry.Package != "" && entry.Package != entry.Name {
+	if entry.Package != "" {
 		d.field(d.label("Package identity", "套件識別"), entry.Ecosystem+" · "+entry.Package)
 	}
 	score := finding.CVSSScore
@@ -102,11 +103,17 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment) {
 	if len(entry.UrgentCVEs) > 0 {
 		d.field(d.label("Listed by CISA KEV", "列入 CISA KEV"), strings.Join(entry.UrgentCVEs, ", "))
 	}
-	upgrade := entry.Upgrade
-	if upgrade == "" {
-		upgrade = d.label("Verify candidate or mitigation", "查證候選版本或評估緩解措施")
+	if entry.Upgrade != "" {
+		d.field(d.label("Upgrade to test", "建議驗測版本"), entry.Upgrade)
 	}
-	d.field(d.label("Upgrade to test", "建議驗測版本"), upgrade)
+	action := d.label("Check advisory candidates and assess mitigations.", "查證公告候選版本，並評估緩解措施。")
+	if entry.Upgrade != "" {
+		action = d.label("Test the candidate, then confirm coverage with a new SBOM scan.", "驗測候選版本，再以新版 SBOM 複掃確認。")
+	}
+	if level, known := levels[entry.Key]; known && level > 0 {
+		action = d.label("Identify the parent dependency and check its upgrade or lockfile. Confirm with a new SBOM scan.", "確認上游相依元件，檢查其升級方式或鎖定檔，再以新版 SBOM 複掃確認。")
+	}
+	d.field(d.label("Next action", "下一步"), action)
 	d.field(d.label("Cumulative findings expected to be addressed", "累計預計處理的元件弱點紀錄"), strconv.Itoa(entry.CumulativeCovered))
 	d.field(d.label("CVEs covered across all known affected components", "已知受影響元件均有方案的 CVE 數"), strconv.Itoa(entry.CumulativeFullyCoveredCVEs))
 	d.field(d.label("Urgent components still to address", "仍待處理的立即查證元件"), strconv.Itoa(entry.RemainingUrgent))

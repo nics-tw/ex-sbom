@@ -165,7 +165,7 @@ func Generate(w io.Writer, report Report) error {
 	doc.Ln(5)
 	threshold := ssbom.RemediationThreshold
 	assessments := report.SBOM.RemediationAssessments(&threshold)
-	doc.remediationSummary(assessments, report.SBOM.ReportSource)
+	doc.remediationSummary(assessments, report.SBOM)
 	doc.section(doc.label("Report information", "報告資訊"))
 	doc.field(doc.label("Project", "專案"), report.Project.Name)
 	doc.field(doc.label("Project ID", "專案識別碼"), strconv.FormatInt(report.Project.ID, 10))
@@ -240,7 +240,7 @@ func Generate(w io.Writer, report Report) error {
 		"Findings are the records stored for this SBOM version. A finding shared by multiple components is counted for each component.",
 		"本報告呈現此 SBOM 版本儲存的弱點紀錄。同一弱點涉及多個元件時，按元件分別計入。"))
 
-	doc.remediationContinuation(assessments)
+	doc.remediationContinuation(assessments, report.SBOM.ComponentToLevel)
 	doc.componentTable(components)
 	doc.vulnerabilityDetails(components, assessments)
 	if doc.usedGlyphFallback {

@@ -77,6 +77,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 	generatedAt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	name := "元件名稱/" + strings.Repeat("long-package-", 35)
 	bom := ssbom.FormattedSBOM{
+		ComponentToLevel: map[string]int{"urgent": 1},
 		ComponentInfo: map[string]ssbom.Component{
 			name: {Name: name, Version: "1.0",
 				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", EPSS: "0.02", LEV: "0.937221",
@@ -123,6 +124,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				require.NotContains(t, text, "0.937221")
 				if tc.language == TraditionalChinese {
 					require.Contains(t, strings.Split(text, "\f")[0], "1. 立即查證 | urgent-package 1.0")
+					require.Contains(t, strings.Split(text, "\f")[0], "確認上游相依元件")
 					require.Contains(t, strings.Split(text, "\f")[0], "建議驗測版本 | 1.2.3")
 					require.Contains(t, strings.Split(text, "\f")[0], "累計預計處理的元件弱點紀錄 | 1")
 					require.Contains(t, strings.Split(text, "\f")[0], "仍待處理的 KEV 弱點 | CVE-2024-0002")
@@ -132,6 +134,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 					require.Contains(t, text, "建議升級的涵蓋情形 | 1.2.3 · 尚未確認涵蓋")
 				} else {
 					require.Contains(t, strings.Split(text, "\f")[0], "1. Verify immediately | urgent-package 1.0")
+					require.Contains(t, strings.Split(text, "\f")[0], "Identify the parent dependency")
 					require.Contains(t, strings.Split(text, "\f")[0], "Upgrade to test | 1.2.3")
 					require.Contains(t, strings.Split(text, "\f")[0], "Cumulative findings expected to be addressed | 1")
 					require.Contains(t, strings.Split(text, "\f")[0], "KEV findings still to address | CVE-2024-0002")
