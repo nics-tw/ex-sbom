@@ -317,12 +317,27 @@ test("searches, compares, renames and deletes versions across windows and a serv
   page.once("dialog", dialog => dialog.accept("Renamed project"));
   await page.locator("#project-rename-btn").click();
   await expect(page.locator("#project-current")).toHaveText("(Renamed project)");
-  page.once("dialog", dialog => dialog.dismiss());
-  await page.locator("#project-delete-btn").click();
+  const deleteProject = page.locator("#project-delete-btn");
+  let deletePrompt;
+  page.once("dialog", async dialog => {
+    deletePrompt = dialog.message();
+    await dialog.dismiss();
+  });
+  await page.locator("#lang-zh").press("Enter");
+  await deleteProject.press("Enter");
+  expect(deletePrompt).toContain("Renamed project");
+  expect(deletePrompt).toContain("SBOM 資料仍保留在資料庫。");
+  await expect(deleteProject).toBeFocused();
   await expect(page.locator("#project-current")).toHaveText("(Renamed project)");
   await expect(versionRow(page, "Before")).toBeVisible();
-  page.once("dialog", dialog => dialog.accept());
-  await page.locator("#project-delete-btn").click();
+  await page.locator("#lang-en").press("Enter");
+  page.once("dialog", async dialog => {
+    deletePrompt = dialog.message();
+    await dialog.accept();
+  });
+  await deleteProject.press("Enter");
+  expect(deletePrompt).toContain("Renamed project");
+  expect(deletePrompt).toContain("SBOMs will remain in the database.");
   await expect(page.locator("#project-select option").filter({ hasText: "Renamed project" })).toHaveCount(0);
   await expect(page.locator("#project-current")).toHaveText("(default)");
   await page.close();

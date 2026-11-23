@@ -133,7 +133,7 @@
           projectRename: "Rename",
           projectDelete: "Delete",
           projectRenamePrompt: "Enter new project name:",
-          projectDeleteConfirm: "Delete this project from the app? Its SBOMs will remain in the database.",
+          projectDeleteConfirm: "Remove project “{0}” from the app? Its SBOMs will remain in the database.",
           projectNameRequired: "Enter a new project name.",
           epssLowerBound: "At least {0} (missing alias scores)",
           levLowerBound: "At least {0} (historical gaps)",
@@ -283,7 +283,7 @@
           projectRename: "重新命名",
           projectDelete: "刪除",
           projectRenamePrompt: "輸入新的專案名稱：",
-          projectDeleteConfirm: "確定從應用程式刪除此專案？SBOM 資料仍保留在資料庫。",
+          projectDeleteConfirm: "確定從工具移除專案「{0}」？SBOM 資料仍保留在資料庫。",
           projectNameRequired: "請輸入新專案名稱。",
           epssLowerBound: "至少 {0}（別名分數未齊）",
           levLowerBound: "至少 {0}（歷史資料有缺口）",
@@ -2013,9 +2013,12 @@
         Project.rename(State.projectID, name.trim());
       });
       document.getElementById("project-delete-btn").addEventListener("click", () => {
-        if (!State.projectID) return;
-        if (!confirm(t("projectDeleteConfirm"))) return;
-        Project.delete(State.projectID);
+        const projectID = State.projectID;
+        if (!projectID) return;
+        const select = document.getElementById("project-select");
+        const project = Array.from(select.options).find(option => option.value === String(projectID));
+        if (!project || !confirm(t("projectDeleteConfirm", project.text))) return;
+        Project.delete(projectID);
       });
 
 
