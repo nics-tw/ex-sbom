@@ -1244,7 +1244,7 @@
 
         if (!a || !b || a === b) {
           this._comparison.cancel();
-          resultEl.innerHTML = `<p class="text-red-500">${t("diffSelectBoth")}</p>`;
+          resultEl.innerHTML = `<p class="text-red-700">${t("diffSelectBoth")}</p>`;
           return;
         }
 
@@ -1424,7 +1424,7 @@
           this._render(container);
         } catch (e) {
           if (this._listing.owns(request) && State.projectID === projectID) {
-            container.innerHTML = `<p class="text-red-500 text-sm" data-i18n="historyLoadError" data-i18n-args="${esc(JSON.stringify([e.message]))}">${t("historyLoadError", esc(e.message))}</p>`;
+            container.innerHTML = `<p class="text-red-700 text-sm" data-i18n="historyLoadError" data-i18n-args="${esc(JSON.stringify([e.message]))}">${t("historyLoadError", esc(e.message))}</p>`;
           }
         } finally {
           this._listing.finish(request);
@@ -1460,7 +1460,7 @@
           return `<tr class="hover:bg-gray-50">
             <td class="px-4 py-3 text-sm font-medium text-gray-800">${esc(v.version)}</td>
             <td class="px-4 py-3 text-sm text-gray-500">${date}</td>
-            <td class="px-4 py-3 text-sm">
+                <td class="px-4 py-3 text-sm history-actions">
               <button class="text-[#006b6b] hover:underline text-xs mr-3 version-load-btn" aria-label="${esc(t("historyOpenVersion", v.version))}" data-version="${esc(v.version)}">${t("historyOpen")}</button>
               <button class="text-gray-500 hover:underline text-xs mr-3 version-rename-btn" aria-label="${esc(t("historyRenameVersion", v.version))}" data-version="${esc(v.version)}">${t("historyRename")}</button>
               <button class="text-red-700 hover:underline text-xs version-delete-btn" aria-label="${esc(t("historyDeleteVersion", v.version))}" data-version="${esc(v.version)}">${t("historyDelete")}</button>
@@ -1832,7 +1832,7 @@
         }
         const badge = document.createElement("div");
         if (level.total_vulns > 0) {
-          badge.className = "px-2 py-1 text-xs font-medium bg-[#D9936E] text-red-800 rounded-full";
+                badge.className = "px-2 py-1 text-xs font-medium bg-red-100 text-red-900 rounded-full";
           localizeText(badge, "vulnerabilities", level.total_vulns);
         } else {
           badge.className = "px-2 py-1 text-xs font-medium bg-[#95D0C0] text-[#231815] rounded-full";

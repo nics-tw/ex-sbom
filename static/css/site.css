@@ -148,6 +148,11 @@ body .main-tab[aria-pressed="true"] {
   color: var(--site-accent);
 }
 
+.history-actions button {
+  min-inline-size: 24px;
+  min-block-size: 24px;
+}
+
 .history-scroll {
   max-inline-size: 100%;
   overflow-x: auto;

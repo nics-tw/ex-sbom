@@ -616,6 +616,13 @@ test("provides a labelled and keyboard-scrollable version history region", async
   await page.addStyleTag({ content: "#version-history-list table { min-width: 600px; }" });
   const tableRegion = page.getByRole("region", { name: "Version History", exact: true });
   await expect(tableRegion.getByRole("table")).toBeVisible();
+  const actions = tableRegion.getByRole("button");
+  await expect(actions).toHaveCount(3);
+  for (const action of await actions.all()) {
+    const { width, height } = await action.boundingBox();
+    expect(width).toBeGreaterThanOrEqual(24);
+    expect(height).toBeGreaterThanOrEqual(24);
+  }
   await expect(tableRegion).toHaveAttribute("tabindex", "0");
   await tableRegion.focus();
   await page.keyboard.press("ArrowRight");
