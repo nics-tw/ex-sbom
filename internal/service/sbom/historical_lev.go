@@ -3,6 +3,7 @@
 package ssbom
 
 import (
+	"encoding/json"
 	"log/slog"
 	"os"
 	"slices"
@@ -30,7 +31,17 @@ func applyHistoricalLEV(bom *FormattedSBOM) {
 	cves = slices.Compact(cves)
 	// A UTC day that has ended is independent of the time an import runs.
 	asOf := bom.ReportSource.QueriedAt.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
-	scores, err := first.ArchiveLEV(dir, first.FirstArchiveDay, asOf, cves)
+	reservations := make(map[string]string)
+	if path := os.Getenv("CVE_RESERVATIONS_FILE"); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			slog.Warn("Cannot read CVE reservation dates", "error", err)
+		} else if err := json.Unmarshal(data, &reservations); err != nil {
+			clear(reservations)
+			slog.Warn("Cannot decode CVE reservation dates", "error", err)
+		}
+	}
+	scores, err := first.ArchiveLEVWithReservations(dir, first.FirstArchiveDay, asOf, cves, reservations)
 	if err != nil {
 		slog.Warn("EPSS archive cannot establish historical LEV", "error", err)
 		return

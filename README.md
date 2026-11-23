@@ -92,6 +92,7 @@ The following environment variables can be used to configure the tool:
 | `AUTO_OPEN_BROWSER` | `true` | Set to `false` to prevent automatically opening the browser on startup. |
 | `DB_PATH` | OS-specific (see below) | Path to the DuckDB database file. |
 | `EPSS_ARCHIVE_DIR` | — | Optional directory of official daily `epss_scores-YYYY-MM-DD.csv.gz` files. Keep the archive from 2021-04-14 through the previous UTC day for LEV calculation at import. Reports mark LEV unavailable when the required history is missing. |
+| `CVE_RESERVATIONS_FILE` | — | Optional local JSON map of CVE IDs to official reservation dates (`YYYY-MM-DD`). Older archive gaps before a CVE was reserved do not invalidate that CVE's history. Use dates from the CVE Program bulk archive. |
 
 By default, the database file is stored under the platform-native config directory:
 - macOS: `~/Library/Application Support/ex-sbom/data.duckdb`

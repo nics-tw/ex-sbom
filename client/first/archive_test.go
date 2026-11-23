@@ -53,4 +53,11 @@ func TestArchiveLEV(t *testing.T) {
 	got, err = ArchiveLEV(dir, "2023-01-01", "2023-02-01", cves)
 	require.NoError(t, err)
 	require.Empty(t, got, "a gap before the first observed score leaves the window anchor unverified")
+	got, err = ArchiveLEVWithReservations(dir, "2023-01-01", "2023-02-01", cves, map[string]string{
+		cves[1]: "2023-01-02",
+	})
+	require.NoError(t, err)
+	require.NotContains(t, got, cves[0])
+	require.Equal(t, "2023-01-02", got[cves[1]].First)
+	require.False(t, got[cves[1]].Partial)
 }

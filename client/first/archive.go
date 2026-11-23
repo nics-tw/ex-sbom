@@ -35,6 +35,12 @@ type archiveFinding struct {
 // A missing file before the first score prevents establishing the window
 // anchor. A missing window after that anchor yields a lower bound.
 func ArchiveLEV(dir, firstDay, asOf string, cves []string) (map[string]HistoricalLEV, error) {
+	return ArchiveLEVWithReservations(dir, firstDay, asOf, cves, nil)
+}
+
+// ArchiveLEVWithReservations uses known CVE reservation dates as lower
+// bounds on when a score could have first been assigned.
+func ArchiveLEVWithReservations(dir, firstDay, asOf string, cves []string, reserved map[string]string) (map[string]HistoricalLEV, error) {
 	start, startErr := time.Parse(time.DateOnly, firstDay)
 	end, endErr := time.Parse(time.DateOnly, asOf)
 	if startErr != nil || endErr != nil || start.After(end) {
@@ -42,13 +48,18 @@ func ArchiveLEV(dir, firstDay, asOf string, cves []string) (map[string]Historica
 	}
 	pending := make(map[string]*archiveFinding, len(cves))
 	for _, cve := range cves {
+		if earliest := reserved[cve]; earliest != "" {
+			if _, err := time.Parse(time.DateOnly, earliest); err != nil {
+				return nil, fmt.Errorf("invalid CVE reservation date for %s", cve)
+			}
+		}
 		pending[cve] = &archiveFinding{}
 	}
 	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
 		date := day.Format(time.DateOnly)
 		wanted := make(map[string]*archiveFinding)
 		for cve, entry := range pending {
-			if entry.first == "" || entry.next == date {
+			if (entry.first == "" && date >= reserved[cve]) || entry.next == date {
 				wanted[cve] = entry
 			}
 		}
