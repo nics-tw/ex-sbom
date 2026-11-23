@@ -178,8 +178,7 @@ func assessFinding(finding Vuln, version string, threshold *float64) FindingAsse
 }
 
 func compareFindings(a, b FindingAssessment) int {
-	return cmp.Or(compareAssessment(a, b), cmp.Compare(a.Finding.ID, b.Finding.ID),
-		cmp.Compare(a.Finding.KEVCVE, b.Finding.KEVCVE))
+	return cmp.Or(compareAssessment(a, b), compareVulns(a.Finding, b.Finding))
 }
 
 func compareAssessment(a, b FindingAssessment) int {

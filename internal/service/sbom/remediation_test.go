@@ -3,11 +3,34 @@
 package ssbom
 
 import (
+	"slices"
 	"testing"
 
 	"ex-sbom/client/first"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRemediationAssessmentOrderIsStableAcrossFindingOrder(t *testing.T) {
+	threshold := RemediationThreshold
+	tiedEPSS := Vuln{ID: "CVE-2025-0001", CVSSScore: "8.0", EPSS: "0.5"}
+	tiedLEV := Vuln{ID: tiedEPSS.ID, CVSSScore: tiedEPSS.CVSSScore, LEV: "0.5", LEVMethod: first.LEVMethod}
+	findings := []Vuln{tiedEPSS, tiedLEV}
+	bom := FormattedSBOM{ComponentInfo: map[string]Component{
+		"b": {Name: "b", Version: "1.0.0", Vulns: findings},
+		"a": {Name: "a", Version: "1.0.0", Vulns: []Vuln{tiedEPSS}},
+	}}
+	firstOrder := bom.RemediationAssessments(&threshold)
+	slices.Reverse(findings)
+	secondOrder := bom.RemediationAssessments(&threshold)
+	require.Equal(t, []string{"a", "b"}, []string{firstOrder[0].Key, firstOrder[1].Key})
+	for i := range firstOrder {
+		require.Equal(t, firstOrder[i].Key, secondOrder[i].Key)
+		require.Equal(t, firstOrder[i].Driver.Signal, secondOrder[i].Driver.Signal)
+		require.Equal(t, firstOrder[i].Driver.Finding, secondOrder[i].Driver.Finding)
+		require.Equal(t, firstOrder[i].CumulativeCovered, secondOrder[i].CumulativeCovered)
+		require.Equal(t, firstOrder[i].RemainingUrgent, secondOrder[i].RemainingUrgent)
+	}
+}
 
 func TestRemediationAssessments(t *testing.T) {
 	urgent := Vuln{ID: "GHSA-test", KEV: KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"}}
