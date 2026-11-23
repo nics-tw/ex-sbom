@@ -1484,6 +1484,17 @@
             <tbody class="divide-y divide-gray-100">${rows}</tbody>
           </table></div>${pager}`;
 
+        const scrollRegion = container.querySelector(".history-scroll");
+        scrollRegion?.addEventListener("keydown", event => {
+          if (event.target !== scrollRegion || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+          if (scrollRegion.scrollWidth <= scrollRegion.clientWidth) return;
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          const direction = event.key === "ArrowRight" ? 1 : -1;
+          const previous = scrollRegion.scrollLeft;
+          scrollRegion.scrollLeft += direction * 40;
+          if (scrollRegion.scrollLeft !== previous) event.preventDefault();
+        });
+
         const restoreActionFocus = (selector, version) => {
           const controls = Array.from(container.querySelectorAll(selector));
           const target = controls.find(control => control.dataset.version === version) ??

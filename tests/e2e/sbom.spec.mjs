@@ -620,6 +620,8 @@ test("provides a labelled and keyboard-scrollable version history region", async
   await tableRegion.focus();
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => tableRegion.evaluate(el => el.scrollLeft)).toBe(0);
   await page.locator("#lang-zh").click();
   await expect(page.getByRole("region", { name: "版本歷程", exact: true }).getByRole("table")).toBeVisible();
 });
