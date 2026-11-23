@@ -599,6 +599,35 @@ test("preserves comparison disclosures and horizontal scroll when translating", 
   await expect.poll(() => region.evaluate(el => el.scrollLeft)).toBe(scroll);
 });
 
+test("downloads verified remediation findings after storing and reopening an SBOM", async ({ page, service }, testInfo) => {
+  await page.goto(service.url);
+  const project = await createProject(page, "Remediation fixture");
+  await upload(page, sbom("fixture-remediation", "1.0.0"), "Repair exercise");
+  await service.restart();
+  await page.goto(service.url);
+  await selectProject(page, project, "Remediation fixture");
+  await versionRow(page, "Repair exercise").locator(".version-load-btn").click();
+  for (const [lang, button] of [["en", "Download PDF Report"], ["zh", "下載 PDF 報告"]]) {
+    await page.locator("#lang-" + lang).click();
+    const [download, response] = await Promise.all([
+      page.waitForEvent("download"),
+      page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/report")),
+      page.getByRole("button", { name: button, exact: true }).click(),
+    ]);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("application/pdf");
+    expect(download.suggestedFilename()).toMatch(/^Repair exercise.*\.pdf$/i);
+    const output = testInfo.outputPath(`remediation-${lang}.pdf`);
+    await download.saveAs(output);
+    const handle = await open(output, "r");
+    try {
+      expect((await handle.read(Buffer.alloc(5))).buffer.toString()).toBe("%PDF-");
+    } finally {
+      await handle.close();
+    }
+  }
+});
+
 test("explains a blank project name and lets the user correct it", async ({ page, service }) => {
   await page.goto(service.url);
   const name = page.locator("#project-input");

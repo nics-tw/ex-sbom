@@ -82,6 +82,22 @@ func TestE2EServer(t *testing.T) {
 type e2eOSVTransport struct{ fail bool }
 
 func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Method == http.MethodGet {
+		switch req.URL.Host + req.URL.Path {
+		case "api.osv.dev/v1/vulns/EX-SBOM-TEST-1":
+			return e2eJSON(req, `{
+				"id":"EX-SBOM-TEST-1","aliases":["CVE-2025-99999"],
+				"modified":"2025-01-01T00:00:00Z","summary":"Synthetic remediation finding",
+				"severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}],
+				"affected":[{"package":{"ecosystem":"npm","name":"fixture-remediation"},
+				"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}]}]
+			}`), nil
+		case "api.first.org/data/v1/epss":
+			return e2eJSON(req, `{"data":[{"cve":"CVE-2025-99999","epss":"0.2","date":"2025-01-02"}]}`), nil
+		case "www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json":
+			return e2eJSON(req, `{"catalogVersion":"synthetic","count":1,"vulnerabilities":[{"cveID":"CVE-2025-99999"}]}`), nil
+		}
+	}
 	if req.Body != nil {
 		defer req.Body.Close()
 	}
@@ -99,24 +115,39 @@ func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, e
 		}, nil
 	}
 	var query struct {
-		Queries []json.RawMessage `json:"queries"`
+		Queries []struct {
+			Package struct {
+				Name string `json:"name"`
+			} `json:"package"`
+		} `json:"queries"`
 	}
 	if err := json.NewDecoder(req.Body).Decode(&query); err != nil {
 		return nil, err
 	}
+	results := make([]json.RawMessage, len(query.Queries))
+	for i, item := range query.Queries {
+		results[i] = json.RawMessage(`{}`)
+		if item.Package.Name == "fixture-remediation" {
+			results[i] = json.RawMessage(`{"vulns":[{"id":"EX-SBOM-TEST-1"}]}`)
+		}
+	}
 	reply, err := json.Marshal(struct {
-		Results []struct{} `json:"results"`
-	}{Results: make([]struct{}, len(query.Queries))})
+		Results []json.RawMessage `json:"results"`
+	}{Results: results})
 	if err != nil {
 		return nil, err
 	}
+	return e2eJSON(req, string(reply)), nil
+}
+
+func e2eJSON(req *http.Request, body string) *http.Response {
 	return &http.Response{
 		StatusCode: http.StatusOK,
 		Status:     "200 OK",
 		Header:     http.Header{"Content-Type": {"application/json"}},
-		Body:       io.NopCloser(strings.NewReader(string(reply))),
+		Body:       io.NopCloser(strings.NewReader(body)),
 		Request:    req,
-	}, nil
+	}
 }
 
 // Store valid JSON with an incompatible shape to exercise the same corrupt-row
