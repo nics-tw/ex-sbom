@@ -29,6 +29,7 @@ function makeApp() {
     setAttribute() {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
     addEventListener(type, listener) { this.listeners.set(type, listener); }, appendChild() {},
+    replaceChildren(...children) { this.textContent = children.map(child => child.textContent).join(""); },
     querySelector: () => null, querySelectorAll: () => [],
   });
   const getElementById = id => {

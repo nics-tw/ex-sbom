@@ -1222,11 +1222,23 @@
         this._comparison.cancel();
       },
 
+      _showStatusError(key) {
+        const result = document.getElementById("diff-result");
+        const message = document.createElement("p");
+        message.className = "text-red-700";
+        message.setAttribute("aria-hidden", "true");
+        localizeText(message, key);
+        result.replaceChildren(message);
+        localizeText(document.getElementById("diff-status"), key);
+      },
+
       _selectionChanged() {
         this._displayed = null;
         this._comparison.cancel();
         document.getElementById("diff-result").innerHTML = "";
-        document.getElementById("diff-status").textContent = "";
+        const status = document.getElementById("diff-status");
+        delete status.dataset.i18n;
+        status.textContent = "";
       },
 
       _swap() {
@@ -1246,8 +1258,7 @@
 
         if (!a || !b || a === b) {
           this._comparison.cancel();
-          status.textContent = "";
-          resultEl.innerHTML = `<p class="text-red-700">${t("diffSelectBoth")}</p>`;
+          this._showStatusError("diffSelectBoth");
           return;
         }
 
@@ -1261,6 +1272,7 @@
           document.getElementById("diff-select-b").value === req.b;
 
         resultEl.innerHTML = `<p class="py-8 text-center" data-i18n="loading" aria-hidden="true">${t("loading")}</p>`;
+        delete status.dataset.i18n;
         status.textContent = t("loading");
 
         try {
@@ -1315,7 +1327,6 @@
         const selects = ["diff-select-a", "diff-select-b"].map(id => document.getElementById(id));
         const compare = document.getElementById("diff-compare-btn");
         const swap = document.getElementById("diff-swap-btn");
-        const result = document.getElementById("diff-result");
         this._selectionChanged();
         this.translate();
         for (const select of selects) {
@@ -1341,7 +1352,7 @@
           compare.disabled = versions.length < 2;
           swap.disabled = versions.length < 2;
         } catch {
-          if (isCurrent()) result.textContent = t("diffVersionsFailed");
+          if (isCurrent()) this._showStatusError("diffVersionsFailed");
         } finally {
           this._versions.finish(request);
         }

@@ -751,6 +751,44 @@ test("clears comparison status on reopening", async ({ page, service }) => {
   await expect(page.locator("#diff-status")).toBeEmpty();
 });
 
+test("announces comparison errors and clears them before retry", async ({ page, service }) => {
+  await page.goto(service.url);
+  await createProject(page, "Comparison status");
+  await upload(page, sbom("status-fixture", "1.0.0"), "Before");
+  await upload(page, sbom("status-fixture", "2.0.0"), "After");
+  await page.locator("#main-tab-diff").click();
+
+  const compare = page.locator("#diff-compare-btn");
+  const panel = page.locator("#panel-diff");
+  const error = panel.getByRole("status").filter({ hasText: /select two different|請選擇兩個不同/ });
+  await page.locator("#diff-select-a").selectOption("Before");
+  await page.locator("#diff-select-b").selectOption("Before");
+  await compare.press("Enter");
+  await expect(error).toHaveText("Please select two different SBOMs");
+  await expect(compare).toBeFocused();
+  await page.locator("#lang-zh").click();
+  await expect(error).toHaveText("請選擇兩個不同的 SBOM");
+
+  await page.locator("#diff-select-b").selectOption("After");
+  await expect(error).toHaveCount(0);
+  await compare.press("Enter");
+  await expect(panel.getByRole("status")).toContainText(/共 .*項新增/);
+  await expect(compare).toBeFocused();
+  await expect(error).toHaveCount(0);
+
+  await page.locator("#main-tab-analysis").click();
+  await page.route("**/projects/*/versions", route => route.fulfill({ status: 503 }), { times: 1 });
+  const comparisonTab = page.locator("#main-tab-diff");
+  await comparisonTab.press("Enter");
+  await expect(panel.getByRole("status")).toContainText("無法載入版本");
+  await expect(comparisonTab).toBeFocused();
+  await page.locator("#lang-en").click();
+  await expect(panel.getByRole("status")).toContainText("Could not load versions.");
+  await comparisonTab.press("Enter");
+  await expect(compare).toBeEnabled();
+  await expect(panel.getByRole("status")).toBeEmpty();
+});
+
 test("provides a labelled and keyboard-scrollable version history region", async ({ page, service }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto(service.url);
