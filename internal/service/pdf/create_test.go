@@ -73,6 +73,40 @@ func TestRemediationHomepageWithoutFindings(t *testing.T) {
 	}
 }
 
+func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
+	extract, err := exec.LookPath("pdftotext")
+	if err != nil {
+		t.Skip("pdftotext is required to verify the PDF homepage")
+	}
+	bom := ssbom.FormattedSBOM{ComponentInfo: map[string]ssbom.Component{}}
+	for _, key := range []string{"a", "b", "c", "d"} {
+		bom.ComponentInfo[key] = ssbom.Component{
+			Name: key + "-" + strings.Repeat("long-component-name-", 20), Version: "1.0.0",
+			Vulns: []ssbom.Vuln{{ID: "CVE-2025-0001", CVEIDs: []string{"CVE-2025-0001"},
+				KEV: ssbom.KEVListed, KEVCVE: "CVE-2025-0001"}},
+		}
+	}
+	for _, lang := range []string{English, TraditionalChinese} {
+		t.Run(lang, func(t *testing.T) {
+			var output bytes.Buffer
+			require.NoError(t, Generate(&output, Report{Language: lang, SBOM: bom}))
+			require.Contains(t, output.String(), "/Subtype /Link")
+			require.Contains(t, output.String(), "/Dest [")
+			cmd := exec.Command(extract, "-layout", "-", "-")
+			cmd.Stdin = &output
+			raw, err := cmd.Output()
+			require.NoError(t, err)
+			pages := strings.Split(string(raw), "\f")
+			doc := &document{language: lang}
+			require.Contains(t, pages[0], doc.label("Additional urgent components | 1", "另有立即查證元件 | 1"))
+			require.Contains(t, pages[0], doc.label("See Remediation priorities (continued)", "其餘元件請見「修補處理順序（續）」。"))
+			continuation := strings.Join(pages[1:], "\n")
+			require.Contains(t, continuation, doc.label("4. Verify immediately |", "4. 立即查證 |"))
+			require.Contains(t, continuation, "d-long-component-name-")
+		})
+	}
+}
+
 func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 	generatedAt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	name := "元件名稱/" + strings.Repeat("long-package-", 35)

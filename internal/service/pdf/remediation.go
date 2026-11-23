@@ -13,7 +13,7 @@ import (
 
 const remediationPreviewLimit = 3
 
-func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, bom ssbom.FormattedSBOM) {
+func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, bom ssbom.FormattedSBOM) int {
 	d.section(d.label("Remediation priorities", "修補處理順序"))
 	source := bom.ReportSource
 	var status ssbom.QueryStatus
@@ -27,7 +27,7 @@ func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, bom s
 				"No remediation order can be established yet. Verify the query coverage before deferring work.",
 				"目前無法判定修補順序。請先查證弱點查詢範圍，再決定是否延後處理。"), lineHeight)
 		}
-		return
+		return 0
 	}
 	if status != ssbom.QueryCompleted || source.KEVCheckedAt == nil {
 		d.write(d.label(
@@ -56,18 +56,28 @@ func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, bom s
 	if urgent > remediationPreviewLimit {
 		d.field(d.label("Additional urgent components", "另有立即查證元件"), strconv.Itoa(urgent-remediationPreviewLimit))
 	}
+	var continuationLink int
 	if len(entries) > remediationPreviewLimit {
-		d.write(d.label("See Remediation priorities (continued) for remaining components.", "其餘元件請見「修補處理順序（續）」。"), lineHeight)
+		continuationLink = d.AddLink()
+		label := d.label("See Remediation priorities (continued) for remaining components.", "其餘元件請見「修補處理順序（續）」。")
+		for _, line := range d.wrap(label, d.width) {
+			d.ensureSpace(lineHeight)
+			d.Link(d.GetX(), d.GetY(), d.GetStringWidth(line.display), lineHeight, continuationLink)
+			d.textCell(d.width, lineHeight, line, 1)
+		}
 	}
 	for i, entry := range entries[:min(len(entries), remediationPreviewLimit)] {
 		d.remediationEntry(i+1, entry, bom.ComponentToLevel)
 	}
+	return continuationLink
 }
 
-func (d *document) remediationContinuation(entries []ssbom.ComponentAssessment, levels map[string]int) {
-	if len(entries) <= remediationPreviewLimit {
+func (d *document) remediationContinuation(entries []ssbom.ComponentAssessment, levels map[string]int, link int) {
+	if link == 0 {
 		return
 	}
+	d.AddPage()
+	d.SetLink(link, d.GetY(), d.PageNo())
 	d.section(d.label("Remediation priorities (continued)", "修補處理順序（續）"))
 	for i := remediationPreviewLimit; i < len(entries); i++ {
 		d.remediationEntry(i+1, entries[i], levels)
