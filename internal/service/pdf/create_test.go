@@ -38,6 +38,41 @@ func TestQueryStatusWording(t *testing.T) {
 	}
 }
 
+func TestRemediationHomepageWithoutFindings(t *testing.T) {
+	extract, err := exec.LookPath("pdftotext")
+	if err != nil {
+		t.Skip("pdftotext is required to verify the PDF homepage")
+	}
+	for _, lang := range []string{English, TraditionalChinese} {
+		for _, status := range []ssbom.QueryStatus{
+			ssbom.QueryCompleted, ssbom.QueryPartial, ssbom.QueryNotRun, ssbom.QueryFailed, "",
+		} {
+			t.Run(lang+"/"+string(status), func(t *testing.T) {
+				var output bytes.Buffer
+				require.NoError(t, Generate(&output, Report{
+					Language: lang,
+					SBOM:     ssbom.FormattedSBOM{ReportSource: &ssbom.ReportSource{Status: status}},
+				}))
+				cmd := exec.Command(extract, "-f", "1", "-l", "1", "-layout", "-", "-")
+				cmd.Stdin = &output
+				page, err := cmd.Output()
+				require.NoError(t, err)
+				text := string(page)
+				doc := &document{language: lang}
+				require.Contains(t, text, doc.label("Remediation priorities", "修補處理順序"))
+				require.Contains(t, text, doc.queryStatus(status, 0))
+				caution := doc.label("No remediation order can be established yet.", "目前無法判定修補順序")
+				if status == ssbom.QueryCompleted {
+					require.NotContains(t, text, caution)
+				} else {
+					require.Contains(t, text, caution)
+					require.NotContains(t, text, doc.queryStatus(ssbom.QueryCompleted, 0))
+				}
+			})
+		}
+	}
+}
+
 func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 	generatedAt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	name := "元件名稱/" + strings.Repeat("long-package-", 35)

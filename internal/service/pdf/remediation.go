@@ -14,11 +14,21 @@ import (
 const remediationPreviewLimit = 3
 
 func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, source *ssbom.ReportSource) {
+	d.section(d.label("Remediation priorities", "修補處理順序"))
+	var status ssbom.QueryStatus
+	if source != nil {
+		status = source.Status
+	}
 	if len(entries) == 0 {
+		d.field(d.label("Vulnerability query status", "弱點查詢狀態"), d.queryStatus(status, 0))
+		if status != ssbom.QueryCompleted {
+			d.write(d.label(
+				"No remediation order can be established yet. Verify the query coverage before deferring work.",
+				"目前無法判定修補順序。請先查證弱點查詢範圍，再決定是否延後處理。"), lineHeight)
+		}
 		return
 	}
-	d.section(d.label("Remediation priorities", "修補處理順序"))
-	if source == nil || source.Status != ssbom.QueryCompleted || source.KEVCheckedAt == nil {
+	if status != ssbom.QueryCompleted || source.KEVCheckedAt == nil {
 		d.write(d.label(
 			"Evidence is incomplete. Review the analysis summary and KEV status before deciding which work can wait.",
 			"部分資料仍待確認。決定哪些工作可延後前，請先核對分析摘要與 KEV 查核狀態。"), lineHeight)
