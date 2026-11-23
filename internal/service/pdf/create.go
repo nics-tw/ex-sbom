@@ -542,6 +542,9 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field("EPSS", vulnerability.EPSS)
 			if _, valid := first.ParseProbability(vulnerability.LEV); valid && vulnerability.LEVMethod == first.LEVMethod {
 				d.field("LEV", vulnerability.LEV)
+				if vulnerability.LEVFirst != "" && vulnerability.LEVAsOf != "" {
+					d.field(d.label("LEV period (UTC)", "LEV 歷史期間（UTC）"), vulnerability.LEVFirst+" – "+vulnerability.LEVAsOf)
+				}
 			} else {
 				d.field("LEV", d.label("Unavailable or unverified", "未取得或未驗證"))
 			}

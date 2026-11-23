@@ -54,6 +54,7 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		}
 		setReportSpecification(&bom, rawData, keySPDXVersion, "")
 		applyKEV(&bom, cisa.Current)
+		applyHistoricalLEV(&bom)
 		return bom, sha256Hash, spdxTimestamp(doc), nil
 
 	case sbomFormatCycloneDX:
@@ -69,6 +70,7 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		if err == nil {
 			setReportSpecification(&result, rawData, keySpecVersion, "CycloneDX ")
 			applyKEV(&result, cisa.Current)
+			applyHistoricalLEV(&result)
 		}
 		return result, sha256Hash, bomTimestamp, err
 

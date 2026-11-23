@@ -91,6 +91,7 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 | `BIND_ADDR` | `127.0.0.1` | 僅接受本機 loopback IP，例如 `127.0.0.1` 或 `::1`。其他位址會被拒絕。 |
 | `AUTO_OPEN_BROWSER` | `true` | 設為 `false` 可在啟動時不自動開啟瀏覽器。 |
 | `DB_PATH` | 依作業系統而定（見下方） | DuckDB 資料庫檔案的路徑。 |
+| `EPSS_ARCHIVE_DIR` | — | 選填。存放官方每日 `epss_scores-YYYY-MM-DD.csv.gz` 的目錄。準備自 2021-04-14 起至前一個 UTC 日的封存，匯入時才可計算 LEV。必要歷史資料缺漏時，報告會標示 LEV 未取得。 |
 
 預設情況下，資料庫檔案會儲存於各平台原生的設定目錄：
 - macOS：`~/Library/Application Support/ex-sbom/data.duckdb`

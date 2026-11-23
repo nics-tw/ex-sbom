@@ -91,6 +91,7 @@ The following environment variables can be used to configure the tool:
 | `BIND_ADDR` | `127.0.0.1` | Loopback IP address, such as `127.0.0.1` or `::1`. Other addresses are rejected. |
 | `AUTO_OPEN_BROWSER` | `true` | Set to `false` to prevent automatically opening the browser on startup. |
 | `DB_PATH` | OS-specific (see below) | Path to the DuckDB database file. |
+| `EPSS_ARCHIVE_DIR` | — | Optional directory of official daily `epss_scores-YYYY-MM-DD.csv.gz` files. Keep the archive from 2021-04-14 through the previous UTC day for LEV calculation at import. Reports mark LEV unavailable when the required history is missing. |
 
 By default, the database file is stored under the platform-native config directory:
 - macOS: `~/Library/Application Support/ex-sbom/data.duckdb`

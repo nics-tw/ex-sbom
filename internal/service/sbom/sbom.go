@@ -72,6 +72,9 @@ type (
 		EPSS      string    `json:"epss,omitempty"`
 		LEV       string    `json:"lev,omitempty"`
 		LEVMethod string    `json:"lev_method,omitempty"`
+		LEVFirst  string    `json:"lev_first,omitempty"`
+		LEVAsOf   string    `json:"lev_as_of,omitempty"`
+		LEVCVE    string    `json:"lev_cve,omitempty"`
 		CVEIDs    []string  `json:"cve_ids,omitempty"`
 		KEV       KEVStatus `json:"kev,omitempty"`
 		KEVCVE    string    `json:"kev_cve,omitempty"`
@@ -147,6 +150,9 @@ func compareVulns(a, b Vuln) int {
 		cmp.Compare(a.EPSS, b.EPSS),
 		cmp.Compare(a.LEV, b.LEV),
 		cmp.Compare(a.LEVMethod, b.LEVMethod),
+		cmp.Compare(a.LEVFirst, b.LEVFirst),
+		cmp.Compare(a.LEVAsOf, b.LEVAsOf),
+		cmp.Compare(a.LEVCVE, b.LEVCVE),
 		slices.Compare(a.CVEIDs, b.CVEIDs),
 		cmp.Compare(a.KEV, b.KEV),
 		cmp.Compare(a.KEVCVE, b.KEVCVE),
