@@ -103,7 +103,6 @@
           severityUnknown: "Unknown",
           topologyVulnerableComponent: "Known vulnerability",
           topologyVulnerableDependency: "Vulnerable dependency",
-          topologyMoreAtLevel: "{0} — {1}",
           searchNoResults: "No results found",
           searchComponentMatch: "Component",
           componentName: "Component Name",
@@ -250,7 +249,6 @@
           severityUnknown: "未知",
           topologyVulnerableComponent: "具有已知漏洞",
           topologyVulnerableDependency: "相依元件具有漏洞",
-          topologyMoreAtLevel: "{1}：{0}",
           searchNoResults: "找不到符合條件的結果",
           searchComponentMatch: "元件",
           componentName: "元件名稱",
@@ -334,12 +332,18 @@
         for (const tab of document.getElementById("file-tabs").children) {
           tab.querySelector(".sbom-tab-close")?.setAttribute("aria-label", t("closeVersion", tab.dataset.version));
         }
-        if (State.activeTab) Sbom.fetchTopology(State.activeTab.dataset.version);
       },
     };
 
     // Convenience shorthand
     function t(key, ...args) { return i18n.t(key, ...args); }
+
+    function localizeText(element, key, ...args) {
+      element.dataset.i18n = key;
+      if (args.length) element.dataset.i18nArgs = JSON.stringify(args);
+      else delete element.dataset.i18nArgs;
+      element.textContent = t(key, ...args);
+    }
 
     // esc HTML-escapes a value before it is interpolated into innerHTML.
     // Every dynamic value coming from SBOM content, filenames, versions,
@@ -573,7 +577,7 @@
         spinner.innerHTML = `<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="animate-spin h-5 w-5 mr-3 text-[#009999]" viewBox="0 0 24 24" fill="none">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>${t("loadingTopology")}`;
+        </svg><span data-i18n="loadingTopology">${t("loadingTopology")}</span>`;
 
         content.innerHTML = "";
         content.appendChild(header);
@@ -650,7 +654,7 @@
           const errEl = document.createElement("div");
           errEl.className = "mt-4 p-4 bg-red-50 text-red-800 break-words rounded-md";
           errEl.setAttribute("role", "alert");
-          errEl.innerHTML = `<div class="font-medium">${t("failedToLoadTopology")}</div>
+          errEl.innerHTML = `<div class="font-medium" data-i18n="failedToLoadTopology">${t("failedToLoadTopology")}</div>
             <div class="text-sm mt-1">${esc(e.message) || t("unknownError")}</div>`;
           content.appendChild(errEl);
         } finally {
@@ -668,7 +672,7 @@
         if (sorted.length === 0) {
           const empty = document.createElement("div");
           empty.className = "text-gray-500 italic";
-          empty.textContent = t("noTopologyData");
+          localizeText(empty, "noTopologyData");
           container.appendChild(empty);
         } else {
           sorted.forEach(level => container.appendChild(this._buildLevelPanel(level, fileName)));
@@ -680,7 +684,6 @@
         const panel = document.createElement("div");
         panel.className = "mb-6 border border-gray-200 rounded-md";
 
-        const levelLabel = level.level === 0 ? t("rootLevel") : t("level", level.level);
         const header = document.createElement("button");
         header.type = "button";
         header.className = "w-full text-left bg-gray-50 px-4 py-3 flex flex-wrap gap-2 items-center justify-between";
@@ -689,8 +692,18 @@
 
         const titleEl = document.createElement("span");
         titleEl.className = "font-medium";
-        const description = level.level === 0 ? t("topLevelDependencies") : t("componentsCount", level.components.length);
-        titleEl.innerHTML = `${esc(levelLabel)} <span class="text-sm font-normal text-gray-600">${esc(description)}</span>`;
+        titleEl.id = `topology-level-title-${level.level}`;
+        const levelName = document.createElement("span");
+        const description = document.createElement("span");
+        description.className = "text-sm font-normal text-gray-600";
+        if (level.level === 0) {
+          localizeText(levelName, "rootLevel");
+          localizeText(description, "topLevelDependencies");
+        } else {
+          localizeText(levelName, "level", level.level);
+          localizeText(description, "componentsCount", level.components.length);
+        }
+        titleEl.append(levelName, " ", description);
 
         const right = document.createElement("span");
         right.className = "flex items-center space-x-2";
@@ -698,10 +711,10 @@
         const badge = document.createElement("span");
         if (level.total_vulns > 0) {
           badge.className = "px-2 py-1 text-xs font-medium bg-red-100 text-red-900 rounded-full";
-          badge.textContent = t("vulnerabilities", level.total_vulns);
+          localizeText(badge, "vulnerabilities", level.total_vulns);
         } else {
           badge.className = "px-2 py-1 text-xs font-medium bg-[#95D0C0] text-[#231815] rounded-full";
-          badge.textContent = t("noVulnerabilities");
+          localizeText(badge, "noVulnerabilities");
         }
 
         const foldIcon = document.createElement("span");
@@ -724,7 +737,7 @@
         if (level.components.length === 0) {
           const msg = document.createElement("div");
           msg.className = "text-gray-500 italic";
-          msg.textContent = t("noComponents");
+          localizeText(msg, "noComponents");
           list.appendChild(msg);
         } else {
           const openComponent = (comp, trigger) => ComponentModal.show(fileName, comp, trigger);
@@ -739,7 +752,9 @@
             const more = document.createElement("button");
             more.type = "button";
             more.className = "mt-3 py-1 text-sm text-[#006b6b] underline font-medium";
+            more.id = `topology-level-toggle-${level.level}`;
             more.setAttribute("aria-controls", additional.id);
+            more.setAttribute("aria-labelledby", `${more.id} ${titleEl.id}`);
             const updateMore = expanded => {
               if (expanded) {
                 additional.appendChild(this._buildTopologyList(level, level.components.slice(10), openComponent));
@@ -748,9 +763,8 @@
               }
               additional.hidden = !expanded;
               more.setAttribute("aria-expanded", String(expanded));
-              const label = expanded ? t("showLess") : t("showAll", level.components.length);
-              more.textContent = label;
-              more.setAttribute("aria-label", t("topologyMoreAtLevel", label, levelLabel));
+              if (expanded) localizeText(more, "showLess");
+              else localizeText(more, "showAll", level.components.length);
             };
             updateMore(false);
             more.addEventListener("click", () => updateMore(additional.hidden));
@@ -788,7 +802,7 @@
             button.classList.add(...(direct ? ["border-red-200", "bg-red-50"] : ["border-yellow-200", "bg-yellow-50"]));
             const status = document.createElement("span");
             status.className = "block text-xs text-gray-700";
-            status.textContent = t(direct ? "topologyVulnerableComponent" : "topologyVulnerableDependency");
+            localizeText(status, direct ? "topologyVulnerableComponent" : "topologyVulnerableDependency");
             button.appendChild(status);
           } else {
             button.classList.add("border-gray-200", "bg-white");
@@ -1103,7 +1117,10 @@
         this._displayed = data;
         ResultView.search(document.getElementById("search-results"), document.getElementById("search-clear-btn"), data);
         const status = document.getElementById("search-status");
-        if (status) status.textContent = data.total ? t("searchFound", data.total) : t("searchNoResults");
+        if (status) {
+          if (data.total) localizeText(status, "searchFound", data.total);
+          else localizeText(status, "searchNoResults");
+        }
       },
 
       schedule(value) {
@@ -1148,7 +1165,7 @@
           results.classList.add("hidden");
           results.innerHTML = "";
           document.getElementById("search-clear-btn").classList.remove("hidden");
-          if (status) status.textContent = t("searchFailed");
+          if (status) localizeText(status, "searchFailed");
         } finally {
           this._results.finish(req);
         }
@@ -1163,7 +1180,11 @@
         container.innerHTML = "";
         document.getElementById("search-clear-btn").classList.add("hidden");
         const status = document.getElementById("search-status");
-        if (status) status.textContent = "";
+        if (status) {
+          delete status.dataset.i18n;
+          delete status.dataset.i18nArgs;
+          status.textContent = "";
+        }
       },
     };
 
@@ -1798,10 +1819,10 @@
         const badge = document.createElement("div");
         if (level.total_vulns > 0) {
           badge.className = "px-2 py-1 text-xs font-medium bg-[#D9936E] text-red-800 rounded-full";
-          badge.textContent = t("vulnerabilities", level.total_vulns);
+          localizeText(badge, "vulnerabilities", level.total_vulns);
         } else {
           badge.className = "px-2 py-1 text-xs font-medium bg-[#95D0C0] text-[#231815] rounded-full";
-          badge.textContent = t("noVulnerabilities");
+          localizeText(badge, "noVulnerabilities");
         }
         hdr.appendChild(titleEl);
         hdr.appendChild(badge);

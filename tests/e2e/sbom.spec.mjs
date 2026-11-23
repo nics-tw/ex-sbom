@@ -315,6 +315,32 @@ test("searches, compares, renames and deletes versions across windows and a serv
   await page.close();
 });
 
+test("translates a search error and keeps topology controls when changing language", async ({ page, service }) => {
+  await page.goto(service.url);
+  const componentName = "language-fixture";
+  await createProject(page, "Language fixtures");
+  await upload(page, sbom(componentName, "1.0.0"), "First release");
+  await versionRow(page, "First release").locator(".version-load-btn").click();
+  const level = page.locator("#active-topology button[aria-controls^='topology-level-']").first();
+  await expect(level).toBeVisible();
+  const original = await level.elementHandle();
+  await level.click();
+  await expect(level).toHaveAttribute("aria-expanded", "false");
+
+  await page.route("**/search?*", route => route.fulfill({ status: 500 }));
+  await page.locator("#search-input").fill(componentName);
+  const status = page.locator("#search-status");
+  await expect(status).toHaveText("Could not complete the search. Please try again.");
+  await page.locator("#lang-zh").click();
+  await expect(status).toHaveText("無法完成搜尋，請再試一次。");
+  await expect(level).toContainText("直接使用之元件");
+  await expect(level).toHaveAttribute("aria-expanded", "false");
+  expect(await original.evaluate(node => node.isConnected)).toBe(true);
+  await page.locator("#search-clear-btn").click();
+  await page.locator("#lang-en").click();
+  await expect(status).toBeEmpty();
+});
+
 test("cancels the previous project request and keeps the latest project selected", async ({ page, service }) => {
   await page.goto(service.url);
   const first = await createProject(page, "First project");
