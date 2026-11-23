@@ -165,7 +165,7 @@ func Generate(w io.Writer, report Report) error {
 	doc.Ln(5)
 	threshold := ssbom.RemediationThreshold
 	assessments := report.SBOM.RemediationAssessments(&threshold)
-	doc.remediationSummary(assessments)
+	doc.remediationSummary(assessments, report.SBOM.ReportSource)
 	doc.section(doc.label("Report information", "報告資訊"))
 	doc.field(doc.label("Project", "專案"), report.Project.Name)
 	doc.field(doc.label("Project ID", "專案識別碼"), strconv.FormatInt(report.Project.ID, 10))

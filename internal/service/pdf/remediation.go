@@ -13,11 +13,16 @@ import (
 
 const remediationPreviewLimit = 3
 
-func (d *document) remediationSummary(entries []ssbom.ComponentAssessment) {
+func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, source *ssbom.ReportSource) {
 	if len(entries) == 0 {
 		return
 	}
 	d.section(d.label("Remediation priorities", "修補處理順序"))
+	if source == nil || source.Status != ssbom.QueryCompleted || source.KEVCheckedAt == nil {
+		d.write(d.label(
+			"Evidence is incomplete. Review the analysis summary and KEV status before deciding which work can wait.",
+			"部分資料仍待確認。決定哪些工作可延後前，請先核對分析摘要與 KEV 查核狀態。"), lineHeight)
+	}
 	urgent, review := 0, 0
 	for _, entry := range entries {
 		if entry.Driver.Priority == ssbom.RemediationUrgent {

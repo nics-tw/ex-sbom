@@ -78,6 +78,12 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				text := string(result)
 				require.GreaterOrEqual(t, strings.Count(text, "\f"), 3)
 				require.Contains(t, text, tc.title)
+				firstPage := strings.Split(text, "\f")[0]
+				if tc.language == TraditionalChinese {
+					require.Contains(t, firstPage, "部分資料仍待確認")
+				} else {
+					require.Contains(t, firstPage, "Evidence is incomplete")
+				}
 				require.Contains(t, text, tc.count+" | 3")
 				require.NotContains(t, text, "0.937221")
 				if tc.language == TraditionalChinese {

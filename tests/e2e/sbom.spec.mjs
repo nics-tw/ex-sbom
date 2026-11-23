@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { createHash } from "node:crypto";
-import { mkdtemp, open, rm } from "node:fs/promises";
+import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test as base } from "@playwright/test";
@@ -645,6 +645,31 @@ test("downloads verified remediation findings after storing and reopening an SBO
       await handle.close();
     }
   }
+});
+
+test("keeps remediation findings and PDF download available when risk feeds fail", async ({ page, service }, testInfo) => {
+  await service.restart({ failRiskFeeds: true });
+  await page.goto(service.url);
+  const project = await createProject(page, "Unavailable risk feeds");
+  const [preview] = await Promise.all([
+    page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+    upload(page, sbom("fixture-remediation", "1.0.0"), "Offline risk evidence"),
+  ]);
+  const finding = (await preview.json()).data.bom_result.ComponentInfo["fixture-remediation"].vulns[0];
+  expect(finding).toMatchObject({ id: "CVE-2025-99999", cvss_score: "9.8" });
+  expect(finding.epss).toBeUndefined();
+  expect(finding.lev).toBeUndefined();
+  expect(finding.kev).toBeUndefined();
+  const response = await page.request.get(new URL(
+    `/projects/${project}/sboms/Offline%20risk%20evidence/report?lang=zh-TW`, service.url,
+  ).href);
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/pdf");
+  const body = await response.body();
+  expect(body.subarray(0, 5).toString()).toBe("%PDF-");
+  const output = testInfo.outputPath("missing-risk-feeds-zh.pdf");
+  await testInfo.attach("missing-risk-feeds-zh", { body, contentType: "application/pdf" });
+  await writeFile(output, body);
 });
 
 test("explains a blank project name and lets the user correct it", async ({ page, service }) => {

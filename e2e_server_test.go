@@ -37,7 +37,10 @@ func TestE2EServer(t *testing.T) {
 		t.Skip("start through the browser fixture, with a temporary DB_PATH")
 	}
 	transport := http.DefaultTransport
-	http.DefaultTransport = e2eOSVTransport{fail: os.Getenv("EX_SBOM_E2E_FAIL_SCAN") == "1"}
+	http.DefaultTransport = e2eOSVTransport{
+		fail:          os.Getenv("EX_SBOM_E2E_FAIL_SCAN") == "1",
+		failRiskFeeds: os.Getenv("EX_SBOM_E2E_FAIL_RISK_FEEDS") == "1",
+	}
 	t.Cleanup(func() { http.DefaultTransport = transport })
 	if os.Getenv("EX_SBOM_E2E_HISTORY") == "1" {
 		seedE2EEPSSHistory(t)
@@ -105,7 +108,7 @@ func seedE2EEPSSHistory(t *testing.T) {
 }
 
 // e2eOSVTransport exercises the real scanner with deterministic query results.
-type e2eOSVTransport struct{ fail bool }
+type e2eOSVTransport struct{ fail, failRiskFeeds bool }
 
 func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Method == http.MethodGet {
@@ -119,8 +122,14 @@ func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, e
 				"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}]}]
 			}`), nil
 		case "api.first.org/data/v1/epss":
+			if transport.failRiskFeeds {
+				return nil, errors.New("fixture EPSS source unavailable")
+			}
 			return e2eJSON(req, `{"data":[{"cve":"CVE-2025-99999","epss":"0.2","date":"2025-01-02"}]}`), nil
 		case "www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json":
+			if transport.failRiskFeeds {
+				return nil, errors.New("fixture KEV source unavailable")
+			}
 			return e2eJSON(req, `{"catalogVersion":"synthetic","count":1,"vulnerabilities":[{"cveID":"CVE-2025-99999"}]}`), nil
 		}
 	}
