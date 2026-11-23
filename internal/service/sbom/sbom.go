@@ -69,9 +69,12 @@ type (
 		SuggestFixVersion string `json:"suggest_fix_version"`
 		OtherFixVersions  string `json:"other_fix_versions"`
 
-		EPSS      string `json:"epss,omitempty"`
-		LEV       string `json:"lev,omitempty"`
-		LEVMethod string `json:"lev_method,omitempty"`
+		EPSS      string    `json:"epss,omitempty"`
+		LEV       string    `json:"lev,omitempty"`
+		LEVMethod string    `json:"lev_method,omitempty"`
+		CVEIDs    []string  `json:"cve_ids,omitempty"`
+		KEV       KEVStatus `json:"kev,omitempty"`
+		KEVCVE    string    `json:"kev_cve,omitempty"`
 
 		FixVersions []string `json:"fix_versions,omitempty"`
 	}
@@ -119,6 +122,7 @@ func sortFormattedSBOM(sbom *FormattedSBOM) {
 	for _, component := range sbom.ComponentInfo {
 		for i := range component.Vulns {
 			slices.Sort(component.Vulns[i].FixVersions)
+			slices.Sort(component.Vulns[i].CVEIDs)
 			if versions := component.Vulns[i].OtherFixVersions; strings.Contains(versions, ", ") {
 				other := strings.Split(versions, ", ")
 				slices.Sort(other)
@@ -141,6 +145,10 @@ func compareVulns(a, b Vuln) int {
 		cmp.Compare(a.OtherFixVersions, b.OtherFixVersions),
 		cmp.Compare(a.EPSS, b.EPSS),
 		cmp.Compare(a.LEV, b.LEV),
+		cmp.Compare(a.LEVMethod, b.LEVMethod),
+		slices.Compare(a.CVEIDs, b.CVEIDs),
+		cmp.Compare(a.KEV, b.KEV),
+		cmp.Compare(a.KEVCVE, b.KEVCVE),
 		slices.Compare(a.FixVersions, b.FixVersions),
 	)
 }
@@ -426,6 +434,7 @@ func getVulns(pkg models.PackageVulns, version string) []Vuln {
 		}
 		vulns = append(vulns, Vuln{
 			ID:                identifier,
+			CVEIDs:            findingCVEs(v.Id, v.Aliases),
 			Summary:           v.Summary,
 			Details:           v.Details,
 			CVSSScore:         getCVSS(v.Id, pkg.Groups),

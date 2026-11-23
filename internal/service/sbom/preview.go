@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"ex-sbom/client/cisa"
+
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	sbomreader "github.com/spdx/tools-golang/json"
 )
@@ -51,6 +53,7 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 			return FormattedSBOM{}, "", time.Time{}, err
 		}
 		setReportSpecification(&bom, rawData, keySPDXVersion, "")
+		applyKEV(&bom, cisa.Current)
 		return bom, sha256Hash, spdxTimestamp(doc), nil
 
 	case sbomFormatCycloneDX:
@@ -65,6 +68,7 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		result, sha256Hash, bomTimestamp, err := s.PreviewCDX(bom, cdxData)
 		if err == nil {
 			setReportSpecification(&result, rawData, keySpecVersion, "CycloneDX ")
+			applyKEV(&result, cisa.Current)
 		}
 		return result, sha256Hash, bomTimestamp, err
 

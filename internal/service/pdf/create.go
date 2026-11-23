@@ -178,6 +178,11 @@ func Generate(w io.Writer, report Report) error {
 		doc.field(doc.label("Query observed at (UTC)", "查詢時間（UTC）"), source.QueriedAt.UTC().Format("2006-01-02 15:04:05"))
 	}
 
+	if source.KEVCheckedAt != nil {
+		doc.field(doc.label("CISA KEV catalog version", "CISA KEV 清單版本"), source.KEVCatalogVersion)
+		doc.field(doc.label("KEV checked at (UTC)", "KEV 查核時間（UTC）"), source.KEVCheckedAt.UTC().Format("2006-01-02 15:04:05"))
+	}
+
 	components := sortedComponents(report.SBOM)
 	var findings, direct, transitive, unknown, affected, directAffected, transitiveAffected int
 	var severities [6]int
@@ -537,7 +542,7 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			} else {
 				d.field("LEV", d.label("Unavailable or unverified", "未取得或未驗證"))
 			}
-			signal := vulnerability.ExploitationSignal(ssbom.KEVUnknown)
+			signal := vulnerability.ExploitationSignal(vulnerability.KEV)
 			value := d.label("Insufficient data", "資料不足")
 			if signal.Available {
 				percent := strconv.FormatFloat(signal.Value*100, 'f', -1, 64) + "%"
@@ -551,7 +556,14 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 				}
 			}
 			d.field(d.label("Exploitation signal", "綜合利用指標"), value)
-			d.field("KEV", d.label("Not checked", "尚未查核"))
+			switch vulnerability.KEV {
+			case ssbom.KEVListed:
+				d.field("KEV", d.label("Listed in CISA catalog", "已列入 CISA 清單")+" · "+vulnerability.KEVCVE)
+			case ssbom.KEVUnlisted:
+				d.field("KEV", d.label("Checked, not listed", "已查核，未列入"))
+			default:
+				d.field("KEV", d.label("Not checked", "尚未查核"))
+			}
 			d.field(d.label("Suggested fix versions", "建議修補版本"), vulnerability.SuggestFixVersion)
 			d.field(d.label("Other fix versions", "其他修補版本"), vulnerability.OtherFixVersions)
 			d.field(d.label("Details", "詳細說明"), vulnerability.Details)

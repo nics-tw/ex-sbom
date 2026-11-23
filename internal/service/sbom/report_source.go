@@ -20,11 +20,13 @@ const (
 // ReportSource is server-observed provenance. It is saved with the
 // snapshot and signed in the preview, independently of the result hash.
 type ReportSource struct {
-	FileName      string      `json:"filename,omitempty"`
-	FileSHA256    string      `json:"sha256,omitempty"`
-	Specification string      `json:"specification,omitempty"`
-	Status        QueryStatus `json:"query_status,omitempty"`
-	QueriedAt     *time.Time  `json:"queried_at,omitempty"`
+	FileName          string      `json:"filename,omitempty"`
+	FileSHA256        string      `json:"sha256,omitempty"`
+	Specification     string      `json:"specification,omitempty"`
+	Status            QueryStatus `json:"query_status,omitempty"`
+	QueriedAt         *time.Time  `json:"queried_at,omitempty"`
+	KEVCatalogVersion string      `json:"kev_catalog_version,omitempty"`
+	KEVCheckedAt      *time.Time  `json:"kev_checked_at,omitempty"`
 }
 
 func observedSource(packages []file.PackageVersion, components map[string]Component, observation file.QueryObservation) *ReportSource {
