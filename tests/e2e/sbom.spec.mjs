@@ -529,6 +529,44 @@ test("preserves a chosen interface language across navigation and reload", async
   await expect(html).toHaveAttribute("lang", "en");
 });
 
+test("keeps control boundaries and selection visible in forced colors", async ({ page, service }) => {
+  await page.emulateMedia({ forcedColors: "active" });
+  if (!(await page.evaluate(() => matchMedia("(forced-colors: active)").matches))) {
+    test.skip(true, "Browser does not support forced colors emulation");
+  }
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto(service.url);
+  await createProject(page, "Forced colors");
+  await upload(page, sbom("forced-colors-fixture", "1.0.0"), "Before");
+  await upload(page, sbom("forced-colors-fixture", "2.0.0"), "After");
+
+  const english = page.locator("#lang-en");
+  const chinese = page.locator("#lang-zh");
+  const analysis = page.locator("#main-tab-analysis");
+  const comparison = page.locator("#main-tab-diff");
+  const download = page.getByRole("button", { name: "Download PDF Report" });
+  await expect(english).toHaveAttribute("aria-pressed", "true");
+  await expect(english).toHaveCSS("text-decoration-line", "underline");
+  await expect(chinese).toHaveCSS("text-decoration-line", "none");
+  await expect(analysis).toHaveCSS("text-decoration-line", "underline");
+  await expect(comparison).toHaveCSS("text-decoration-line", "none");
+  await expect(download).toHaveCSS("border-top-style", "solid");
+
+  await page.getByRole("button", { name: "Before", exact: true }).press("Enter");
+  await expect(page.getByRole("button", { name: "Before", exact: true })).toHaveCSS("text-decoration-line", "underline");
+  await expect(page.getByRole("button", { name: "After", exact: true })).toHaveCSS("text-decoration-line", "none");
+
+  await chinese.press("Enter");
+  await expect(chinese).toHaveAttribute("aria-pressed", "true");
+  await expect(chinese).toHaveCSS("text-decoration-line", "underline");
+  await expect(english).toHaveCSS("text-decoration-line", "none");
+  await comparison.press("Enter");
+  await expect(comparison).toBeFocused();
+  await expect(comparison).toHaveCSS("outline-width", "3px");
+  await expect(comparison).toHaveCSS("text-decoration-line", "underline");
+  await expect(analysis).toHaveCSS("text-decoration-line", "none");
+});
+
 test("provides bilingual landmarks, field names, and keyboard skip links", async ({ page, service, browserName }) => {
   await page.goto(service.url);
   const main = page.getByRole("main");

@@ -270,12 +270,18 @@ body .site-main:focus-visible {
     outline-color: Highlight;
   }
 
-  .language-btn.active-language {
-    border-color: ButtonText;
+  .language-btn[aria-pressed="true"],
+  body .main-tab[aria-pressed="true"] {
+    text-decoration: underline;
+    text-underline-offset: .18em;
   }
 
-  body .main-tab[aria-pressed="true"] {
-    border-block-end-color: ButtonText;
+  .control-primary {
+    border: 1px solid ButtonText;
+  }
+
+  .control-primary:is(:disabled, [aria-disabled="true"]) {
+    border-color: GrayText;
   }
 }
 
