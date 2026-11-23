@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type (
@@ -45,12 +46,11 @@ type (
 const (
 	BaseURL = "https://api.first.org/data/v1/epss"
 	Pcve    = "?cve="
-	Ps      = "&scope=time-series"
 )
 
 func New() *Client {
 	return &Client{
-		HttpClient: &http.Client{},
+		HttpClient: &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
@@ -92,8 +92,6 @@ func composeParam(cves []string) string {
 
 		p.WriteString(cve)
 	}
-
-	p.WriteString(Ps)
 
 	return p.String()
 }

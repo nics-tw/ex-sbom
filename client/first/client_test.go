@@ -26,12 +26,12 @@ func TestComposeParam(t *testing.T) {
 		{
 			name:     "Single element",
 			input:    []string{"CVE-2023-12345"},
-			expected: "https://api.first.org/data/v1/epss?cve=CVE-2023-12345&scope=time-series",
+			expected: "https://api.first.org/data/v1/epss?cve=CVE-2023-12345",
 		},
 		{
 			name:     "Multiple elements",
 			input:    []string{"CVE-2023-12345", "CVE-2023-67890"},
-			expected: "https://api.first.org/data/v1/epss?cve=CVE-2023-12345,CVE-2023-67890&scope=time-series",
+			expected: "https://api.first.org/data/v1/epss?cve=CVE-2023-12345,CVE-2023-67890",
 		},
 	}
 

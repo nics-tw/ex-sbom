@@ -54,6 +54,8 @@ func matchedRepairEvidence(advisory *osvschema.Vulnerability, identity file.Pack
 			e.Ranges = append(e.Ranges, intervals...)
 		}
 	}
+	slices.SortFunc(e.Ranges, compareRepairIntervals)
+	e.Ranges = slices.Compact(e.Ranges)
 	slices.Sort(e.Versions)
 	e.Versions = slices.Compact(e.Versions)
 	if len(e.Ranges) == 0 || !semver.IsValid(repairVersion(e.Installed)) || !e.affects(e.Installed) {
@@ -144,7 +146,7 @@ func verifiedRepair(findings []FindingAssessment) (string, []FindingAssessment) 
 			candidate := repairVersion(r.Fixed)
 			current := repairVersion(e.Installed)
 			if semver.IsValid(candidate) && semver.Prerelease(candidate) == "" &&
-				semver.Major(candidate) == semver.Major(current) && semver.Compare(candidate, current) > 0 {
+				compatibleRepairSeries(candidate, current) && semver.Compare(candidate, current) > 0 {
 				candidates = append(candidates, r.Fixed)
 			}
 		}
@@ -169,4 +171,31 @@ func verifiedRepair(findings []FindingAssessment) (string, []FindingAssessment) 
 		return candidate, covered
 	}
 	return "", nil
+}
+
+func compatibleRepairSeries(candidate, current string) bool {
+	major := semver.Major(current)
+	if major != semver.Major(candidate) {
+		return false
+	}
+	return major != "v0" || semver.MajorMinor(candidate) == semver.MajorMinor(current)
+}
+
+func compareRepairIntervals(a, b RepairInterval) int {
+	return cmp.Or(cmp.Compare(a.Start, b.Start), cmp.Compare(a.Fixed, b.Fixed), cmp.Compare(a.Last, b.Last))
+}
+
+func compareRepairEvidence(a, b *RepairEvidence) int {
+	if a == nil && b == nil {
+		return 0
+	}
+	if a == nil {
+		return -1
+	}
+	if b == nil {
+		return 1
+	}
+	return cmp.Or(cmp.Compare(a.AdvisoryID, b.AdvisoryID), cmp.Compare(a.Ecosystem, b.Ecosystem),
+		cmp.Compare(a.Package, b.Package), cmp.Compare(a.Installed, b.Installed),
+		slices.Compare(a.Versions, b.Versions), slices.CompareFunc(a.Ranges, b.Ranges, compareRepairIntervals))
 }

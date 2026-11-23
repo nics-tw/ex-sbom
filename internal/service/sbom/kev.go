@@ -49,10 +49,22 @@ func applyKEV(bom *FormattedSBOM, current func() (cisa.Catalog, error)) {
 			for _, id := range finding.CVEIDs {
 				if catalog.Contains(id) {
 					finding.KEV = KEVListed
-					finding.KEVCVE = id
-					break
+					finding.KEVCVEs = append(finding.KEVCVEs, id)
 				}
 			}
 		}
 	}
+}
+
+func (v Vuln) listedCVEs() []string {
+	if v.KEV != KEVListed {
+		return nil
+	}
+	if len(v.KEVCVEs) > 0 {
+		return v.KEVCVEs
+	}
+	if v.KEVCVE != "" {
+		return []string{v.KEVCVE}
+	}
+	return nil
 }

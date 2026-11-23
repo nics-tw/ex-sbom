@@ -68,5 +68,9 @@ func calculateLEV(series []TimeSeries, firstDate, assessmentDate string, require
 		fraction := float64(min(end.Sub(day), window)) / float64(window)
 		logSurvival += math.Log1p(-score * fraction)
 	}
-	return -math.Expm1(logSurvival), true
+	score := -math.Expm1(logSurvival)
+	if score == 1 && !math.IsInf(logSurvival, -1) {
+		score = math.Nextafter(1, 0)
+	}
+	return score, true
 }

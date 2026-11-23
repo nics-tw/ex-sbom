@@ -43,8 +43,7 @@ func applyHistoricalLEV(bom *FormattedSBOM) {
 	}
 	scores, err := first.ArchiveLEVWithReservations(dir, first.FirstArchiveDay, asOf, cves, reservations)
 	if err != nil {
-		slog.Warn("EPSS archive cannot establish historical LEV", "error", err)
-		return
+		slog.Warn("EPSS archive has unusable data", "error", err)
 	}
 	setHistoricalLEV(bom, scores)
 }

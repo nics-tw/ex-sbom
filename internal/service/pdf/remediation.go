@@ -4,6 +4,7 @@ package pdf
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -36,14 +37,14 @@ func (d *document) remediationSummary(entries []ssbom.ComponentAssessment) {
 		"Confirm deployment and exposure with the system owner. Findings with insufficient evidence remain pending review.",
 		"請維運單位確認實際部署與曝險。證據不足的弱點仍待查證。"), lineHeight)
 
-	for i, entry := range entries[:min(len(entries), remediationPreviewLimit)] {
-		d.remediationEntry(i+1, entry)
-	}
 	if urgent > remediationPreviewLimit {
 		d.field(d.label("Additional urgent components", "另有立即查證元件"), strconv.Itoa(urgent-remediationPreviewLimit))
 	}
 	if len(entries) > remediationPreviewLimit {
 		d.write(d.label("See Remediation priorities (continued) for remaining components.", "其餘元件請見「修補處理順序（續）」。"), lineHeight)
+	}
+	for i, entry := range entries[:min(len(entries), remediationPreviewLimit)] {
+		d.remediationEntry(i+1, entry)
 	}
 }
 
@@ -75,6 +76,9 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment) {
 	}
 	d.field(fmt.Sprintf("%d. %s", rank, label), strings.TrimSpace(entry.Name+" "+entry.Version))
 	d.SetTextColor(24, 37, 42)
+	if entry.Package != "" && entry.Package != entry.Name {
+		d.field(d.label("Package identity", "套件識別"), entry.Ecosystem+" · "+entry.Package)
+	}
 	score := finding.CVSSScore
 	if !entry.Driver.HasCVSS {
 		score = d.label("Unavailable", "未取得")
@@ -102,7 +106,13 @@ func (d *document) exploitationValue(signal ssbom.ExploitationSignal) string {
 	if !signal.Available {
 		return d.label("Insufficient data", "資料不足")
 	}
-	percent := strconv.FormatFloat(signal.Value*100, 'f', -1, 64) + "%"
+	value := signal.Value * 100
+	if signal.Value < 1 && value >= 99.99 {
+		value = 99.99
+	} else if !signal.Complete {
+		value = math.Floor(math.Nextafter(value*100, math.Inf(1))) / 100
+	}
+	percent := strings.TrimRight(strings.TrimRight(strconv.FormatFloat(value, 'f', 2, 64), "0"), ".") + "%"
 	if !signal.Complete {
 		percent = fmt.Sprintf(d.label("At least %s (incomplete data)", "至少 %s（資料未齊）"), percent)
 	}

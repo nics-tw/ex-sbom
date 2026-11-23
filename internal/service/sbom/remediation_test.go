@@ -43,3 +43,14 @@ func TestRemediationThresholdUsesUnroundedValue(t *testing.T) {
 	finding.EPSS = "0.8"
 	require.Equal(t, RemediationElevated, assessFinding(finding, "1", &threshold).Priority)
 }
+
+func TestRemediationPreservesAllKEVMatches(t *testing.T) {
+	ids := []string{"CVE-2024-0001", "CVE-2024-0002"}
+	finding := Vuln{CVEIDs: ids, KEV: KEVListed, KEVCVEs: ids}
+	bom := FormattedSBOM{ComponentInfo: map[string]Component{
+		"dependency": {Name: "dependency", Version: "1", Vulns: []Vuln{finding}},
+	}}
+	entry := bom.RemediationAssessments(nil)[0]
+	require.Equal(t, ids, entry.UrgentCVEs)
+	require.Equal(t, ids, entry.ResidualUrgentCVEs)
+}

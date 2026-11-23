@@ -41,6 +41,12 @@ func TestVerifiedRepair(t *testing.T) {
 	require.Empty(t, bom.RemediationAssessments(nil)[0].Upgrade)
 }
 
+func TestCompatibleRepairSeries(t *testing.T) {
+	require.True(t, compatibleRepairSeries("v0.1.9", "v0.1.0"))
+	require.False(t, compatibleRepairSeries("v0.2.0", "v0.1.0"))
+	require.True(t, compatibleRepairSeries("v1.2.0", "v1.1.0"))
+}
+
 func TestMatchedRepairEvidence(t *testing.T) {
 	identity := file.PackageVersion{Ecosystem: "npm", Name: "body-parser", Version: "1.19.0"}
 	affected := &osvschema.Affected{

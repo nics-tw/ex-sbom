@@ -540,6 +540,8 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field(d.label("Vulnerability ID", "弱點識別碼"), vulnerability.ID)
 			d.field(d.label("Summary", "摘要"), vulnerability.Summary)
 			d.field("CVSS", vulnerability.CVSSScore)
+			d.field(d.label("CVSS version", "CVSS 指標版本"), vulnerability.CVSSVersion)
+			d.field(d.label("EPSS score date", "EPSS 評分日期"), vulnerability.EPSSDate)
 			d.field("EPSS", vulnerability.EPSS)
 			if _, valid := first.ParseProbability(vulnerability.LEV); valid && vulnerability.LEVMethod == first.LEVMethod {
 				value := vulnerability.LEV
@@ -547,6 +549,7 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 					value = fmt.Sprintf(d.label("At least %s (historical gaps)", "至少 %s（歷史資料有缺口）"), value)
 				}
 				d.field("LEV", value)
+				d.field(d.label("LEV calculation method", "LEV 計算方法"), vulnerability.LEVMethod)
 				if vulnerability.LEVFirst != "" && vulnerability.LEVAsOf != "" {
 					d.field(d.label("LEV period (UTC)", "LEV 歷史期間（UTC）"), vulnerability.LEVFirst+" – "+vulnerability.LEVAsOf)
 				}
@@ -556,7 +559,11 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field(d.label("Exploitation signal", "綜合利用指標"), d.exploitationValue(vulnerability.ExploitationSignal(vulnerability.KEV)))
 			switch vulnerability.KEV {
 			case ssbom.KEVListed:
-				d.field("KEV", d.label("Listed in CISA catalog", "已列入 CISA 清單")+" · "+vulnerability.KEVCVE)
+				ids := vulnerability.KEVCVEs
+				if len(ids) == 0 {
+					ids = []string{vulnerability.KEVCVE}
+				}
+				d.field("KEV", d.label("Listed in CISA catalog", "已列入 CISA 清單")+" · "+strings.Join(ids, ", "))
 			case ssbom.KEVUnlisted:
 				d.field("KEV", d.label("Checked, not listed", "已查核，未列入"))
 			default:

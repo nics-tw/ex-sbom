@@ -55,6 +55,7 @@ func ArchiveLEVWithReservations(dir, firstDay, asOf string, cves []string, reser
 		}
 		pending[cve] = &archiveFinding{}
 	}
+	var firstError error
 	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
 		date := day.Format(time.DateOnly)
 		wanted := make(map[string]*archiveFinding)
@@ -68,8 +69,8 @@ func ArchiveLEVWithReservations(dir, firstDay, asOf string, cves []string, reser
 		}
 		rows, err := archiveDay(dir, date, wanted)
 		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("EPSS archive %s: %w", date, err)
+			if firstError == nil && !os.IsNotExist(err) {
+				firstError = fmt.Errorf("EPSS archive %s: %w", date, err)
 			}
 		}
 		for cve, finding := range wanted {
@@ -101,7 +102,7 @@ func ArchiveLEVWithReservations(dir, firstDay, asOf string, cves []string, reser
 			results[cve] = HistoricalLEV{Score: score, First: finding.first, AsOf: asOf, Partial: finding.partial}
 		}
 	}
-	return results, nil
+	return results, firstError
 }
 
 func archiveDay(dir, day string, wanted map[string]*archiveFinding) (map[string]string, error) {

@@ -13,9 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"ex-sbom/client/first"
 	"ex-sbom/internal/domain"
-	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
 	"ex-sbom/util/file"
 
@@ -426,39 +424,7 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string, 
 		}
 	}
 
-	var cves []string
-	for _, c := range componentInfo {
-		for _, v := range c.Vulns {
-			if v.ID != "" {
-				cves = append(cves, v.ID)
-			}
-		}
-	}
-
-	firstInfos, err := lev.GetByChunk(cves)
-	if err != nil {
-		slog.Error("failed to get lev info", "error", err)
-	}
-
-	if len(firstInfos) == 0 {
-		slog.Info("no lev info found for the components", "name", util.LogSafe(filename))
-	}
-
-	for name, info := range componentInfo {
-		updated := false
-		for i, v := range info.Vulns {
-			if data, found := firstInfos[v.ID]; found {
-				slog.Info("found lev info", "cve", util.LogSafe(v.ID), "epss", util.LogSafe(data.EPSS))
-				if _, valid := first.ParseProbability(data.EPSS); valid {
-					info.Vulns[i].EPSS = data.EPSS
-				}
-				updated = true
-			}
-		}
-		if updated {
-			componentInfo[name] = info
-		}
-	}
+	applyEPSS(componentInfo)
 
 	return componentInfo, observation, nil
 }
