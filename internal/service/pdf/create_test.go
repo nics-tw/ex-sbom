@@ -44,7 +44,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 	bom := ssbom.FormattedSBOM{
 		ComponentInfo: map[string]ssbom.Component{
 			name: {Name: name, Version: "1.0",
-				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4",
+				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", LEV: "0.937221",
 					Summary: "弱點摘要", Details: strings.Repeat("跨頁內容 Mixed-language text. ", 400) + "末頁標記"}}},
 		},
 		ReportSource: &ssbom.ReportSource{
@@ -73,6 +73,12 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				require.GreaterOrEqual(t, strings.Count(text, "\f"), 3)
 				require.Contains(t, text, tc.title)
 				require.Contains(t, text, tc.count+" | 1")
+				require.NotContains(t, text, "0.937221")
+				if tc.language == TraditionalChinese {
+					require.Contains(t, text, "LEV | 未取得或未驗證")
+				} else {
+					require.Contains(t, text, "LEV | Unavailable or unverified")
+				}
 				for _, value := range []string{"測試專案", "候選版", "來源測試.json", strings.Repeat("e", 64), "TEST-EX-SBOM-0001", "末頁標記"} {
 					require.Contains(t, text, value)
 				}

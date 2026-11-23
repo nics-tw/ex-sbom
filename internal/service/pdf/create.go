@@ -18,6 +18,7 @@ import (
 	"unicode"
 	"unicode/utf16"
 
+	"ex-sbom/client/first"
 	"ex-sbom/internal/domain"
 	ssbom "ex-sbom/internal/service/sbom"
 
@@ -181,6 +182,7 @@ func Generate(w io.Writer, report Report) error {
 	var findings, direct, transitive, unknown, affected, directAffected, transitiveAffected int
 	var severities [6]int
 	var epssBands, levBands [3]int
+	var unavailableLEV int
 	for _, component := range components {
 		findings += len(component.sbom.Vulns)
 		if len(component.sbom.Vulns) > 0 {
@@ -189,7 +191,11 @@ func Generate(w io.Writer, report Report) error {
 		for _, vuln := range component.sbom.Vulns {
 			severities[severity(vuln.CVSSScore)]++
 			countRiskThresholds(&epssBands, vuln.EPSS)
-			countRiskThresholds(&levBands, vuln.LEV)
+			if _, valid := first.ParseProbability(vuln.LEV); valid && vuln.LEVMethod == first.LEVMethod {
+				countRiskThresholds(&levBands, vuln.LEV)
+			} else {
+				unavailableLEV++
+			}
 		}
 		switch component.scope {
 		case "direct":
@@ -218,6 +224,9 @@ func Generate(w io.Writer, report Report) error {
 		fmt.Sprintf("%d / %d / %d / %d / %d / %d", severities[5], severities[4], severities[3], severities[2], severities[1], severities[0]))
 	doc.field("EPSS ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", epssBands[0], epssBands[1], epssBands[2]))
 	doc.field("LEV ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", levBands[0], levBands[1], levBands[2]))
+	if unavailableLEV > 0 {
+		doc.field(doc.label("LEV unavailable or unverified", "LEV 未取得或未驗證"), strconv.Itoa(unavailableLEV))
+	}
 	doc.field(doc.label("Analysis scope", "分析範圍"), doc.label(
 		"Findings are the records stored for this SBOM version. A finding shared by multiple components is counted for each component.",
 		"本報告呈現此 SBOM 版本儲存的弱點紀錄。同一弱點涉及多個元件時，按元件分別計入。"))
@@ -523,7 +532,11 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field(d.label("Summary", "摘要"), vulnerability.Summary)
 			d.field("CVSS", vulnerability.CVSSScore)
 			d.field("EPSS", vulnerability.EPSS)
-			d.field("LEV", vulnerability.LEV)
+			if _, valid := first.ParseProbability(vulnerability.LEV); valid && vulnerability.LEVMethod == first.LEVMethod {
+				d.field("LEV", vulnerability.LEV)
+			} else {
+				d.field("LEV", d.label("Unavailable or unverified", "未取得或未驗證"))
+			}
 			d.field(d.label("Suggested fix versions", "建議修補版本"), vulnerability.SuggestFixVersion)
 			d.field(d.label("Other fix versions", "其他修補版本"), vulnerability.OtherFixVersions)
 			d.field(d.label("Details", "詳細說明"), vulnerability.Details)

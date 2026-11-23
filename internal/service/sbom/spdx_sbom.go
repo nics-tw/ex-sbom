@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"ex-sbom/client/first"
 	"ex-sbom/internal/domain"
 	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
@@ -341,9 +342,10 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, na
 		updated := false
 		for i, v := range info.Vulns {
 			if data, found := firstInfos[v.ID]; found {
-				slog.Info("found lev info", "cve", util.LogSafe(v.ID), "lev", data.LEV, "epss", util.LogSafe(data.EPSS))
-				info.Vulns[i].EPSS = fmt.Sprintf("%.6f", data.EPSSNum)
-				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
+				slog.Info("found lev info", "cve", util.LogSafe(v.ID), "epss", util.LogSafe(data.EPSS))
+				if _, valid := first.ParseProbability(data.EPSS); valid {
+					info.Vulns[i].EPSS = data.EPSS
+				}
 				updated = true
 			}
 		}

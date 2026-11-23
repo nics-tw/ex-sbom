@@ -45,31 +45,25 @@ func TestComposeParam(t *testing.T) {
 	}
 }
 
-func TestGetLEV(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []TimeSeries
-		expected float64
+func TestCalculateLEV(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		series []TimeSeries
+		want   float64
+		valid  bool
 	}{
-		{
-			name:     "Valid single CVE",
-			input:    []TimeSeries{{EPSS: "0.5", Percentile: "0.5", Date: "2023-01-01"}},
-			expected: 0.5,
-		},
-		{
-			name: "Valid multiple CVEs",
-			input: []TimeSeries{{EPSS: "0.3", Percentile: "0.3", Date: "2023-01-01"},
-				{EPSS: "0.7", Percentile: "0.7", Date: "2023-01-02"}},
-			expected: 0.853,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getLEV(tt.input)
-			if !assert.Equal(t, tt.expected, result) {
-				t.Errorf("expected %f, got %f", tt.expected, result)
-			}
+		{"full window and one-day tail", []TimeSeries{{Date: "2023-01-31", EPSS: "0.3"}, {Date: "2023-01-02", EPSS: "0.9"}, {Date: "2023-01-01", EPSS: "0.3"}}, .307, true},
+		{"valid zero", []TimeSeries{{Date: "2023-01-01", EPSS: "0"}, {Date: "2023-01-31", EPSS: "0"}}, 0, true},
+		{"missing first window", []TimeSeries{{Date: "2023-01-31", EPSS: "0.3"}}, 0, false},
+		{"missing tail window", []TimeSeries{{Date: "2023-01-01", EPSS: "0.3"}, {Date: "2023-02-01", EPSS: "0.9"}}, 0, false},
+		{"conflicting duplicate", []TimeSeries{{Date: "2023-01-01", EPSS: "0.3"}, {Date: "2023-01-01", EPSS: "0.4"}}, 0, false},
+		{"nonfinite", []TimeSeries{{Date: "2023-01-01", EPSS: "NaN"}}, 0, false},
+		{"out of range", []TimeSeries{{Date: "2023-01-01", EPSS: "1.01"}}, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, valid := CalculateLEV(tc.series, "2023-01-01", "2023-01-31")
+			assert.Equal(t, tc.valid, valid)
+			assert.InDelta(t, tc.want, got, 1e-12)
 		})
 	}
 }
