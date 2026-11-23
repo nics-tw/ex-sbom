@@ -115,7 +115,7 @@ type document struct {
 	usedGlyphFallback bool
 }
 
-func Generate(w io.Writer, report Report) error {
+func generateUntagged(w io.Writer, report Report) error {
 	font, err := loadFont()
 	if err != nil {
 		return fmt.Errorf("load report font: %w", err)
@@ -165,22 +165,32 @@ func Generate(w io.Writer, report Report) error {
 	doc.Ln(5)
 	threshold := ssbom.RemediationThreshold
 	assessments := report.SBOM.RemediationAssessments(&threshold)
-	continuationLink := doc.remediationSummary(assessments, report.SBOM)
-	doc.section(doc.label("Report information", "報告資訊"))
-	doc.field(doc.label("Project", "專案"), report.Project.Name)
-	doc.field(doc.label("Project ID", "專案識別碼"), strconv.FormatInt(report.Project.ID, 10))
-	doc.field(doc.label("Version", "版本"), report.Version)
 	source := report.SBOM.ReportSource
 	if source == nil {
 		source = &ssbom.ReportSource{}
 	}
-	doc.field(doc.label("Source file", "來源檔案"), source.FileName)
+	doc.SetFont(reportFont, "", 9)
+	doc.SetTextColor(24, 37, 42)
+	doc.field(doc.label("Project", "專案"), report.Project.Name)
+	doc.field(doc.label("Version", "版本"), report.Version)
 	doc.field(doc.label("SBOM specification", "SBOM 規格"), source.Specification)
-	doc.field(doc.label("Source file SHA-256", "來源檔案 SHA-256"), source.FileSHA256)
-	doc.field(doc.label("Generated at (UTC)", "產製時間（UTC）"), report.GeneratedAt.UTC().Format("2006-01-02 15:04:05"))
+	doc.field(doc.label("Vulnerability query status", "弱點查詢狀態"), doc.queryStatus(source.Status, len(assessments)))
 	if source.QueriedAt != nil && !source.QueriedAt.IsZero() {
 		doc.field(doc.label("Query observed at (UTC)", "查詢時間（UTC）"), source.QueriedAt.UTC().Format("2006-01-02 15:04:05"))
 	}
+	evidenceComplete := remediationEvidenceComplete(source, report.SBOM.ComponentInfo)
+	continuationLink := doc.remediationSummary(assessments, report.SBOM.ComponentToLevel, source, evidenceComplete)
+	if continuationLink != 0 {
+		doc.remediationContinuation(assessments, report.SBOM.ComponentToLevel, continuationLink, evidenceComplete)
+	} else if len(assessments) != 0 {
+		doc.AddPage()
+	}
+
+	doc.section(doc.label("Report information", "報告資訊"))
+	doc.field(doc.label("Project ID", "專案識別碼"), strconv.FormatInt(report.Project.ID, 10))
+	doc.field(doc.label("Source file", "來源檔案"), source.FileName)
+	doc.field(doc.label("Source file SHA-256", "來源檔案 SHA-256"), source.FileSHA256)
+	doc.field(doc.label("Generated at (UTC)", "產製時間（UTC）"), report.GeneratedAt.UTC().Format("2006-01-02 15:04:05"))
 
 	if source.KEVCheckedAt != nil {
 		doc.field(doc.label("CISA KEV catalog version", "CISA KEV 清單版本"), source.KEVCatalogVersion)
@@ -240,7 +250,12 @@ func Generate(w io.Writer, report Report) error {
 		"Findings are the records stored for this SBOM version. A finding shared by multiple components is counted for each component.",
 		"本報告呈現此 SBOM 版本儲存的弱點紀錄。同一弱點涉及多個元件時，按元件分別計入。"))
 
-	doc.remediationContinuation(assessments, report.SBOM.ComponentToLevel, continuationLink)
+	if len(assessments) != 0 {
+		doc.field(doc.label("Ranking policy", "排序規則"), doc.remediationPolicy())
+		doc.field(doc.label("Repair version policy", "修補版本選擇"), doc.repairVersionPolicy())
+		doc.field(doc.label("Exploitation signal calculation", "綜合利用指標算法"), doc.exploitationMethod())
+	}
+
 	doc.componentTable(components)
 	doc.vulnerabilityDetails(components, assessments)
 	if doc.usedGlyphFallback {
@@ -550,7 +565,7 @@ func (d *document) vulnerabilityDetails(components []reportComponent, assessment
 			d.field(d.label("EPSS score date", "EPSS 評分日期"), vulnerability.EPSSDate)
 			epss := ""
 			if score, valid := first.ParseProbability(vulnerability.EPSS); valid {
-				epss = probabilityPercent(score, vulnerability.EPSSPartial)
+				epss = probabilityPercent(score)
 			}
 			if epss != "" && vulnerability.EPSSPartial {
 				epss = fmt.Sprintf(d.label("At least %s (missing alias scores)", "至少 %s（別名分數未齊）"), epss)
@@ -560,7 +575,7 @@ func (d *document) vulnerabilityDetails(components []reportComponent, assessment
 				d.field(d.label("EPSS source CVE", "EPSS 來源 CVE"), vulnerability.EPSSCVE)
 			}
 			if score, valid := vulnerability.VerifiedLEV(); valid {
-				value := probabilityPercent(score, vulnerability.LEVPartial)
+				value := probabilityPercent(score)
 				if vulnerability.LEVPartial {
 					value = fmt.Sprintf(d.label("At least %s (historical gaps)", "至少 %s（歷史資料有缺口）"), value)
 				}

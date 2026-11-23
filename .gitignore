@@ -23,3 +23,6 @@ go.work.sum
 
 # env file
 .env
+
+# Generated tagged PDF release assets
+/internal/service/pdf/bundle/

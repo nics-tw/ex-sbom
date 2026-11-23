@@ -81,6 +81,19 @@ go build -o ex-sbom
 
 （If for local development, you can merely run the command `go run main.go` to start the server.）
 
+### Build with tagged PDFs
+
+Supported build targets are macOS ARM64, Linux ARM64, and Linux amd64.
+
+Use the [asset preparation script](scripts/prepare-tagged-pdf-assets.sh) to verify the pinned Typst and font assets. Its help lists the local input files, and the script records their upstream sources.
+
+```bash
+scripts/prepare-tagged-pdf-assets.sh --from /path/to/verified-assets
+go build -tags taggedpdf -o ex-sbom .
+```
+
+The executable includes the PDF renderer and fonts. The usual OSV startup check still applies. Once an SBOM version is saved, the export reads its report data locally.
+
 ## Configuration
 
 The following environment variables can be used to configure the tool:

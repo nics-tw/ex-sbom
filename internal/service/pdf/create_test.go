@@ -49,7 +49,7 @@ func TestRemediationHomepageWithoutFindings(t *testing.T) {
 		} {
 			t.Run(lang+"/"+string(status), func(t *testing.T) {
 				var output bytes.Buffer
-				require.NoError(t, Generate(&output, Report{
+				require.NoError(t, generateUntagged(&output, Report{
 					Language: lang,
 					SBOM:     ssbom.FormattedSBOM{ReportSource: &ssbom.ReportSource{Status: status}},
 				}))
@@ -59,12 +59,15 @@ func TestRemediationHomepageWithoutFindings(t *testing.T) {
 				require.NoError(t, err)
 				text := string(page)
 				doc := &document{language: lang}
-				require.Contains(t, text, doc.label("Remediation priorities", "修補處理順序"))
+				require.Contains(t, text, doc.label("Remediation summary", "修補摘要"))
 				require.Contains(t, text, doc.queryStatus(status, 0))
-				caution := doc.label("No remediation order can be established yet.", "目前無法判定修補順序")
+				caution := doc.label("No remediation order", "目前無法判定修補順序")
+				empty := doc.label("No remediation items for this query.", "本次無修補項目。")
 				if status == ssbom.QueryCompleted {
+					require.Contains(t, text, empty)
 					require.NotContains(t, text, caution)
 				} else {
+					require.NotContains(t, text, empty)
 					require.Contains(t, text, caution)
 					require.NotContains(t, text, doc.queryStatus(ssbom.QueryCompleted, 0))
 				}
@@ -78,7 +81,11 @@ func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 	if err != nil {
 		t.Skip("pdftotext is required to verify the PDF homepage")
 	}
-	bom := ssbom.FormattedSBOM{ComponentInfo: map[string]ssbom.Component{}}
+	checked := time.Date(2026, 11, 23, 1, 2, 3, 0, time.UTC)
+	bom := ssbom.FormattedSBOM{
+		ReportSource:  &ssbom.ReportSource{Status: ssbom.QueryCompleted, KEVCheckedAt: &checked},
+		ComponentInfo: map[string]ssbom.Component{},
+	}
 	for _, key := range []string{"a", "b", "c", "d"} {
 		bom.ComponentInfo[key] = ssbom.Component{
 			Name: key + "-" + strings.Repeat("long-component-name-", 20), Version: "1.0.0",
@@ -89,7 +96,7 @@ func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 	for _, lang := range []string{English, TraditionalChinese} {
 		t.Run(lang, func(t *testing.T) {
 			var output bytes.Buffer
-			require.NoError(t, Generate(&output, Report{Language: lang, SBOM: bom}))
+			require.NoError(t, generateUntagged(&output, Report{Language: lang, SBOM: bom}))
 			require.Contains(t, output.String(), "/Subtype /Link")
 			require.Contains(t, output.String(), "/Dest [")
 			cmd := exec.Command(extract, "-layout", "-", "-")
@@ -98,10 +105,13 @@ func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 			require.NoError(t, err)
 			pages := strings.Split(string(raw), "\f")
 			doc := &document{language: lang}
-			require.Contains(t, pages[0], doc.label("Additional urgent components | 1", "另有立即查證元件 | 1"))
+			require.Contains(t, pages[0], doc.label("Additional components to update immediately | 3", "另有需立即更新的元件 | 3"))
 			require.Contains(t, pages[0], doc.label("See Remediation priorities (continued)", "其餘元件請見「修補處理順序（續）」。"))
+			require.Contains(t, pages[0], doc.label("1. Update immediately |", "1. 立即更新 |"))
+			require.NotContains(t, pages[0], doc.label("2. Update immediately |", "2. 立即更新 |"))
 			continuation := strings.Join(pages[1:], "\n")
-			require.Contains(t, continuation, doc.label("4. Verify immediately |", "4. 立即查證 |"))
+			require.Contains(t, continuation, doc.label("2. Update immediately |", "2. 立即更新 |"))
+			require.Contains(t, continuation, doc.label("4. Update immediately |", "4. 立即更新 |"))
 			require.Contains(t, continuation, "d-long-component-name-")
 		})
 	}
@@ -134,7 +144,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 	} {
 		t.Run(tc.language, func(t *testing.T) {
 			var output bytes.Buffer
-			err := Generate(&output, Report{Project: domain.ProjectInfo{ID: 12, Name: "測試專案"},
+			err := generateUntagged(&output, Report{Project: domain.ProjectInfo{ID: 12, Name: "測試專案"},
 				Version: "候選版", GeneratedAt: generatedAt, Language: tc.language, SBOM: bom})
 			require.NoError(t, err)
 			require.True(t, bytes.HasPrefix(output.Bytes(), []byte("%PDF-")))
@@ -149,33 +159,47 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				require.GreaterOrEqual(t, strings.Count(text, "\f"), 3)
 				require.Contains(t, text, tc.title)
 				firstPage := strings.Split(text, "\f")[0]
+				require.NotContains(t, firstPage, "100% · KEV")
+				doc := &document{language: tc.language}
+				previous := -1
+				for _, label := range []string{
+					doc.label("Remediation summary", "修補摘要"),
+					doc.label("Priority action", "優先交辦項目"),
+					doc.label("Known exploitation (CISA KEV)", "已知遭利用（CISA KEV）"),
+					doc.label("If only action 1 is completed", "若本輪只完成第 1 項"),
+				} {
+					position := strings.Index(firstPage, label)
+					require.Greater(t, position, previous, label)
+					previous = position
+				}
+				require.Contains(t, text[len(firstPage):], doc.label("Ranking policy", "排序規則"))
 				if tc.language == TraditionalChinese {
 					require.Contains(t, firstPage, "部分資料仍待確認")
 					require.Contains(t, text, "共同修補版本 | 尚未驗證")
 					require.Contains(t, text, "此弱點的公告修補候選 | 9.9.9")
 				} else {
-					require.Contains(t, firstPage, "Evidence is incomplete")
+					require.Contains(t, firstPage, "Evidence incomplete")
 					require.Contains(t, text, "Common fix version | Unverified.")
 					require.Contains(t, text, "Advisory candidates for this finding | 9.9.9")
 				}
 				require.Contains(t, text, tc.count+" | 3")
 				require.NotContains(t, text, "0.937221")
 				if tc.language == TraditionalChinese {
-					require.Contains(t, strings.Split(text, "\f")[0], "1. 立即查證 | urgent-package 1.0")
+					require.Contains(t, strings.Split(text, "\f")[0], "1. 立即更新 | urgent-package 1.0")
 					require.Contains(t, strings.Split(text, "\f")[0], "確認上游相依元件")
-					require.Contains(t, strings.Split(text, "\f")[0], "建議驗測版本 | 1.2.3")
+					require.Regexp(t, `建議驗測版本[ \t]+1[.]2[.]3`, firstPage)
 					require.Contains(t, strings.Split(text, "\f")[0], "累計預計處理的元件弱點紀錄 | 1")
-					require.Contains(t, strings.Split(text, "\f")[0], "仍待處理的 KEV 弱點 | CVE-2024-0002")
+					require.Regexp(t, `建議驗測版本[ \t]+1[.]2[.]3\s+預計涵蓋的 KEV 弱點[ \t]+CVE-2024-0001\s+此版本未確認涵蓋的 KEV 弱點[ \t]+CVE-2024-0002`, firstPage)
 					require.Contains(t, text, "LEV | 未取得或未驗證")
 					require.Contains(t, text, "至少 2%（資料未齊）")
 					require.Contains(t, text, "建議升級的涵蓋情形 | 1.2.3 · 預計可處理此弱點")
 					require.Contains(t, text, "建議升級的涵蓋情形 | 1.2.3 · 尚未確認涵蓋")
 				} else {
-					require.Contains(t, strings.Split(text, "\f")[0], "1. Verify immediately | urgent-package 1.0")
-					require.Contains(t, strings.Split(text, "\f")[0], "Identify the parent dependency")
-					require.Contains(t, strings.Split(text, "\f")[0], "Upgrade to test | 1.2.3")
+					require.Contains(t, strings.Split(text, "\f")[0], "1. Update immediately | urgent-package 1.0")
+					require.Regexp(t, `Identify the parent\s+dependency`, firstPage)
+					require.Regexp(t, `Upgrade to test[ \t]+1[.]2[.]3`, firstPage)
 					require.Contains(t, strings.Split(text, "\f")[0], "Cumulative findings expected to be addressed | 1")
-					require.Contains(t, strings.Split(text, "\f")[0], "KEV findings still to address | CVE-2024-0002")
+					require.Regexp(t, `Upgrade to test[ \t]+1[.]2[.]3\s+KEV findings expected to be[ \t]+CVE-2024-0001\s+addressed\s+KEV findings without confirmed[ \t]+CVE-2024-0002\s+coverage in this version`, firstPage)
 					require.Contains(t, text, "LEV | Unavailable or unverified")
 					require.Contains(t, text, "At least 2% (incomplete data)")
 					require.Contains(t, text, "Coverage of proposed upgrade | 1.2.3 · Expected to address this finding")
@@ -227,7 +251,7 @@ func TestGenerateRepeatsInventoryHeadingsAndPreservesRowsAcrossPages(t *testing.
 				"b": {Name: strings.Join(segments, " "), Version: "spanning-version"},
 				"c": {Name: "after-inventory-row", Version: "after-version"},
 			}}
-			require.NoError(t, Generate(&output, Report{Language: tc.language, SBOM: bom}))
+			require.NoError(t, generateUntagged(&output, Report{Language: tc.language, SBOM: bom}))
 			command := exec.Command(tool, "-layout", "-", "-")
 			command.Stdin = bytes.NewReader(output.Bytes())
 			result, err := command.CombinedOutput()
@@ -265,7 +289,7 @@ func TestGeneratePreservesOriginalTextForUnavailableGlyphs(t *testing.T) {
 				Language: language,
 				SBOM:     ssbom.FormattedSBOM{Components: []string{"測試𠮷元件", "control\u202Etest"}},
 			}
-			require.NoError(t, Generate(&output, report))
+			require.NoError(t, generateUntagged(&output, report))
 			require.True(t, bytes.HasPrefix(output.Bytes(), []byte("%PDF-1.4")))
 			if tool, err := exec.LookPath("pdftotext"); err == nil {
 				command := exec.Command(tool, "-layout", "-", "-")
@@ -287,5 +311,44 @@ func (failingWriter) Write([]byte) (int, error) {
 }
 
 func TestGeneratePropagatesWriteFailure(t *testing.T) {
-	require.ErrorContains(t, Generate(failingWriter{}, Report{GeneratedAt: time.Now()}), "write failed")
+	require.ErrorContains(t, generateUntagged(failingWriter{}, Report{GeneratedAt: time.Now()}), "write failed")
+}
+
+func TestRemediationHomepageKeepsCheckpointWithManyKEVFindings(t *testing.T) {
+	extract, err := exec.LookPath("pdftotext")
+	if err != nil {
+		t.Skip("pdftotext is required to verify the PDF homepage")
+	}
+
+	findings := make([]ssbom.Vuln, 96)
+	for i := range findings {
+		id := fmt.Sprintf("CVE-2099-%04d", 1000+i)
+		findings[i] = ssbom.Vuln{ID: id, CVEIDs: []string{id}, KEV: ssbom.KEVListed, KEVCVE: id}
+	}
+	for _, lang := range []string{TraditionalChinese, English} {
+		t.Run(lang, func(t *testing.T) {
+			var output bytes.Buffer
+			bom := ssbom.FormattedSBOM{
+				ComponentInfo: map[string]ssbom.Component{
+					"one": {Name: "first-" + strings.Repeat("long-component-name-", 36), Version: "1.0.0", Vulns: findings},
+				},
+			}
+			require.NoError(t, generateUntagged(&output, Report{Language: lang, SBOM: bom}))
+
+			command := exec.Command(extract, "-layout", "-", "-")
+			command.Stdin = &output
+			extracted, err := command.Output()
+			require.NoError(t, err)
+			homepage, details, _ := strings.Cut(string(extracted), "")
+			doc := &document{language: lang}
+			require.Contains(t, homepage, doc.label("If only action 1 is completed", "若本輪只完成第 1 項"))
+			require.Contains(t, homepage, doc.label("Next action", "下一步"))
+			require.Contains(t, strings.Join(strings.Fields(homepage), " "),
+				doc.label("92 more in vulnerability details", "另有 92 筆見弱點明細"))
+			require.NotContains(t, homepage, "CVE-2099-1095")
+			for _, finding := range findings {
+				require.Contains(t, details, finding.ID)
+			}
+		})
+	}
 }

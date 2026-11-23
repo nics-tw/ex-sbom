@@ -81,6 +81,19 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 5. 您的瀏覽器應該會自動打開一個新標籤頁，網址為 `http://localhost:8080`。如果沒有自動打開，您可以手動在瀏覽器中輸入此網址。
    （如果是本地開發，您可以直接執行 `go run main.go` 來啟動它。）
 
+### 建置支援標籤式 PDF 的版本
+
+支援 macOS ARM64、Linux ARM64 與 Linux amd64 建置。
+
+先依[資產準備腳本](scripts/prepare-tagged-pdf-assets.sh)的說明備妥固定版本的 Typst、字型與授權檔，並由腳本核對檔案雜湊。
+
+```bash
+scripts/prepare-tagged-pdf-assets.sh --from /path/to/verified-assets
+go build -tags taggedpdf -o ex-sbom .
+```
+
+執行檔內含 PDF 產生器與字型。應用程式啟動時仍執行一般的 OSV 連線檢查。SBOM 版本儲存後，匯出會在本機讀取已存的報告資料。
+
 ## 環境設定
 
 您可以透過以下環境變數來設定此工具：

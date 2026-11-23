@@ -67,3 +67,79 @@ jobs:
           name: browser-test-failures
           path: tests/e2e/test-results/
           if-no-files-found: ignore
+
+  tagged-pdf-linux-amd64:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Verify native Linux amd64 and install Poppler
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          test "$(go env GOOS)/$(go env GOARCH)" = linux/amd64
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+
+      - name: Prepare pinned tagged PDF assets
+        run: |
+          set -euo pipefail
+          asset_dir="$(mktemp -d "${RUNNER_TEMP}/tagged-pdf-assets.XXXXXX")"
+          trap 'rm -rf -- "$asset_dir"' EXIT
+
+          download() {
+            curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+              --retry 3 --connect-timeout 15 --max-time 180 --output "$asset_dir/$2" "$1"
+          }
+
+          typst_archive=typst-x86_64-unknown-linux-musl.tar.xz
+          cjk_base=https://raw.githubusercontent.com/notofonts/noto-cjk/refs/tags/Sans2.004
+          emoji_base=https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/notoemoji
+          download "https://github.com/typst/typst/releases/download/v0.15.1/$typst_archive" "$typst_archive"
+          download "$cjk_base/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf" NotoSansCJKtc-Regular.otf
+          download "$cjk_base/LICENSE" NotoSansCJKtc-OFL.txt
+          download "$emoji_base/NotoEmoji%5Bwght%5D.ttf" NotoEmoji.ttf
+          download "$emoji_base/OFL.txt" NotoEmoji-OFL.txt
+
+          bash scripts/prepare-tagged-pdf-assets.sh --from "$asset_dir"
+
+      - name: Verify downloads from the release executable
+        run: |
+          set -euo pipefail
+          release_dir="${RUNNER_TEMP}/tagged-pdf-release"
+          fixture_dir="$(mktemp -d "${RUNNER_TEMP}/tagged-pdf-fixture.XXXXXX")"
+          trap 'rm -rf -- "$fixture_dir"' EXIT
+          mkdir -p "$release_dir"
+          go build -trimpath -tags taggedpdf -o "$release_dir/ex-sbom" .
+          go run ./tests/perf/cmd/seed -db "$fixture_dir/fixture.duckdb" -versions 2 -components 8 > "$fixture_dir/fixture.json"
+          python3 scripts/check-tagged-pdf-release.py "$release_dir/ex-sbom" "$fixture_dir/fixture.duckdb" "$fixture_dir/fixture.json"
+          mkdir "$release_dir/licenses"
+          bundle_dir=internal/service/pdf/bundle/linux_amd64
+          cp LICENSE "$release_dir/licenses/ex-sbom-MIT.txt"
+          cp "$bundle_dir/LICENSE" "$release_dir/licenses/Typst-Apache-2.0.txt"
+          cp "$bundle_dir/NOTICE" "$release_dir/licenses/Typst-NOTICE.txt"
+          cp "$bundle_dir/"*OFL.txt "$release_dir/licenses/"
+          cp internal/service/pdf/fonts/OFL.txt "$release_dir/licenses/NotoSansTC-OFL.txt"
+          (
+            cd "$release_dir"
+            sha256sum ex-sbom licenses/* > SHA256SUMS
+            tar -czf ex-sbom-linux-amd64.tar.gz ex-sbom SHA256SUMS licenses
+          )
+
+      - name: Go tests (unit + integration + tagged PDF)
+        run: go test -tags 'unit integration taggedpdf' ./...
+
+      - name: Upload verified Linux amd64 candidate
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tagged-pdf-linux-amd64
+          path: ${{ runner.temp }}/tagged-pdf-release/ex-sbom-linux-amd64.tar.gz
+          if-no-files-found: error

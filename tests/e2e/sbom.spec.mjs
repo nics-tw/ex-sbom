@@ -575,6 +575,29 @@ test("keeps selected version visible and Chinese open label in its accessible na
   await expect(open).toHaveAccessibleName(/^開啟分析.*Before/);
 });
 
+test("keeps comparison controls in view with increased text spacing", async ({ page, service }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto(service.url);
+  await page.locator("#main-tab-diff").click();
+  await page.addStyleTag({ content: `
+    * { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }
+    p { margin-block-end: 2em !important; }
+  ` });
+
+  for (const language of ["en", "zh"]) {
+    await page.locator("#lang-" + language).click();
+    const controls = page.locator("#diff-select-a, #diff-swap-btn, #diff-select-b, #diff-compare-btn");
+    await expect(controls).toHaveCount(4);
+    for (const control of await controls.all()) {
+      await expect(control).toBeVisible();
+      const bounds = await control.boundingBox();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  }
+});
+
 test("preserves comparison disclosures and horizontal scroll when translating", async ({ page, service }) => {
   await page.goto(service.url);
   await createProject(page, "Comparison state");

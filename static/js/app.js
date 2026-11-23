@@ -1281,8 +1281,8 @@
 
         if (!panel.querySelector("#diff-select-a")) {
           panel.innerHTML = `
-            <div class="flex items-end space-x-4 mb-6">
-              <div class="flex-1">
+            <div class="diff-controls mb-6">
+              <div class="diff-version-field">
                 <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-a" for="diff-select-a"></label>
                 <select id="diff-select-a" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
               </div>
@@ -1291,7 +1291,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
                 </svg>
               </button>
-              <div class="flex-1">
+              <div class="diff-version-field">
                 <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-b" for="diff-select-b"></label>
                 <select id="diff-select-b" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
               </div>
