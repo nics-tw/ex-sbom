@@ -594,7 +594,7 @@
         const isCurrent = () => State.projectID === projectID && State.activeTab?.dataset.version === version && button.isConnected;
         if (button.getAttribute("aria-disabled") === "true") return;
         button.setAttribute("aria-disabled", "true");
-        status.textContent = t("reportPreparing");
+        localizeText(status, "reportPreparing");
         try {
           const response = await Api.getReport(projectID, version, State.language);
           if (!response.ok || response.headers.get("Content-Type")?.split(";")[0] !== "application/pdf") {
@@ -613,9 +613,9 @@
             // Give the browser time to start reading the download.
             setTimeout(() => URL.revokeObjectURL(url), 30_000);
           }
-          status.textContent = t("reportDownloadStarted", filename);
+          localizeText(status, "reportDownloadStarted", filename);
         } catch {
-          if (isCurrent()) status.textContent = t("reportDownloadError");
+          if (isCurrent()) localizeText(status, "reportDownloadError");
         } finally {
           button.removeAttribute("aria-disabled");
         }

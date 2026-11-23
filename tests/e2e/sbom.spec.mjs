@@ -184,6 +184,10 @@ test("@smoke creates a project, uploads and previews an SBOM, saves it and downl
   await expect(reportStatus).toHaveText(/Could not create (?:the )?PDF report/i);
   await expect(reportButton).toBeEnabled();
   await expect(reportButton).toBeFocused();
+  await page.locator("#lang-zh").click();
+  await expect(reportStatus).toHaveText("無法產製 PDF 報告，請再試一次。");
+  await page.locator("#lang-en").click();
+  await reportButton.focus();
 
   const downloadEvent = page.waitForEvent("download");
   await page.keyboard.press("Enter");
@@ -195,6 +199,8 @@ test("@smoke creates a project, uploads and previews an SBOM, saves it and downl
   await expect(page.locator("#search-status")).toContainText(/Search results/);
   await page.locator("#lang-zh").click();
   await expect(page.locator("#search-status")).toContainText("搜尋結果");
+  await expect(reportStatus).toContainText("請在瀏覽器的下載清單查找");
+  await expect(reportStatus).toContainText(download.suggestedFilename());
   await expect(versionRow(page, "First release").locator(".version-load-btn")).toHaveAccessibleName(/開啟/);
   await page.locator("#search-clear-btn").focus();
   await page.keyboard.press("Space");
