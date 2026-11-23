@@ -8,121 +8,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ex-sbom</title>
+    <title>ex-sbom · Tutorial</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.0"></script>
-    <style>
-      .tab-active {
-        border-bottom: 2px solid #009999;
-        background-color: rgba(0, 153, 153, 0.1);
-      }
-
-      .language-btn {
-        transition: all 0.2s;
-      }
-
-      .language-btn:hover {
-        background-color: rgba(0, 153, 153, 0.1);
-      }
-
-      .active-language {
-        background-color: rgba(0, 153, 153, 0.2);
-        color: #009999;
-      }
-
-      .preserve-whitespace {
-        white-space: pre-line;
-      }
-    </style>
+    <link rel="stylesheet" href="/static/css/site.css" />
   </head>
 
-  <body>
-    <header class="bg-white shadow">
-      <div
-        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between"
-      >
-        <div class="flex items-center space-x-2">
+  <body data-shell-title="tutorialTitle">
+    <a class="site-skip" href="#main-content" data-shell-i18n="skipToMain">Skip to main content</a>
+    <header class="site-header">
+      <div class="site-container site-header-inner">
+        <div class="site-brand">
           <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-7 w-7 text-[#009999]"
-            viewBox="0 0 20 20"
-            fill="currentColor"
+          xmlns="http://www.w3.org/2000/svg"
+          class="site-mark"
+          viewBox="0 0 20 20"
+          fill="currentColor"
           >
-            <path
-              fill-rule="evenodd"
-              d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
-              clip-rule="evenodd"
-            />
+          <path
+          fill-rule="evenodd"
+          d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z"
+          clip-rule="evenodd"
+          />
           </svg>
-          <h1
-            class="text-2xl font-bold text-gray-800 tracking-tight"
-            data-i18n="appTitle"
-          >
-            ex-sbom
-          </h1>
+          <span class="site-brand-title">ex-sbom</span>
         </div>
-
-        <div class="flex items-center space-x-3">
-          <!-- Language switcher -->
-          <div class="flex text-sm">
-            <button
-              id="lang-en"
-              class="px-2 py-1 rounded font-medium language-btn active-language"
-            >
-              EN
-            </button>
-            <button
-              id="lang-zh"
-              class="px-2 py-1 rounded font-medium language-btn"
-            >
-              正體中文
-            </button>
-          </div>
-
-          <div class="ml-6">
-            <button
-              id="back-btn"
-              class="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded text-sm flex items-center"
-              onclick="window.location.href='/'"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-4 w-4 mr-1"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              <span data-i18n="backToMain">Back to Main Page</span>
-            </button>
-          </div>
-
-          <!-- Divider -->
-          <div class="text-gray-400">|</div>
-
-          <!-- App description -->
-          <div
-            class="text-sm text-gray-600"
-            id="app-description"
-            data-i18n="appDescription"
-          >
-            SBOM Explorer, designed by NICS-ra
-          </div>
+        <nav class="site-navigation" aria-label="Site navigation" data-shell-aria-label="siteNavigation">
+          <a id="back-btn" class="site-navigation-link" href="/" data-shell-i18n="backToMain">Back to Explorer</a>
+        </nav>
+        <div class="site-language" role="group" aria-label="Display language" data-shell-aria-label="displayLanguage">
+          <button type="button" id="lang-en" class="language-btn active-language" aria-pressed="true" lang="en">English</button>
+          <button type="button" id="lang-zh" class="language-btn" aria-pressed="false" lang="zh-Hant">正體中文</button>
         </div>
+        <div class="site-description" id="app-description" data-shell-i18n="appDescription">SBOM Explorer, designed by NICS-ra</div>
       </div>
     </header>
 
-    <div>
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <h2 class="text-xl font-semibold mb-4" data-i18n="whyMakeThisTool"></h2>
+    <main id="main-content" class="site-container site-main tutorial-content" tabindex="-1">
+      <h1 class="site-page-title" data-shell-i18n="tutorialHeading">How to use ex-sbom</h1>
+      <div class="tutorial-section">
+        <h2 class="site-section-title" data-i18n="whyMakeThisTool"></h2>
         <p class="text-gray-700 preserve-whitespace" data-i18n="reasonParagraph"></p>
       </div>
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <h2 class="text-xl font-semibold mb-4" data-i18n="StepsTitle"></h2>
+      <div class="tutorial-section">
+        <h2 class="site-section-title" data-i18n="StepsTitle"></h2>
         <ol class="list-decimal pl-6 space-y-2">
           <li class="text-gray-700" data-i18n="Step1"></li>
           <li class="text-gray-700" data-i18n="Step2"></li>
@@ -133,34 +62,31 @@
           <li class="text-gray-700" data-i18n="Step7"></li>
           <li class="text-gray-700" data-i18n="Step8"></li>
         </ol>
-        <div class="mt-4 p-4 bg-gray-100 rounded">
-          <p class="text-gray-700" data-i18n="Step5Additional1"></p>
-          <p class="text-gray-700" data-i18n="Step5Additional2"></p>
-          <p class="text-gray-700" data-i18n="Step5Additional3"></p>
-        </div>
+        <ul class="mt-4 list-disc space-y-2 rounded bg-gray-100 py-4 pl-8 pr-4">
+          <li class="text-gray-700" data-i18n="Step5Additional1"></li>
+          <li class="text-gray-700" data-i18n="Step5Additional2"></li>
+          <li class="text-gray-700" data-i18n="Step5Additional3"></li>
+        </ul>
       </div>
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <h2 class="text-xl font-semibold mb-4">CVSS</h2>
+      <div class="tutorial-section">
+        <h2 class="site-section-title">CVSS</h2>
         <p class="text-gray-700 preserve-whitespace" data-i18n="CVSSExplain"></p>
-        <h2 class="text-xl font-semibold mb-4 mt-6">EPSS</h2>
+        <h2 class="site-section-title tutorial-subsection">EPSS</h2>
         <p class="text-gray-700 preserve-whitespace" data-i18n="EPSSExplain"></p>
-        <h2 class="text-xl font-semibold mb-4 mt-6">LEV</h2>
+        <h2 class="site-section-title tutorial-subsection">LEV</h2>
         <p class="text-gray-700 preserve-whitespace" data-i18n="LEVExplain"></p>
       </div>
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <h2 class="text-xl font-semibold mb-4" data-i18n="ThingsYouNeedToKnow"></h2>
+      <div class="tutorial-section">
+        <h2 class="site-section-title" data-i18n="ThingsYouNeedToKnow"></h2>
         <p class="text-gray-700 preserve-whitespace" data-i18n="SBOMEffectiveness"></p>
       </div>
-    </div>
+    </main>
 
     <script src="/static/js/language.js"></script>
     <script>
       // Language translations
       const translations = {
         en: {
-          appTitle: "ex-sbom",
-          appDescription: "SBOM Explorer, designed by NICS-ra",
-          backToMain: "Back to Main",
 
           // tutorial contents
           whyMakeThisTool: "Why we made this tool?",
@@ -176,11 +102,11 @@
           Step4: "Give the parsed result a version name and click 'Create Version' to save it. If a file with the same content already exists, you will be notified. All saved versions appear under 'Version History'.",
           Step5: "Open a saved version and click any component in the dependency graph or list to view detailed information, including dependencies, vulnerability information, licenses, and suggested fix versions.",
           Step6: "Use the search bar to find a component or CVE across all versions of the project, and quickly locate which versions are affected.",
-          Step7: "Switch to the 'Diff' tab to compare two versions of the project and see which components were added, removed, or changed, along with a vulnerability summary.",
+          Step7: "Switch to the 'Compare Versions' tab to compare two versions of the project and see which components were added, removed, or changed, along with a vulnerability summary.",
           Step8: "For any version, you can export a PDF report of its vulnerability findings for sharing or record keeping.",
-          Step5Additional1: "Additionally, if a component is displayed in the default gray-white color, it means that the component has no vulnerabilities and does not use any components with known vulnerabilities.",
-          Step5Additional2: "If a component is displayed in red, it means that the component itself has vulnerabilities.",
-          Step5Additional3: "If a component is displayed in yellow, it means that the component itself does not have vulnerabilities, but it uses another component that has vulnerabilities.",
+          Step5Additional1: "The dependency list shows vulnerability status next to the component name when the scan finds a match.",
+          Step5Additional2: "Known vulnerability: the scan found a known vulnerability in this component.",
+          Step5Additional3: "Vulnerable dependency: the scan found a vulnerability in one of this component’s dependencies.",
           CVSSExplain: "CVSS (Common Vulnerability Scoring System) is a standardized framework for assessing the severity of information security vulnerabilities." +
             " It provides a numerical range (from 0 to 10) to represent the severity of a vulnerability, considering multiple factors including exploitability, impact, and potential effects on systems." +
             " CVSS scores help organizations prioritize vulnerability remediation efforts and develop effective security strategies.",
@@ -197,9 +123,6 @@
             " For shared components that cannot be made public within an organization, we sincerely recommend conducting independent scans for such components to ensure their security.",
         },
         zh: {
-          appTitle: "ex-sbom",
-          appDescription: "SBOM explorer，由 NICS-ra 設計",
-          backToMain: "返回主頁",
 
           // tutorial contents
           whyMakeThisTool: "為什麼我們要做這個工具？",
@@ -209,17 +132,17 @@
             "然而，SBOM 資料往往不容易閱讀，尤其當需要比較多次掃描結果、追蹤元件與弱點變化時更是如此。"+
             "因此，ex-sbom 提供以專案為核心的視覺化流程，協助使用者匯入 SBOM、將每次掃描儲存為版本、探索相依性與弱點影響路徑、跨版本搜尋與比對，並匯出報告。",
           StepsTitle: "使用此工具的步驟",
-          Step1: "建立或選擇一個專案。在「New project name」欄位輸入名稱並點擊「Switch」即可建立新專案，或從下拉選單中選擇既有專案。專案可用來彙整同一產品或系統的多個 SBOM 版本。",
+          Step1: "建立或選擇一個專案。在「新專案名稱」欄位輸入名稱並選擇「切換」即可建立新專案，或從下拉選單中選擇既有專案。專案可用來彙整同一產品或系統的多個 SBOM 版本。",
           Step2: "在「SBOM 分析」分頁中，點擊「新增版本」按鈕以開啟上傳視窗。",
           Step3: "選擇您想要上傳的 SBOM 檔案（支援 CycloneDX 與 SPDX，僅限 JSON 格式），並點擊「預覽」。工具會解析檔案並掃描其中元件是否存在已知漏洞。",
           Step4: "為解析後的結果命名一個版本名稱，並點擊「建立版本」以儲存。若上傳的檔案內容與既有版本相同，系統會提示您。所有已儲存的版本都會顯示在「版本歷史」中。",
           Step5: "開啟已儲存的版本後，點擊相依性圖或列表中的任一元件，即可查看該元件的詳細資訊，包括其依賴關係、漏洞資訊、授權（License）以及建議修復版本等。",
           Step6: "使用搜尋列即可在專案的所有版本中搜尋特定元件或 CVE，並快速定位其出現於哪些版本。",
-          Step7: "切換到「Diff 比對」分頁，即可比較專案中的兩個版本，查看新增、移除或變更的元件，以及漏洞的彙總資訊。",
+          Step7: "切換到「版本比對」分頁，即可比較專案中的兩個版本，查看新增、移除或變更的元件，以及漏洞的彙總資訊。",
           Step8: "針對任一版本，您都可以匯出其漏洞發現的 PDF 報告，方便分享或留存記錄。",
-          Step5Additional1: "另外值得注意的是，當元件為預設灰白配色時，代表其元件不存在漏洞，也沒有使用到任何已知存在漏洞的元件。",
-          Step5Additional2: "若元件為紅色，則代表其元件本身存在漏洞",
-          Step5Additional3: "若元件為黃色，則代表其元件本身並沒有漏洞，但是有使用到的某個元件存在漏洞",
+          Step5Additional1: "掃描比對到漏洞時，相依元件清單會在元件名稱旁顯示狀態。",
+          Step5Additional2: "具有已知漏洞：掃描比對到此元件的已知漏洞。",
+          Step5Additional3: "相依元件具有漏洞：掃描比對到此元件所依賴的其他元件有已知漏洞。",
           CVSSExplain: "CVSS (Common Vulnerability Scoring System) 是一個用於評估資訊安全漏洞嚴重性的標準化框架。" +
             "它提供了一個數值範圍（從 0 到 10），用於表示漏洞的嚴重程度，並且考慮了多個因素，包括漏洞的可利用性、影響範圍以及對系統的潛在影響。" +
             "CVSS 分數有助於組織優先處理漏洞修復工作，並制定有效的安全策略。",

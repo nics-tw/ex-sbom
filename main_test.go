@@ -168,6 +168,7 @@ func TestSetupSSR_StaticFileHeaders(t *testing.T) {
 		{"/favicon.ico", "image/png"},
 		{"/apple-touch-icon.png", "image/png"},
 		{"/apple-touch-icon-precomposed.png", "image/png"},
+		{"/static/css/site.css", "text/css"},
 	}
 
 	for _, file := range staticFiles {
@@ -204,12 +205,12 @@ func TestSetupSSR_RouteCount(t *testing.T) {
 	// Get final route count
 	finalRoutes := len(router.Routes())
 
-	// Should have added 7 routes (2 HTML + 3 static img files + 2 for StaticFS /static/js)
+	// Should have added 7 routes (2 HTML + 3 static img files + 2 for StaticFS /static)
 	expectedNewRoutes := 7
 	actualNewRoutes := finalRoutes - initialRoutes
 
 	assert.Equal(t, expectedNewRoutes, actualNewRoutes,
-		"Should register exactly 5 new routes")
+		"Should register exactly 7 new routes")
 }
 
 func TestSetupSSR_TemplateRegistration(t *testing.T) {

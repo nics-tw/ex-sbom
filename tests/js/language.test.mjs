@@ -8,8 +8,11 @@ const script = readFileSync(new URL("../../static/js/language.js", import.meta.u
 
 function openPage(browserLanguage, storage) {
   const clicks = new Map();
+  const skipLink = { dataset: { shellI18n: "skipToMain" } };
   const document = {
+    body: { dataset: {} },
     documentElement: {},
+    querySelectorAll: selector => selector === "[data-shell-i18n]" ? [skipLink] : [],
     getElementById: id => ({
       classList: { toggle() {} },
       setAttribute() {},
@@ -21,7 +24,7 @@ function openPage(browserLanguage, storage) {
   vm.runInNewContext(script + "\nbindLanguageSwitcher(lang => rendered.push(lang));", {
     navigator: { language: browserLanguage }, window: { localStorage: storage, addEventListener: (name, fn) => events.set(name, fn) }, document, rendered,
   });
-  return { rendered, restore: () => events.get("pageshow")({ persisted: true }), select: lang => clicks.get("lang-" + lang)(), html: document.documentElement };
+  return { rendered, restore: () => events.get("pageshow")({ persisted: true }), select: lang => clicks.get("lang-" + lang)(), html: document.documentElement, skipLink };
 }
 
 test("only explicit choices persist and either language survives a new page", () => {
@@ -33,6 +36,7 @@ test("only explicit choices persist and either language survives a new page", ()
   first.select("zh");
   const next = openPage("en-US", storage);
   assert.equal(next.html.lang, "zh-Hant");
+  assert.equal(next.skipLink.textContent, "跳至主要內容");
   next.select("en");
   assert.deepEqual(openPage("zh-TW", storage).rendered, ["en"]);
 });

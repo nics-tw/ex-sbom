@@ -49,8 +49,9 @@ func TestE2EServer(t *testing.T) {
 	loadInitialData(repo, cache)
 	gin.SetMode(gin.TestMode)
 	server := &http.Server{
-		Handler:           createServer(psvc.New(repo, cache), ssbom.NewService(repo, cache)),
-		ReadHeaderTimeout: 5 * time.Second,
+		Handler: createServer(psvc.New(repo, cache), ssbom.NewService(repo, cache)),
+		// Close speculative browser sockets before the five-second shutdown deadline.
+		ReadHeaderTimeout: 2 * time.Second,
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {

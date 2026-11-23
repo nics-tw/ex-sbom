@@ -24,6 +24,11 @@ function makeElement(tag = "div") {
     tagName: tag.toUpperCase(), dataset: {}, style: {}, value: "", textContent: "",
     className: "", children: [], parentNode: null, options: [], selectedIndex: -1,
     buttons: new Map(),
+    open: false,
+    showModal() { this.open = true; },
+    close() { this.open = false; },
+    setAttribute(name, value) { this[name] = String(value); },
+    focus() {},
     classList: {
       add(...names) { names.forEach(name => classes.add(name)); },
       remove(...names) { names.forEach(name => classes.delete(name)); },
@@ -56,7 +61,7 @@ function makeElement(tag = "div") {
       for (const listener of listeners.get(type) ?? []) await listener(event);
     },
     querySelector(selector) {
-      if (selector === ".sbom-tab-label") return this.children.find(child => child.className === "sbom-tab-label") ?? null;
+      if (selector === ".sbom-tab-label") return this.children.find(child => child.className.split(" ").includes("sbom-tab-label")) ?? null;
       if (selector === "div") return this.children.find(child => child.tagName === "DIV") ?? null;
       return null;
     },
@@ -161,7 +166,7 @@ test("switch clears A's actions while B is still loading", async () => {
   assert.equal(State.projectID, null);
   assert.equal(State.uploadedFiles.size, 0);
   assert.equal(getElementById("file-tabs").children.length, 0);
-  assert.match(getElementById("version-history-list").innerHTML, /尚未選擇專案/);
+  assert.match(getElementById("version-history-list").innerHTML, /Select a project to view versions/);
 
   pendingB.resolve({ data: { project_id: "B" } });
   await loadingB;
@@ -289,7 +294,7 @@ test("deleting the last project clears its tabs and version history", async () =
   assert.equal(getElementById("project-select").value, "");
   assert.equal(State.uploadedFiles.size, 0);
   assert.equal(getElementById("file-tabs").children.length, 0);
-  assert.match(getElementById("version-history-list").innerHTML, /尚未選擇專案/);
+  assert.match(getElementById("version-history-list").innerHTML, /Select a project to view versions/);
   assert.equal(getElementById("project-current").textContent, "");
 });
 
@@ -321,7 +326,7 @@ test("changing the selected file cancels an in-flight preview and ignores its re
   assert.equal(signal?.aborted, true);
   assert.equal(rendered, false);
   assert.equal(getElementById("sbom-modal-preview-btn").disabled, false);
-  assert.equal(getElementById("sbom-modal-step1-error").classList.contains("hidden"), true);
+  assert.equal(getElementById("sbom-modal-step1-error").textContent, "");
 });
 
 test("Enter while saving does not start a second version creation", async () => {
@@ -361,8 +366,8 @@ test("closing the upload dialog cancels the request and drops a late preview fai
   await response;
 
   assert.equal(signal.aborted, true);
-  assert.equal(getElementById("sbom-modal").classList.contains("hidden"), true);
-  assert.equal(getElementById("sbom-modal-step1-error").classList.contains("hidden"), true);
+  assert.equal(getElementById("sbom-modal").open, false);
+  assert.equal(getElementById("sbom-modal-step1-error").textContent, "");
 });
 
 for (const action of ["rename", "delete"]) {

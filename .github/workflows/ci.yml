@@ -47,11 +47,11 @@ jobs:
       - name: Build browser test service
         run: go test -tags e2e -c -o "${RUNNER_TEMP}/ex-sbom-browser.test" .
 
-      - name: Browser smoke test
+      - name: Browser regression tests
         working-directory: tests/e2e
         env:
           EX_SBOM_E2E_BINARY: ${{ runner.temp }}/ex-sbom-browser.test
-        run: npm run test:smoke
+        run: npm test
 
       - name: Verify performance measurement entry point
         run: |
