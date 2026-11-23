@@ -13,8 +13,16 @@ type RemediationPriority int
 const (
 	RemediationReview RemediationPriority = iota
 	RemediationRoutine
+	RemediationAttention
 	RemediationElevated
 	RemediationUrgent
+)
+
+// RemediationPolicyVersion identifies the first report policy, calibrated on
+// the reference SBOM. The threshold applies to the exploitation signal.
+const (
+	RemediationPolicyVersion = "1"
+	RemediationThreshold     = 0.10
 )
 
 type FindingAssessment struct {
@@ -137,8 +145,10 @@ func assessFinding(finding Vuln, version string, threshold *float64) FindingAsse
 		item.Priority = RemediationUrgent
 	} else if threshold != nil && item.HasCVSS && signal.Available {
 		switch {
-		case signal.Value >= *threshold || (signal.Complete && item.CVSS >= CVSSThreshold):
+		case signal.Value >= *threshold && item.CVSS >= CVSSThreshold:
 			item.Priority = RemediationElevated
+		case signal.Value >= *threshold || (signal.Complete && item.CVSS >= CVSSThreshold):
+			item.Priority = RemediationAttention
 		case signal.Complete:
 			item.Priority = RemediationRoutine
 		}

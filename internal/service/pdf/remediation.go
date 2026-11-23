@@ -28,9 +28,13 @@ func (d *document) remediationSummary(entries []ssbom.ComponentAssessment) {
 	}
 	d.field(d.label("Components to verify immediately", "需立即查證的元件"), strconv.Itoa(urgent))
 	d.field(d.label("Components with findings to assess", "有待評估弱點的元件"), strconv.Itoa(review))
+	d.field(d.label("Ranking policy", "排序規則"), fmt.Sprintf(d.label(
+		"v%s · Prioritize fixes at CVSS ≥ 7.0 and signal ≥ %.0f%%",
+		"v%s · CVSS ≥ 7.0 且利用指標 ≥ %.0f%% 時優先評估修補"),
+		ssbom.RemediationPolicyVersion, ssbom.RemediationThreshold*100))
 	d.write(d.label(
-		"Confirm deployment and exposure with the system owner. Other entries are ordered by available evidence while priority thresholds are being calibrated.",
-		"請維運單位確認實際部署與曝險。其餘項目先依已知證據排列，分級門檻待校準。"), lineHeight)
+		"Confirm deployment and exposure with the system owner. Findings with insufficient evidence remain pending review.",
+		"請維運單位確認實際部署與曝險。證據不足的弱點仍待查證。"), lineHeight)
 
 	for i, entry := range entries[:min(len(entries), remediationPreviewLimit)] {
 		d.remediationEntry(i+1, entry)
@@ -64,6 +68,8 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment) {
 	case ssbom.RemediationElevated:
 		label = d.label("Prioritize fix assessment", "優先評估修補")
 		d.SetTextColor(117, 71, 0)
+	case ssbom.RemediationAttention:
+		label = d.label("Schedule assessment", "安排評估")
 	case ssbom.RemediationRoutine:
 		label = d.label("Routine maintenance", "例行維護")
 	}

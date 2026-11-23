@@ -162,7 +162,8 @@ func Generate(w io.Writer, report Report) error {
 	doc.SetFont(reportFont, "", 19)
 	doc.write(title, 9)
 	doc.Ln(5)
-	assessments := report.SBOM.RemediationAssessments(nil)
+	threshold := ssbom.RemediationThreshold
+	assessments := report.SBOM.RemediationAssessments(&threshold)
 	doc.remediationSummary(assessments)
 	doc.section(doc.label("Report information", "報告資訊"))
 	doc.field(doc.label("Project", "專案"), report.Project.Name)
