@@ -42,6 +42,15 @@ func TestArchiveLEV(t *testing.T) {
 	require.Zero(t, got[cves[1]].Score)
 
 	require.NoError(t, os.Remove(filepath.Join(dir, "epss_scores-2023-01-31.csv.gz")))
-	_, err = ArchiveLEV(dir, "2023-01-01", "2023-02-01", cves)
-	require.ErrorContains(t, err, "2023-01-31")
+	got, err = ArchiveLEV(dir, "2023-01-01", "2023-02-01", cves)
+	require.NoError(t, err)
+	require.True(t, got[cves[0]].Partial)
+	require.InDelta(t, 0.3, got[cves[0]].Score, 1e-12)
+	require.False(t, got[cves[1]].Partial)
+	require.Zero(t, got[cves[1]].Score)
+
+	require.NoError(t, os.Remove(filepath.Join(dir, "epss_scores-2023-01-01.csv.gz")))
+	got, err = ArchiveLEV(dir, "2023-01-01", "2023-02-01", cves)
+	require.NoError(t, err)
+	require.Empty(t, got, "a gap before the first observed score leaves the window anchor unverified")
 }

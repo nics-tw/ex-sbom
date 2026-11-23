@@ -50,6 +50,7 @@ func setHistoricalLEV(bom *FormattedSBOM, scores map[string]first.HistoricalLEV)
 			finding.LEVMethod = first.LEVMethod
 			finding.LEVFirst = best.First
 			finding.LEVAsOf = best.AsOf
+			finding.LEVPartial = best.Partial
 			finding.LEVCVE = finding.ID
 		}
 	}

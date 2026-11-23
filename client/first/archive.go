@@ -20,17 +20,20 @@ type HistoricalLEV struct {
 	Score float64
 	First string
 	AsOf  string
+	// Partial marks a lower bound calculated from the available windows.
+	Partial bool
 }
 
 type archiveFinding struct {
-	first  string
-	next   string
-	scores []TimeSeries
+	first   string
+	next    string
+	scores  []TimeSeries
+	partial bool
 }
 
 // ArchiveLEV evaluates several CVEs in one pass over official daily archives.
-// A missing required day invalidates the calculation: before the first score
-// it could conceal an earlier score, and at a window start it leaves a gap.
+// A missing file before the first score prevents establishing the window
+// anchor. A missing window after that anchor yields a lower bound.
 func ArchiveLEV(dir, firstDay, asOf string, cves []string) (map[string]HistoricalLEV, error) {
 	start, startErr := time.Parse(time.DateOnly, firstDay)
 	end, endErr := time.Parse(time.DateOnly, asOf)
@@ -54,13 +57,20 @@ func ArchiveLEV(dir, firstDay, asOf string, cves []string) (map[string]Historica
 		}
 		rows, err := archiveDay(dir, date, wanted)
 		if err != nil {
-			return nil, fmt.Errorf("EPSS archive %s: %w", date, err)
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("EPSS archive %s: %w", date, err)
+			}
 		}
 		for cve, finding := range wanted {
 			score, found := rows[cve]
 			if !found {
-				if finding.first != "" {
+				if err != nil && finding.first == "" {
 					delete(pending, cve)
+					continue
+				}
+				if finding.first != "" {
+					finding.partial = true
+					finding.next = day.AddDate(0, 0, 30).Format(time.DateOnly)
 				}
 				continue
 			}
@@ -73,8 +83,11 @@ func ArchiveLEV(dir, firstDay, asOf string, cves []string) (map[string]Historica
 	}
 	results := make(map[string]HistoricalLEV)
 	for cve, finding := range pending {
-		if score, valid := CalculateLEV(finding.scores, finding.first, asOf); valid {
-			results[cve] = HistoricalLEV{Score: score, First: finding.first, AsOf: asOf}
+		if finding.first == "" {
+			continue
+		}
+		if score, valid := calculateAvailableLEV(finding.scores, finding.first, asOf); valid {
+			results[cve] = HistoricalLEV{Score: score, First: finding.first, AsOf: asOf, Partial: finding.partial}
 		}
 	}
 	return results, nil

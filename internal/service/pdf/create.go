@@ -541,7 +541,11 @@ func (d *document) vulnerabilityDetails(components []reportComponent) {
 			d.field("CVSS", vulnerability.CVSSScore)
 			d.field("EPSS", vulnerability.EPSS)
 			if _, valid := first.ParseProbability(vulnerability.LEV); valid && vulnerability.LEVMethod == first.LEVMethod {
-				d.field("LEV", vulnerability.LEV)
+				value := vulnerability.LEV
+				if vulnerability.LEVPartial {
+					value = fmt.Sprintf(d.label("At least %s (historical gaps)", "至少 %s（歷史資料有缺口）"), value)
+				}
+				d.field("LEV", value)
 				if vulnerability.LEVFirst != "" && vulnerability.LEVAsOf != "" {
 					d.field(d.label("LEV period (UTC)", "LEV 歷史期間（UTC）"), vulnerability.LEVFirst+" – "+vulnerability.LEVAsOf)
 				}

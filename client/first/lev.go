@@ -24,6 +24,14 @@ func ParseProbability(raw string) (float64, bool) {
 // inclusive end of the historical period. Each window requires its first day's
 // EPSS score. A truncated history must not be used to infer firstDate.
 func CalculateLEV(series []TimeSeries, firstDate, assessmentDate string) (float64, bool) {
+	return calculateLEV(series, firstDate, assessmentDate, true)
+}
+
+func calculateAvailableLEV(series []TimeSeries, firstDate, assessmentDate string) (float64, bool) {
+	return calculateLEV(series, firstDate, assessmentDate, false)
+}
+
+func calculateLEV(series []TimeSeries, firstDate, assessmentDate string, requireEveryWindow bool) (float64, bool) {
 	start, errStart := time.Parse(time.DateOnly, firstDate)
 	end, errEnd := time.Parse(time.DateOnly, assessmentDate)
 	if errStart != nil || errEnd != nil || start.After(end) {
@@ -52,7 +60,10 @@ func CalculateLEV(series []TimeSeries, firstDate, assessmentDate string) (float6
 	for day := start; day.Before(end); day = day.Add(window) {
 		score, found := scores[day.Format(time.DateOnly)]
 		if !found {
-			return 0, false
+			if requireEveryWindow {
+				return 0, false
+			}
+			continue
 		}
 		fraction := float64(min(end.Sub(day), window)) / float64(window)
 		logSurvival += math.Log1p(-score * fraction)
