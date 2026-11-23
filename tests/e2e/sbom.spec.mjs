@@ -600,8 +600,30 @@ test("clears comparison status on reopening", async ({ page, service }) => {
   await page.locator("#main-tab-diff").click();
   await page.locator("#diff-select-a").selectOption("Before");
   await page.locator("#diff-select-b").selectOption("After");
-  await page.locator("#diff-compare-btn").click();
-  await expect(page.locator("#diff-status")).not.toBeEmpty();
+  const { promise: pending, resolve: release } = Promise.withResolvers();
+  await page.route("**/projects/*/diff?*", async route => {
+    await pending;
+    await route.continue();
+  });
+  const compare = page.locator("#diff-compare-btn");
+  const status = page.locator("#diff-status");
+  const loading = page.locator("#diff-result [data-i18n='loading']");
+  try {
+    await compare.click();
+    await expect(status).toHaveText("Loading...");
+    await expect(loading).toHaveText("Loading...");
+    await expect(loading).toHaveCSS("animation-name", "none");
+    await compare.click();
+    await expect(status).toHaveText("Loading...");
+    await page.locator("#lang-zh").click();
+    await expect(status).toHaveText("載入中...");
+    await expect(loading).toHaveText("載入中...");
+    await page.locator("#lang-en").click();
+  } finally {
+    release();
+  }
+  await expect(loading).toHaveCount(0);
+  await expect(status).not.toBeEmpty();
   await page.locator("#main-tab-analysis").click();
   await page.locator("#main-tab-diff").click();
   await expect(page.locator("#diff-result")).toBeEmpty();
