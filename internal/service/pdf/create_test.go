@@ -46,6 +46,9 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 			name: {Name: name, Version: "1.0",
 				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", EPSS: "0.02", LEV: "0.937221",
 					Summary: "弱點摘要", Details: strings.Repeat("跨頁內容 Mixed-language text. ", 400) + "末頁標記"}}},
+			"urgent": {Name: "urgent-package", Version: "1.0", Vulns: []ssbom.Vuln{
+				{ID: "CVE-2024-0001", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"}},
+			}},
 		},
 		ReportSource: &ssbom.ReportSource{
 			FileName: "來源測試.json", FileSHA256: strings.Repeat("e", 64),
@@ -72,12 +75,14 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				text := string(result)
 				require.GreaterOrEqual(t, strings.Count(text, "\f"), 3)
 				require.Contains(t, text, tc.title)
-				require.Contains(t, text, tc.count+" | 1")
+				require.Contains(t, text, tc.count+" | 2")
 				require.NotContains(t, text, "0.937221")
 				if tc.language == TraditionalChinese {
+					require.Contains(t, strings.Split(text, "\f")[0], "1. 立即查證 | urgent-package 1.0")
 					require.Contains(t, text, "LEV | 未取得或未驗證")
 					require.Contains(t, text, "至少 2%（資料未齊）")
 				} else {
+					require.Contains(t, strings.Split(text, "\f")[0], "1. Verify immediately | urgent-package 1.0")
 					require.Contains(t, text, "LEV | Unavailable or unverified")
 					require.Contains(t, text, "At least 2% (incomplete data)")
 				}

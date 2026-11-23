@@ -1,0 +1,45 @@
+//go:build unit
+
+package ssbom
+
+import (
+	"testing"
+
+	"ex-sbom/client/first"
+	"github.com/stretchr/testify/require"
+)
+
+func TestRemediationAssessments(t *testing.T) {
+	urgent := Vuln{ID: "GHSA-test", KEV: KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"}}
+	bom := FormattedSBOM{ComponentInfo: map[string]Component{
+		"a-unknown-version": {Name: "unknown version", Vulns: []Vuln{urgent}},
+		"b-urgent":          {Name: "urgent", Version: "1", Vulns: []Vuln{urgent, urgent}},
+		"c-mixed": {Name: "mixed", Version: "1", Vulns: []Vuln{
+			{ID: "higher-cvss", CVSSScore: "9.5", EPSS: "0.1"},
+			{ID: "higher-signal", CVSSScore: "5", EPSS: "0.8"},
+		}},
+		"d-exact": {Name: "exact", Version: "1", Vulns: []Vuln{
+			{ID: "complete", CVSSScore: "8", EPSS: "0.8", LEV: "0.1", LEVMethod: first.LEVMethod, KEV: KEVUnlisted},
+		}},
+		"e-empty": {Name: "empty"},
+	}}
+	got := bom.RemediationAssessments(new(0.8))
+	require.Len(t, got, 4)
+	require.Equal(t, "b-urgent", got[0].Key)
+	require.Equal(t, []string{"CVE-2024-0001"}, got[0].UrgentCVEs)
+	require.Equal(t, "d-exact", got[1].Key)
+	require.Equal(t, "c-mixed", got[2].Key)
+	require.Equal(t, "higher-signal", got[2].Driver.Finding.ID)
+	require.Equal(t, 5.0, got[2].Driver.CVSS)
+	require.Equal(t, 1, got[2].NeedsReview)
+	require.Equal(t, RemediationReview, got[3].Driver.Priority)
+	require.Equal(t, RemediationReview, bom.RemediationAssessments(nil)[1].Driver.Priority)
+}
+
+func TestRemediationThresholdUsesUnroundedValue(t *testing.T) {
+	threshold := 0.8
+	finding := Vuln{CVSSScore: "8", EPSS: "0.799999"}
+	require.Equal(t, RemediationReview, assessFinding(finding, "1", &threshold).Priority)
+	finding.EPSS = "0.8"
+	require.Equal(t, RemediationElevated, assessFinding(finding, "1", &threshold).Priority)
+}
