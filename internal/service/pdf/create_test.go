@@ -80,7 +80,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 		ComponentToLevel: map[string]int{"urgent": 1},
 		ComponentInfo: map[string]ssbom.Component{
 			name: {Name: name, Version: "1.0",
-				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", EPSS: "0.02", LEV: "0.937221",
+				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", EPSS: "0.02", LEV: "0.937221", SuggestFixVersion: "9.9.9",
 					Summary: "弱點摘要", Details: strings.Repeat("跨頁內容 Mixed-language text. ", 400) + "末頁標記"}}},
 			"urgent": {Name: "urgent-package", Version: "1.0", Vulns: []ssbom.Vuln{
 				{ID: "CVE-2024-0001", CVSSScore: "8.0", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"},
@@ -117,8 +117,12 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				firstPage := strings.Split(text, "\f")[0]
 				if tc.language == TraditionalChinese {
 					require.Contains(t, firstPage, "部分資料仍待確認")
+					require.Contains(t, text, "共同修補版本 | 尚未驗證")
+					require.Contains(t, text, "此弱點的公告修補候選 | 9.9.9")
 				} else {
 					require.Contains(t, firstPage, "Evidence is incomplete")
+					require.Contains(t, text, "Common fix version | Unverified.")
+					require.Contains(t, text, "Advisory candidates for this finding | 9.9.9")
 				}
 				require.Contains(t, text, tc.count+" | 3")
 				require.NotContains(t, text, "0.937221")

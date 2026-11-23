@@ -595,8 +595,10 @@ func (d *document) vulnerabilityDetails(components []reportComponent, assessment
 				}
 				d.field(d.label("Coverage of proposed upgrade", "建議升級的涵蓋情形"), assessment.Upgrade+" · "+coverage)
 			}
-			d.field(d.label("Suggested fix versions", "建議修補版本"), vulnerability.SuggestFixVersion)
-			d.field(d.label("Other fix versions", "其他修補版本"), vulnerability.OtherFixVersions)
+			d.field(d.label("Advisory candidates for this finding", "此弱點的公告修補候選"), vulnerability.SuggestFixVersion)
+			if vulnerability.OtherFixVersions != "" {
+				d.field(d.label("Other advisory candidates", "其他公告候選版本"), vulnerability.OtherFixVersions)
+			}
 			d.field(d.label("Details", "詳細說明"), vulnerability.Details)
 		}
 	}

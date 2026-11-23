@@ -105,6 +105,9 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 	}
 	if entry.Upgrade != "" {
 		d.field(d.label("Upgrade to test", "建議驗測版本"), entry.Upgrade)
+	} else {
+		d.field(d.label("Common fix version", "共同修補版本"),
+			d.label("Unverified. See individual advisory candidates in the details.", "尚未驗證，個別公告候選請見弱點明細。"))
 	}
 	action := d.label("Check advisory candidates and assess mitigations.", "查證公告候選版本，並評估緩解措施。")
 	if entry.Upgrade != "" {
