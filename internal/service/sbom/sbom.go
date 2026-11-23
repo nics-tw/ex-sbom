@@ -461,7 +461,7 @@ func buildVulns(pkg models.PackageVulns, version string, identity *file.PackageV
 		if identifier == "" {
 			identifier = v.Id
 		}
-		cvss, standard := advisoryCVSS(v)
+		cvss, standard := advisoryCVSS(v, identity)
 		if identity == nil {
 			cvss = getCVSS(v.Id, pkg.Groups)
 		}

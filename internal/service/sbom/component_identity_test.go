@@ -65,6 +65,44 @@ func TestPreviewRetainsFindingsForSameNamePackages(t *testing.T) {
 	}
 }
 
+func TestPreviewPreservesPURLVersionForRemediation(t *testing.T) {
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = sameNameOSVFixture{}
+
+	tests := map[string]string{
+		"CycloneDX": `{"bomFormat":"CycloneDX","specVersion":"1.7","version":1,
+			"components":[{"type":"library","bom-ref":"fixture","name":"fixture","purl":"pkg:npm/fixture@2.0.0"}]}`,
+		"SPDX": `{"spdxVersion":"SPDX-2.3","SPDXID":"SPDXRef-DOCUMENT","name":"fixture",
+			"dataLicense":"CC0-1.0","documentNamespace":"https://example.org/fixture",
+			"creationInfo":{"created":"2025-01-01T00:00:00Z","creators":["Tool: fixture"]},
+			"packages":[{"SPDXID":"SPDXRef-fixture","name":"fixture","externalRefs":[
+				{"referenceCategory":"PACKAGE-MANAGER","referenceType":"purl","referenceLocator":"pkg:npm/fixture@2.0.0"}]}]}`,
+	}
+	for name, raw := range tests {
+		t.Run(name, func(t *testing.T) {
+			bom, _, _, err := (&Service{}).Preview([]byte(raw))
+			require.NoError(t, err)
+			require.Equal(t, QueryCompleted, bom.ReportSource.Status)
+			require.Equal(t, []string{"fixture"}, bom.Components)
+			component := bom.ComponentInfo["fixture"]
+			require.Len(t, component.Vulns, 1)
+			require.Equal(t, "TEST-1", component.Vulns[0].ID)
+			require.Equal(t, "2.0.0", component.Version)
+
+			finding := &component.Vulns[0]
+			finding.CVEIDs = []string{"CVE-2025-99999"}
+			finding.KEV = KEVListed
+			finding.KEVCVEs = finding.CVEIDs
+			bom.ComponentInfo["fixture"] = component
+			tasks := bom.RemediationAssessments(nil)
+			require.Len(t, tasks, 1)
+			require.Equal(t, RemediationUrgent, tasks[0].Driver.Priority)
+			require.Equal(t, "2.0.0", tasks[0].Version)
+		})
+	}
+}
+
 func TestDiffSBOMsWhenSameNamePackageIsAddedOrRemoved(t *testing.T) {
 	original := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = original })

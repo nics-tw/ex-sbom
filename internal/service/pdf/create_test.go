@@ -117,6 +117,46 @@ func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 	}
 }
 
+func TestRemediationHomepageKEVEvidence(t *testing.T) {
+	extract, err := exec.LookPath("pdftotext")
+	if err != nil {
+		t.Skip("pdftotext is required to verify the PDF homepage")
+	}
+	checked := time.Date(2026, 11, 23, 1, 2, 3, 0, time.UTC)
+	legacy := ssbom.Vuln{ID: "CVE-2025-0001"}
+	listed := ssbom.Vuln{ID: "CVE-2025-0002", CVEIDs: []string{"CVE-2025-0002"},
+		KEV: ssbom.KEVListed, KEVCVE: "CVE-2025-0002"}
+	unlisted := ssbom.Vuln{ID: "CVE-2025-0003", CVEIDs: []string{"CVE-2025-0003"}, KEV: ssbom.KEVUnlisted}
+	for _, tc := range []struct {
+		name     string
+		findings []ssbom.Vuln
+		checked  *time.Time
+		count    string
+	}{
+		{"legacy CVE", []ssbom.Vuln{legacy}, nil, "Pending"},
+		{"legacy CVE alongside checked CVE", []ssbom.Vuln{legacy, listed}, &checked, "At least 1"},
+		{"checked CVE and finding without CVE", []ssbom.Vuln{unlisted, {ID: "GHSA-test"}}, &checked, "0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bom := ssbom.FormattedSBOM{
+				ReportSource: &ssbom.ReportSource{Status: ssbom.QueryCompleted, KEVCheckedAt: tc.checked},
+				ComponentInfo: map[string]ssbom.Component{
+					"example": {Name: "example", Version: "1.0.0", Vulns: tc.findings},
+				},
+			}
+			var output bytes.Buffer
+			require.NoError(t, Generate(&output, Report{Language: English, SBOM: bom}))
+			cmd := exec.Command(extract, "-f", "1", "-l", "1", "-raw", "-", "-")
+			cmd.Stdin = &output
+			page, err := cmd.Output()
+			require.NoError(t, err)
+			text := strings.Join(strings.Fields(string(page)), " ")
+			require.Contains(t, text, "Components to update immediately "+tc.count)
+			require.Contains(t, text, "CVEs listed in CISA KEV "+tc.count)
+		})
+	}
+}
+
 func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 	generatedAt := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	name := "元件名稱/" + strings.Repeat("long-package-", 35)

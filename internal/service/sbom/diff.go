@@ -101,11 +101,20 @@ func riskFields(comp Component) (maxCvss, maxEpss, maxLev string, severe bool) {
 type vulnRiskKey struct {
 	id, cvss, epss, lev     string
 	levPartial, epssPartial bool
+	kev                     KEVStatus
 }
 
 func diffVulnRisk(v Vuln) vulnRiskKey {
 	lev := v.verifiedLEVText()
-	return vulnRiskKey{v.ID, v.CVSSScore, v.EPSS, lev, lev != "" && v.LEVPartial, v.EPSS != "" && v.EPSSPartial}
+	return vulnRiskKey{
+		id:          v.ID,
+		cvss:        v.CVSSScore,
+		epss:        v.EPSS,
+		lev:         lev,
+		levPartial:  lev != "" && v.LEVPartial,
+		epssPartial: v.EPSS != "" && v.EPSSPartial,
+		kev:         v.KEV,
+	}
 }
 
 // sameVulnRisks compares findings as a multiset, so source ordering cannot

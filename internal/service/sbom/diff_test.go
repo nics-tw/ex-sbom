@@ -114,7 +114,7 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 	base := Component{
 		Version: "1.0.0", VulnNumber: 2,
 		Vulns: []Vuln{
-			{ID: "CVE-1", CVSSScore: "7.1", EPSS: "0.1", LEV: "0.2", LEVMethod: first.LEVMethod},
+			{ID: "CVE-2025-0001", CVEIDs: []string{"CVE-2025-0001"}, CVSSScore: "7.1", EPSS: "0.1", LEV: "0.2", LEVMethod: first.LEVMethod, KEV: KEVUnlisted},
 			{ID: "CVE-2", CVSSScore: "4.0", EPSS: "0.3", LEV: "0.4"},
 		},
 	}
@@ -129,6 +129,10 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 		{"changed EPSS", func(c *Component) { c.Vulns[0].EPSS = "0.2" }, true},
 		{"changed LEV", func(c *Component) { c.Vulns[0].LEV = "0.3" }, true},
 		{"changed LEV certainty", func(c *Component) { c.Vulns[0].LEVPartial = true }, true},
+		{"listed in KEV", func(c *Component) {
+			c.Vulns[0].KEV = KEVListed
+			c.Vulns[0].KEVCVEs = c.Vulns[0].CVEIDs
+		}, true},
 		{"changed unverified LEV", func(c *Component) { c.Vulns[1].LEV = "0.9" }, false},
 		{"changed dependency risk", func(c *Component) { c.ContainsVulnDep = true }, true},
 	}
@@ -140,9 +144,9 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 			a := makeSBOM(map[string]Component{"pkg": base}, map[string]int{"pkg": 0})
 			b := makeSBOM(map[string]Component{"pkg": newComponent}, map[string]int{"pkg": 0})
 			result := DiffSBOMs(a, b)
-			if tt.changed {
+			if tt.changed && assert.Contains(t, result.ByLevel, 0) {
 				assert.Len(t, result.ByLevel[0].Changed, 1)
-			} else {
+			} else if !tt.changed {
 				assert.Empty(t, result.ByLevel)
 			}
 		})

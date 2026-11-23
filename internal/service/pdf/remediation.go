@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"ex-sbom/client/cisa"
 	ssbom "ex-sbom/internal/service/sbom"
 )
 
@@ -73,6 +74,10 @@ func remediationEvidenceComplete(source *ssbom.ReportSource, components map[stri
 	for _, component := range components {
 		for _, finding := range component.Vulns {
 			if len(finding.CVEIDs) == 0 {
+				// Older snapshots could record a CVE only as the displayed ID.
+				if cisa.IsCVE(finding.ID) {
+					return false
+				}
 				continue
 			}
 			if source.KEVCheckedAt == nil || (finding.KEV != ssbom.KEVListed && finding.KEV != ssbom.KEVUnlisted) {

@@ -5,6 +5,7 @@
 package ssbom
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -306,10 +307,11 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, na
 		if ref != "" && !isGeneratedRoot(ref) {
 			key := componentKey(p.PackageName, ref, p.PackageVersion, reserved, result)
 			refToName[ref] = key
-			vulns := packageFindings(vulnPkgs, spdxReportPackage(p))
+			pkg := spdxReportPackage(p)
+			vulns := packageFindings(vulnPkgs, pkg)
 			result[key] = Component{
 				Name:       p.PackageName,
-				Version:    p.PackageVersion,
+				Version:    cmp.Or(p.PackageVersion, pkg.Version),
 				VulnNumber: len(vulns),
 				Vulns:      vulns,
 				Licences:   getSpdxLicences(p.PackageLicenseDeclared),

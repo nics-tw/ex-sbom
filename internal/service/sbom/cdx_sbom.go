@@ -5,6 +5,7 @@
 package ssbom
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -413,10 +414,11 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string, 
 			if c.BOMRef != "" {
 				refToName[c.BOMRef] = key
 			}
-			vulns := packageFindings(vulnPkgs, file.IdentifyPackage(c.Name, c.Version, c.PackageURL))
+			pkg := file.IdentifyPackage(c.Name, c.Version, c.PackageURL)
+			vulns := packageFindings(vulnPkgs, pkg)
 			componentInfo[key] = Component{
 				Name:       c.Name,
-				Version:    c.Version,
+				Version:    cmp.Or(c.Version, pkg.Version),
 				VulnNumber: len(vulns),
 				Vulns:      vulns,
 				Licences:   getCdxLicences(c.Licenses),

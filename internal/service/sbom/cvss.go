@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"ex-sbom/util/file"
+	"github.com/google/osv-scalibr/inventory/osvecosystem"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
 	cvss20 "github.com/pandatix/go-cvss/20"
 	cvss30 "github.com/pandatix/go-cvss/30"
@@ -13,13 +15,31 @@ import (
 	cvss40 "github.com/pandatix/go-cvss/40"
 )
 
-func advisoryCVSS(v *osvschema.Vulnerability) (string, string) {
+func advisoryCVSS(v *osvschema.Vulnerability, identity *file.PackageVersion) (string, string) {
 	best := -1.0
 	var version string
-	for _, severity := range v.GetSeverity() {
-		score, standard := vectorScore(severity)
-		if standard != "" && (score > best || (score == best && standard > version)) {
-			best, version = score, standard
+	consider := func(severities []*osvschema.Severity) {
+		for _, severity := range severities {
+			score, standard := vectorScore(severity)
+			if standard != "" && (score > best || (score == best && standard > version)) {
+				best, version = score, standard
+			}
+		}
+	}
+	consider(v.GetSeverity())
+	if version == "" && identity != nil && identity.Name != "" {
+		ecosystem, err := osvecosystem.Parse(identity.Ecosystem)
+		if err == nil && !ecosystem.IsEmpty() {
+			for _, affected := range v.GetAffected() {
+				pkg := affected.GetPackage()
+				if pkg.GetName() != identity.Name {
+					continue
+				}
+				affectedEcosystem, err := osvecosystem.Parse(pkg.GetEcosystem())
+				if err == nil && ecosystem.Equal(affectedEcosystem) {
+					consider(affected.GetSeverity())
+				}
+			}
 		}
 	}
 	if version == "" {
