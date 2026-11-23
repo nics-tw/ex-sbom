@@ -134,6 +134,7 @@
           projectDelete: "Delete",
           projectRenamePrompt: "Enter new project name:",
           projectDeleteConfirm: "Delete this project from the app? Its SBOMs will remain in the database.",
+          projectNameRequired: "Enter a new project name.",
           diffFiles: "Diff Files",
           diffSbomTitle: "Compare SBOMs",
           diffSbomA: "SBOM A (before)",
@@ -280,6 +281,7 @@
           projectDelete: "刪除",
           projectRenamePrompt: "輸入新的專案名稱：",
           projectDeleteConfirm: "確定從應用程式刪除此專案？SBOM 資料仍保留在資料庫。",
+          projectNameRequired: "請輸入新專案名稱。",
           diffFiles: "Diff 檔案",
           diffSbomTitle: "比較 SBOM",
           diffSbomA: "SBOM A（舊版）",
@@ -1964,11 +1966,25 @@
       });
 
       // Project controls
+      const projectName = document.getElementById("project-input");
+      const projectNameError = document.getElementById("project-name-error");
+      projectName.addEventListener("input", () => {
+        if (!projectName.value.trim()) return;
+        projectNameError.hidden = true;
+        projectName.removeAttribute("aria-invalid");
+        projectName.removeAttribute("aria-describedby");
+      });
       document.getElementById("project-select").addEventListener("change", e => Project.get(e.target.value));
       document.getElementById("project-switch-btn").addEventListener("click", () => {
-        const name = document.getElementById("project-input").value.trim();
-        if (!name) return;
-        document.getElementById("project-input").value = "";
+        const name = projectName.value.trim();
+        if (!name) {
+          projectNameError.hidden = false;
+          projectName.setAttribute("aria-invalid", "true");
+          projectName.setAttribute("aria-describedby", projectNameError.id);
+          projectName.focus();
+          return;
+        }
+        projectName.value = "";
         Project.create(name);
       });
       document.getElementById("project-rename-btn").addEventListener("click", () => {

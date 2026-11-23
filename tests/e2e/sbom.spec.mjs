@@ -304,6 +304,9 @@ test("searches, compares, renames and deletes versions across windows and a serv
   await page.goto(service.url);
   await selectProject(page, project, "Two releases");
   await expect(versionRow(page, "Renamed")).toBeVisible();
+  page.once("dialog", dialog => dialog.dismiss());
+  await versionRow(page, "Renamed").locator(".version-delete-btn").click();
+  await expect(versionRow(page, "Renamed")).toBeVisible();
   page.once("dialog", dialog => dialog.accept());
   await versionRow(page, "Renamed").locator(".version-delete-btn").click();
   await expect(versionRow(page, "Renamed")).toHaveCount(0);
@@ -314,6 +317,10 @@ test("searches, compares, renames and deletes versions across windows and a serv
   page.once("dialog", dialog => dialog.accept("Renamed project"));
   await page.locator("#project-rename-btn").click();
   await expect(page.locator("#project-current")).toHaveText("(Renamed project)");
+  page.once("dialog", dialog => dialog.dismiss());
+  await page.locator("#project-delete-btn").click();
+  await expect(page.locator("#project-current")).toHaveText("(Renamed project)");
+  await expect(versionRow(page, "Before")).toBeVisible();
   page.once("dialog", dialog => dialog.accept());
   await page.locator("#project-delete-btn").click();
   await expect(page.locator("#project-select option").filter({ hasText: "Renamed project" })).toHaveCount(0);
@@ -590,6 +597,24 @@ test("preserves comparison disclosures and horizontal scroll when translating", 
   await expect(region).toBeHidden();
   await page.locator("#diff-result summary").first().click();
   await expect.poll(() => region.evaluate(el => el.scrollLeft)).toBe(scroll);
+});
+
+test("explains a blank project name and lets the user correct it", async ({ page, service }) => {
+  await page.goto(service.url);
+  const name = page.locator("#project-input");
+  await name.fill("   ");
+  await page.locator("#project-switch-btn").click();
+  await expect(name).toBeFocused();
+  await expect(name).toHaveAttribute("aria-invalid", "true");
+  await expect(name).toHaveAccessibleDescription("Enter a new project name.");
+
+  await page.locator("#lang-zh").click();
+  await expect(name).toHaveAccessibleDescription("請輸入新專案名稱。");
+  await name.fill("驗收專案");
+  await expect(name).not.toHaveAttribute("aria-invalid");
+  await expect(page.locator("#project-name-error")).toBeHidden();
+  await page.locator("#project-switch-btn").click();
+  await expect(page.locator("#project-current")).toHaveText("(驗收專案)");
 });
 
 test("clears comparison status on reopening", async ({ page, service }) => {
