@@ -139,6 +139,15 @@ func TestSetupRouterGroup_RejectsMissingProjectBeforeDispatch(t *testing.T) {
 	}
 }
 
+func TestSetupRouterGroup_RejectsCrossSitePDFDownload(t *testing.T) {
+	router := buildTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/projects/1/sboms/release/report", nil)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
 func TestSetupRouterGroup_DecodesVersionPathOnce(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := buildTestRouter()

@@ -8,12 +8,48 @@ import (
 
 	"ex-sbom/util/file"
 	"github.com/google/osv-scalibr/inventory/osvecosystem"
+	"github.com/google/osv-scanner/v2/pkg/models"
 	"github.com/ossf/osv-schema/bindings/go/osvschema"
 	cvss20 "github.com/pandatix/go-cvss/20"
 	cvss30 "github.com/pandatix/go-cvss/30"
 	cvss31 "github.com/pandatix/go-cvss/31"
 	cvss40 "github.com/pandatix/go-cvss/40"
 )
+
+type cvssRating struct {
+	score   string
+	version string
+}
+
+func groupCVSSByID(pkg models.PackageVulns) map[string]cvssRating {
+	fallbacks := make(map[string]cvssRating)
+	if len(pkg.Groups) == 0 {
+		return fallbacks
+	}
+	standards := make(map[[2]string]string)
+	for _, advisory := range pkg.Vulnerabilities {
+		score, standard := advisoryCVSS(advisory, nil)
+		if standard != "" {
+			key := [2]string{advisory.GetId(), score}
+			standards[key] = max(standards[key], standard)
+		}
+	}
+	for _, group := range pkg.Groups {
+		if group.MaxSeverity == "" {
+			continue
+		}
+		rating := cvssRating{score: group.MaxSeverity}
+		for _, id := range group.IDs {
+			rating.version = max(rating.version, standards[[2]string{id, rating.score}])
+		}
+		for _, id := range group.IDs {
+			if _, alreadyScored := fallbacks[id]; !alreadyScored {
+				fallbacks[id] = rating
+			}
+		}
+	}
+	return fallbacks
+}
 
 func advisoryCVSS(v *osvschema.Vulnerability, identity *file.PackageVersion) (string, string) {
 	best := -1.0

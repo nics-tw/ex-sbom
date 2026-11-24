@@ -20,13 +20,24 @@ const (
 // ReportSource is server-observed provenance. It is saved with the
 // snapshot and signed in the preview, independently of the result hash.
 type ReportSource struct {
-	FileName          string      `json:"filename,omitempty"`
-	FileSHA256        string      `json:"sha256,omitempty"`
-	Specification     string      `json:"specification,omitempty"`
-	Status            QueryStatus `json:"query_status,omitempty"`
-	QueriedAt         *time.Time  `json:"queried_at,omitempty"`
-	KEVCatalogVersion string      `json:"kev_catalog_version,omitempty"`
-	KEVCheckedAt      *time.Time  `json:"kev_checked_at,omitempty"`
+	FileName          string          `json:"filename,omitempty"`
+	FileSHA256        string          `json:"sha256,omitempty"`
+	Specification     string          `json:"specification,omitempty"`
+	Status            QueryStatus     `json:"query_status,omitempty"`
+	QueriedAt         *time.Time      `json:"queried_at,omitempty"`
+	KEVCatalogVersion string          `json:"kev_catalog_version,omitempty"`
+	KEVCheckedAt      *time.Time      `json:"kev_checked_at,omitempty"`
+	LEVArchiveStatus  string          `json:"lev_archive_status,omitempty"`
+	GoComponents      map[string]bool `json:"go_components,omitempty"`
+}
+
+const (
+	LEVArchiveDisabled   = "disabled"
+	LEVArchiveConfigured = "configured"
+)
+
+func (source *ReportSource) LEVDisabled() bool {
+	return source != nil && source.LEVArchiveStatus == LEVArchiveDisabled
 }
 
 func observedSource(packages []file.PackageVersion, components map[string]Component, observation file.QueryObservation) *ReportSource {

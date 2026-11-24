@@ -187,16 +187,22 @@ func TestCreateRejectsMissingOrInvalidPreviewToken(t *testing.T) {
 
 func TestPreviewTokenBindsReportSource(t *testing.T) {
 	h := New(nil, nil)
-	source := &ssbom.ReportSource{FileName: "input.json", FileSHA256: "source hash", Status: ssbom.QueryCompleted}
+	source := &ssbom.ReportSource{FileName: "input.json", FileSHA256: "source hash", Status: ssbom.QueryCompleted, LEVArchiveStatus: ssbom.LEVArchiveDisabled}
 	token, err := h.previewToken(1, "analysis hash", time.Time{}, source)
 	assert.NoError(t, err)
 	assert.True(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, source))
 	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, nil))
+	withGoIdentity := *source
+	withGoIdentity.GoComponents = map[string]bool{"go-module": true}
+	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &withGoIdentity))
 
 	changed := *source
 	changed.FileSHA256 = "other hash"
 	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &changed))
 	changed = *source
 	changed.Status = ssbom.QueryPartial
+	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &changed))
+	changed = *source
+	changed.LEVArchiveStatus = ssbom.LEVArchiveConfigured
 	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &changed))
 }

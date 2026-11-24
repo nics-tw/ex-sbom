@@ -35,7 +35,8 @@ const (
 func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string, error) {
 	names := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
-	componentInfo, observation, err := getSpdxComponentInfo(*document, rawData, name, names, refToName)
+	goComponents := make(map[string]bool)
+	componentInfo, observation, err := getSpdxComponentInfo(*document, rawData, name, names, refToName, goComponents)
 	if err != nil {
 		return FormattedSBOM{}, "", err
 	}
@@ -52,6 +53,7 @@ func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (Form
 		ReportSource:      observedSource(spdxReportPackages(document), componentInfo, observation),
 	}
 
+	bom.ReportSource.GoComponents = goComponents
 	compWithVuln := []string{}
 	for compName, info := range bom.ComponentInfo {
 		if info.VulnNumber > 0 {
@@ -279,7 +281,7 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, names []string, refToName map[string]string) (map[string]Component, file.QueryObservation, error) {
+func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, names []string, refToName map[string]string, goComponents map[string]bool) (map[string]Component, file.QueryObservation, error) {
 	var result = make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -309,6 +311,9 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, na
 			refToName[ref] = key
 			pkg := spdxReportPackage(p)
 			vulns := packageFindings(vulnPkgs, pkg)
+			if pkg.Ecosystem == "Go" && len(vulns) > 0 {
+				goComponents[key] = true
+			}
 			result[key] = Component{
 				Name:       p.PackageName,
 				Version:    cmp.Or(p.PackageVersion, pkg.Version),

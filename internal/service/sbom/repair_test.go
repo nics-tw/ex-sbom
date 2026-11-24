@@ -63,3 +63,88 @@ func TestMatchedRepairEvidence(t *testing.T) {
 	identity.Name = "another-package"
 	require.Nil(t, matchedRepairEvidence(advisory, identity))
 }
+
+func TestConservativeRepairEvidence(t *testing.T) {
+	identity := file.PackageVersion{Ecosystem: "npm", Name: "example", Version: "1.2.3"}
+	for _, tc := range []struct {
+		name     string
+		kind     osvschema.Range_Type
+		start    string
+		versions []string
+	}{
+		{name: "unknown range type", kind: osvschema.Range_Type(99), start: "0"},
+		{name: "reversed range", kind: osvschema.Range_SEMVER, start: "1.2.5", versions: []string{"1.2.3"}},
+		{name: "invalid explicit version", kind: osvschema.Range_SEMVER, start: "0", versions: []string{"invalid"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			advisory := &osvschema.Vulnerability{
+				Id: "TEST-1",
+				Affected: []*osvschema.Affected{{
+					Package:  &osvschema.Package{Ecosystem: identity.Ecosystem, Name: identity.Name},
+					Versions: tc.versions,
+					Ranges: []*osvschema.Range{{
+						Type: tc.kind, Events: []*osvschema.Event{{Introduced: tc.start}, {Fixed: "1.2.4"}},
+					}},
+				}},
+			}
+			require.Nil(t, matchedRepairEvidence(advisory, identity))
+		})
+	}
+}
+
+func TestGoAdvisoryDisplayPreservesSnapshotData(t *testing.T) {
+	finding := Vuln{SuggestFixVersion: "1.2.4, v2.0.0", OtherFixVersions: "not-a-version, 1.2.5", FixVersions: []string{"1.2.4", "v2.0.0"}}
+	component := Component{Name: "example.com/widget", Version: "v1.2.3", Vulns: []Vuln{finding}}
+	bom := FormattedSBOM{ComponentInfo: map[string]Component{"widget": component}}
+	checksum := HashSBOM(bom)
+	source := &ReportSource{GoComponents: map[string]bool{"widget": true}}
+	bom.ReportSource = source
+	require.Equal(t, checksum, HashSBOM(bom))
+	require.True(t, IsGoComponent(source, "widget", component))
+	require.False(t, IsGoComponent(source, "other", component))
+	display := component.Vulns[0].GoAdvisoryDisplay()
+	require.Equal(t, "v1.2.4, v2.0.0", display.SuggestFixVersion)
+	require.Equal(t, "not-a-version, v1.2.5", display.OtherFixVersions)
+	require.Equal(t, []string{"1.2.4", "v2.0.0"}, display.FixVersions)
+	require.Equal(t, finding, component.Vulns[0])
+	require.Empty(t, GoCandidateVersions(""))
+	component.Vulns[0].RepairEvidence = &RepairEvidence{Ecosystem: "Go", Package: component.Name, Installed: "1.2.3"}
+	require.True(t, IsGoComponent(nil, "widget", component))
+	component.Vulns[0].RepairEvidence.Installed = "1.2.2"
+	require.False(t, IsGoComponent(nil, "widget", component))
+	component.Vulns[0].RepairEvidence = &RepairEvidence{Ecosystem: "npm", Package: component.Name, Installed: "1.2.3"}
+	require.False(t, IsGoComponent(nil, "widget", component))
+}
+
+func TestRepairVersionUsesGoPrefixAndMatchingEvidence(t *testing.T) {
+	const installed = "v1.2.3"
+	newFinding := func(id, score, name, version string) Vuln {
+		return Vuln{ID: id, CVSSScore: score, RepairEvidence: &RepairEvidence{
+			AdvisoryID: id, Ecosystem: "Go", Package: name, Installed: version,
+			Ranges: []RepairInterval{{Start: "0", Fixed: "1.2.4"}},
+		}}
+	}
+	for _, tc := range []struct {
+		name, score, pkg, version, wantUpgrade string
+		wantCoverage                           int
+	}{
+		{"matching evidence", "8.0", "example", installed, "v1.2.4", 2},
+		{"different target package", "8.0", "other", installed, "", 0},
+		{"different target version", "8.0", "example", "v1.2.2", "", 0},
+		{"different secondary package", "6.0", "other", installed, "v1.2.4", 1},
+		{"different secondary version", "6.0", "example", "v1.2.2", "v1.2.4", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bom := FormattedSBOM{ComponentInfo: map[string]Component{
+				"example": {Name: "example", Version: installed, Vulns: []Vuln{
+					newFinding("TEST-1", "9.0", "example", installed),
+					newFinding("TEST-2", tc.score, tc.pkg, tc.version),
+				}},
+			}}
+			got := bom.RemediationAssessments(nil)
+			require.Len(t, got, 1)
+			require.Equal(t, tc.wantUpgrade, got[0].Upgrade)
+			require.Equal(t, tc.wantCoverage, got[0].Covered)
+		})
+	}
+}

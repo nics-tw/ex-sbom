@@ -26,7 +26,8 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 	components := flattenCdxComponents(nil, bom.Components)
 	refToName := getCdxBomRefToName(&components)
 	keys := getCdxComponents(&components)
-	componentInfo, observation, err := getCdxComponentInfo(&components, rawData, name, keys, refToName)
+	goComponents := make(map[string]bool)
+	componentInfo, observation, err := getCdxComponentInfo(&components, rawData, name, keys, refToName, goComponents)
 	if err != nil {
 		return FormattedSBOM{}, "", time.Time{}, err
 	}
@@ -62,6 +63,7 @@ func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, st
 		ReportSource:      observedSource(cdxReportPackages(components), componentInfo, observation),
 	}
 
+	result.ReportSource.GoComponents = goComponents
 	withVuln := []string{}
 	for compName, info := range result.ComponentInfo {
 		if info.VulnNumber > 0 {
@@ -381,7 +383,7 @@ func getCdxDep(input *[]cdx.Dependency, refToName map[string]string, rootRef str
 	return dependency
 }
 
-func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string, names []string, refToName map[string]string) (map[string]Component, file.QueryObservation, error) {
+func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string, names []string, refToName map[string]string, goComponents map[string]bool) (map[string]Component, file.QueryObservation, error) {
 	componentInfo := make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -416,6 +418,9 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string, 
 			}
 			pkg := file.IdentifyPackage(c.Name, c.Version, c.PackageURL)
 			vulns := packageFindings(vulnPkgs, pkg)
+			if pkg.Ecosystem == "Go" && len(vulns) > 0 {
+				goComponents[key] = true
+			}
 			componentInfo[key] = Component{
 				Name:       c.Name,
 				Version:    cmp.Or(c.Version, pkg.Version),

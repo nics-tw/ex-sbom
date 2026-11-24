@@ -40,6 +40,14 @@ func LocalBrowserRequest() gin.HandlerFunc {
 	}
 }
 
+func RequireLocalBrowserSource(c *gin.Context) {
+	if !localBrowserSource(c.Request) {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	c.Next()
+}
+
 func localHost(raw string) bool {
 	var host, port string
 	if strings.HasPrefix(raw, "[") {
@@ -85,7 +93,10 @@ func localMutation(r *http.Request) bool {
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
 		return true
 	}
+	return localBrowserSource(r)
+}
 
+func localBrowserSource(r *http.Request) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
 		return false
 	}

@@ -40,7 +40,12 @@ func matchedRepairEvidence(advisory *osvschema.Vulnerability, identity file.Pack
 		if pkg.GetEcosystem() != identity.Ecosystem || pkg.GetName() != identity.Name {
 			continue
 		}
-		e.Versions = append(e.Versions, affected.GetVersions()...)
+		for _, version := range affected.GetVersions() {
+			if !semver.IsValid(repairVersion(version)) {
+				return nil
+			}
+			e.Versions = append(e.Versions, version)
+		}
 		for _, r := range affected.GetRanges() {
 			// A limit does not establish a repair version. Unknown range
 			// types also prevent a verified coverage claim.
@@ -69,6 +74,45 @@ func repairVersion(value string) string {
 		return value
 	}
 	return "v" + value
+}
+
+// IsGoComponent checks the recorded identity, with matching repair evidence
+// as a fallback for snapshots saved before the component identity was kept.
+func IsGoComponent(source *ReportSource, key string, component Component) bool {
+	if source != nil && source.GoComponents[key] {
+		return true
+	}
+	for _, finding := range component.Vulns {
+		evidence := finding.RepairEvidence
+		if evidence != nil && evidence.Ecosystem == "Go" && evidence.Package == component.Name &&
+			component.Version != "" && repairVersion(evidence.Installed) == repairVersion(component.Version) {
+			return true
+		}
+	}
+	return false
+}
+
+// GoCandidateVersions formats advisory versions for display, preserving
+// values the Go version parser cannot verify and the order of candidates.
+func GoCandidateVersions(versions string) string {
+	if versions == "" {
+		return ""
+	}
+	parts := strings.Split(versions, ", ")
+	for i, version := range parts {
+		candidate := repairVersion(version)
+		if semver.IsValid(candidate) {
+			parts[i] = candidate
+		}
+	}
+	return getVersionString(parts)
+}
+
+// GoAdvisoryDisplay formats a finding's advisory candidates for a confirmed Go component.
+func (v Vuln) GoAdvisoryDisplay() Vuln {
+	v.SuggestFixVersion = GoCandidateVersions(v.SuggestFixVersion)
+	v.OtherFixVersions = GoCandidateVersions(v.OtherFixVersions)
+	return v
 }
 
 func repairIntervals(events []*osvschema.Event) ([]RepairInterval, bool) {
@@ -167,6 +211,9 @@ func verifiedRepair(findings []FindingAssessment) (string, []FindingAssessment) 
 				e.Installed == identity.Installed && !e.affects(candidate) {
 				covered = append(covered, item)
 			}
+		}
+		if identity.Ecosystem == "Go" {
+			candidate = repairVersion(candidate)
 		}
 		return candidate, covered
 	}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-//go:build taggedpdf && ((darwin && !ios && arm64) || (linux && !android && (arm64 || amd64)))
+//go:build taggedpdf && ((darwin && !ios && arm64) || (linux && !android && (arm64 || amd64)) || (windows && amd64))
 
 package pdf
 
@@ -90,13 +90,19 @@ func prepareTaggedGlyphs(report *taggedData, fontDir string) error {
 		}
 	}
 	for i := range report.Findings {
-		visit(&report.Findings[i].ID)
-		fields(report.Findings[i].Fields)
+		finding := &report.Findings[i]
+		visit(&finding.Title)
+		visit(&finding.Component.Value)
+		visit(&finding.Version.Value)
+		visit(&finding.Summary.Value)
+		fields(finding.Fields)
+		visit(&finding.Details.Value)
 	}
 	fontFile := filepath.Join(fontDir, taggedFallbackFont)
 	if len(missing) == 0 {
 		return os.WriteFile(fontFile, taggedFallbackTemplate, 0600)
 	}
+	report.HasMissingGlyphs = true
 	font, err := buildFallbackFont(taggedFallbackTemplate, missing)
 	if err != nil {
 		return err

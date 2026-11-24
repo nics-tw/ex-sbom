@@ -24,13 +24,24 @@
 #show heading.where(level: 1): set text(fill: accent, size: 19pt, weight: "bold")
 #show heading.where(level: 2): set text(fill: accent, size: 13pt, weight: "bold")
 #show heading.where(level: 3): set text(size: 11pt, weight: "bold")
-#let field(item) = block(above: 4pt, below: 4pt)[
-  #text(weight: "bold", item.label) #h(4pt) #item.value
-]
-#let row(item) = grid(
-  columns: (31%, 1fr), gutter: 3mm,
-  text(weight: "bold", item.label), item.value,
-)
+#let wrap(value, width: 24) = value.replace(regex("\\S{" + str(width + 1) + ",}"), match => {
+  match.text.clusters().chunks(width).map(chunk => chunk.join()).join(sym.zws)
+})
+#let report-heading(title, color: black) = {
+  show heading: it => block(above: 0.75em, below: 0.4em, sticky: true, text(fill: color, wrap(title)))
+  heading(level: 3, title)
+}
+#let recorded(value) = if value == "" { tr("Not recorded", "未記錄") } else { value }
+#let field(item, prose: false, sticky: false) = {
+  let label = text(weight: "bold", item.label) + text(" ")
+  let value = recorded(item.value)
+  if prose and item.value != "" {
+    block(above: 4pt, below: 4pt, sticky: true, par(text(weight: "bold", item.label)))
+    block(above: 0pt, below: 4pt, par(text(lang: "en", region: none, wrap(value))))
+  } else {
+    block(above: 4pt, below: 4pt, sticky: sticky, par(label + text(wrap(value))))
+  }
+}
 #let metric(label, value) = block(width: 100%, height: 18mm, inset: 3mm, fill: neutral)[
   #label \
   #text(size: 16pt, weight: "bold", value)
@@ -54,7 +65,7 @@
     metric(tr("CVEs listed in CISA KEV", "列入 CISA KEV 的弱點"), data.kev_count),
   )
   if data.needs_review > 0 {
-    field((label: tr("Components with findings to assess", "有待評估弱點的元件"), value: str(data.needs_review)))
+    field((label: tr("Components with unclassified findings", "含未分級弱點的元件"), value: str(data.needs_review)))
   }
   if data.additional_urgent != "" {
     field((label: tr("Additional components to update immediately", "另有需立即更新的元件"), value: data.additional_urgent))
@@ -63,8 +74,8 @@
   let first = data.actions.first()
   heading(level: 2, tr("Priority action", "優先交辦項目"))
   block(width: 100%, inset: 4mm, stroke: (left: 1.25mm + priority-color(first), rest: 0.35pt + rgb("#bac5cb")))[
-    #heading(level: 3, text(fill: priority-color(first), first.title))
-    #for item in first.fields { row(item) }
+    #report-heading(first.title, color: priority-color(first))
+    #for item in first.fields { field(item) }
   ]
   heading(level: 2, tr("If only action 1 is completed", "若本輪只完成第 1 項"))
   if first.coverage_note != "" {
@@ -79,6 +90,7 @@
   table(columns: (13mm, 1fr, 21mm, 30mm, 28mm, 27mm), stroke: none, inset: 4pt,
     table.header(..data.order_headers.map(label => table.cell(fill: neutral)[#label])),
     ..data.order_rows.map(item => item.cells.enumerate().map(((i, value)) => {
+      let value = wrap(value, width: if i == 1 { 12 } else { 6 })
       if i == 4 and item.urgent { text(fill: rgb("#801a24"), value) } else { value }
     })).flatten(),
   )
@@ -86,7 +98,7 @@
 #if data.actions.len() > 1 {
   [== #tr("Remediation priorities (continued)", "修補處理順序（續）")]
   for action in data.actions.slice(1) {
-    heading(level: 3, text(fill: priority-color(action), action.title))
+    report-heading(action.title, color: priority-color(action))
     for item in action.fields { field(item) }
     counts(action)
   }
@@ -103,7 +115,14 @@
 } else {
   table(columns: (1fr, 29mm, 26mm, 18mm), stroke: none, inset: 4pt,
     table.header(..(tr("Component", "元件"), tr("Version", "版本"), tr("Scope", "類型"), tr("Findings", "弱點數")).map(label => table.cell(fill: neutral)[#label])),
-    ..data.components.map(component => (table.cell(breakable: true)[#component.name], component.version, component.scope, str(component.count))).flatten(),
+    ..data.components.map(component => {
+      let breakable = component.name.len() > 240 or component.version.len() > 240
+      (
+        table.cell(breakable: breakable)[#wrap(component.name)],
+        table.cell(breakable: breakable)[#wrap(recorded(component.version), width: 8)],
+        component.scope, str(component.count),
+      )
+    }).flatten(),
   )
 }
 
@@ -112,6 +131,17 @@
   tr("No vulnerability records are stored for this version.", "此版本未儲存弱點紀錄")
 }
 #for finding in data.findings {
-  heading(level: 3, finding.id)
+  report-heading(finding.title)
+  field(finding.component, sticky: true)
+  field(finding.version)
+  field(finding.summary, prose: true)
   for item in finding.fields { field(item) }
+  field(finding.details, prose: true)
 }
+#if data.has_missing_glyphs [
+  == #tr("Text display note", "文字顯示說明")
+  #tr(
+    "Boxes mark characters that the report fonts cannot display. Copy or extract the text to recover the original characters.",
+    "方框表示報告字型無法顯示的字元。可複製或擷取文字取得原始字元。",
+  )
+]

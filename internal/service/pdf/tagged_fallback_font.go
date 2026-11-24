@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-//go:build taggedpdf && ((darwin && !ios && arm64) || (linux && !android && (arm64 || amd64)))
+//go:build taggedpdf && ((darwin && !ios && arm64) || (linux && !android && (arm64 || amd64)) || (windows && amd64))
 
 package pdf
 

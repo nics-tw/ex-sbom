@@ -428,22 +428,9 @@ func getComponentToLevel(DependencyLevel map[int][]string) map[string]int {
 	return componentToLevel
 }
 
-func getCVSS(id string, groups []models.GroupInfo) string {
-	for _, g := range groups {
-		if slices.Contains(g.IDs, id) {
-			return g.MaxSeverity
-		}
-	}
-
-	return ""
-}
-
-func getVulns(pkg models.PackageVulns, version string) []Vuln {
-	return buildVulns(pkg, version, nil)
-}
-
 func buildVulns(pkg models.PackageVulns, version string, identity *file.PackageVersion) []Vuln {
 	var vulns []Vuln
+	var groupFallbacks map[string]cvssRating
 	for _, v := range pkg.Vulnerabilities {
 		if v == nil {
 			continue
@@ -462,8 +449,12 @@ func buildVulns(pkg models.PackageVulns, version string, identity *file.PackageV
 			identifier = v.Id
 		}
 		cvss, standard := advisoryCVSS(v, identity)
-		if identity == nil {
-			cvss = getCVSS(v.Id, pkg.Groups)
+		if cvss == "" {
+			if groupFallbacks == nil {
+				groupFallbacks = groupCVSSByID(pkg)
+			}
+			fallback := groupFallbacks[v.Id]
+			cvss, standard = fallback.score, fallback.version
 		}
 		vulns = append(vulns, Vuln{
 			ID:                identifier,

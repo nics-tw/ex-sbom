@@ -121,6 +121,15 @@ func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, e
 				"affected":[{"package":{"ecosystem":"npm","name":"fixture-remediation"},
 				"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}]}]
 			}`), nil
+		case "api.osv.dev/v1/vulns/EX-SBOM-TEST-2":
+			return e2eJSON(req, `{
+				"id":"EX-SBOM-TEST-2","aliases":["CVE-2025-99998"],
+				"modified":"2025-01-01T00:00:00Z","summary":"Unlisted synthetic finding",
+				"affected":[{"package":{"ecosystem":"npm","name":"fixture-remediation"},
+				"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}]}]
+			}`), nil
+		case "api.osv.dev/v1/vulns/EX-SBOM-GO-FIX":
+			return e2eJSON(req, `{"id":"EX-SBOM-GO-FIX","modified":"2025-01-01T00:00:00Z","summary":"Go advisory candidate fixture","affected":[{"package":{"ecosystem":"Go","name":"example.com/widget"},"ranges":[{"type":"GIT","repo":"https://example.com/widget","events":[{"introduced":"0"},{"fixed":"1.2.4"}]}]}]}`), nil
 		case "api.first.org/data/v1/epss":
 			if transport.failRiskFeeds {
 				return nil, errors.New("fixture EPSS source unavailable")
@@ -163,7 +172,10 @@ func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, e
 	for i, item := range query.Queries {
 		results[i] = json.RawMessage(`{}`)
 		if item.Package.Name == "fixture-remediation" {
-			results[i] = json.RawMessage(`{"vulns":[{"id":"EX-SBOM-TEST-1"}]}`)
+			results[i] = json.RawMessage(`{"vulns":[{"id":"EX-SBOM-TEST-1"},{"id":"EX-SBOM-TEST-2"}]}`)
+		}
+		if item.Package.Name == "example.com/widget" {
+			results[i] = json.RawMessage(`{"vulns":[{"id":"EX-SBOM-GO-FIX"}]}`)
 		}
 	}
 	reply, err := json.Marshal(struct {

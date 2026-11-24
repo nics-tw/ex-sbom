@@ -178,8 +178,8 @@ func generateUntagged(w io.Writer, report Report) error {
 	if source.QueriedAt != nil && !source.QueriedAt.IsZero() {
 		doc.field(doc.label("Query observed at (UTC)", "查詢時間（UTC）"), source.QueriedAt.UTC().Format("2006-01-02 15:04:05"))
 	}
-	evidenceComplete := remediationEvidenceComplete(source, report.SBOM.ComponentInfo)
-	continuationLink := doc.remediationSummary(assessments, report.SBOM.ComponentToLevel, source, evidenceComplete)
+	kevCount, kevComplete, evidenceComplete := remediationEvidence(source, report.SBOM.ComponentInfo)
+	continuationLink := doc.remediationSummary(assessments, report.SBOM.ComponentToLevel, source, doc.urgencyCount(kevCount, kevComplete), evidenceComplete)
 	if continuationLink != 0 {
 		doc.remediationContinuation(assessments, report.SBOM, continuationLink, evidenceComplete)
 	}
@@ -240,9 +240,13 @@ func generateUntagged(w io.Writer, report Report) error {
 	doc.field(doc.label("CVSS critical / high / medium / low / none / unavailable", "CVSS 極高／高／中／低／無／未提供"),
 		fmt.Sprintf("%d / %d / %d / %d / %d / %d", severities[5], severities[4], severities[3], severities[2], severities[1], severities[0]))
 	doc.field("EPSS ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", epssBands[0], epssBands[1], epssBands[2]))
-	doc.field("LEV ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", levBands[0], levBands[1], levBands[2]))
-	if unavailableLEV > 0 {
-		doc.field(doc.label("LEV unavailable or unverified", "LEV 未取得或未驗證"), strconv.Itoa(unavailableLEV))
+	if source.LEVDisabled() {
+		doc.field("LEV", doc.label("Disabled at scan time", "掃描時未啟用"))
+	} else {
+		doc.field("LEV ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", levBands[0], levBands[1], levBands[2]))
+		if unavailableLEV > 0 {
+			doc.field(doc.label("LEV unavailable or unverified", "LEV 未取得或未驗證"), strconv.Itoa(unavailableLEV))
+		}
 	}
 	doc.field(doc.label("Analysis scope", "分析範圍"), doc.label(
 		"Findings are the records stored for this SBOM version. A finding shared by multiple components is counted for each component.",
@@ -253,9 +257,10 @@ func generateUntagged(w io.Writer, report Report) error {
 		doc.field(doc.label("Repair version policy", "修補版本選擇"), doc.repairVersionPolicy())
 		doc.field(doc.label("Exploitation signal calculation", "綜合利用指標算法"), doc.exploitationMethod())
 	}
+	doc.field(doc.label("Review notes", "查核說明"), doc.reviewNotes())
 
 	doc.componentTable(components)
-	doc.vulnerabilityDetails(components, assessments)
+	doc.vulnerabilityDetails(components, assessments, source)
 	if doc.usedGlyphFallback {
 		doc.section(doc.label("Text display note", "文字顯示說明"))
 		doc.write(doc.label(
@@ -263,6 +268,13 @@ func generateUntagged(w io.Writer, report Report) error {
 			"部分字元以 Unicode 碼位顯示。支援此功能的 PDF 閱讀器可搜尋及複製原文。"), lineHeight)
 	}
 	return pdf.Output(w)
+}
+
+func (d *document) reviewNotes() string {
+	return d.label(
+		"Confirm actual deployment and exposure with the operations team. Verify findings with insufficient evidence.",
+		"請維運單位確認實際部署與曝險。證據不足的弱點仍待查證。",
+	)
 }
 
 func sortedComponents(bom ssbom.FormattedSBOM) []reportComponent {
@@ -563,7 +575,7 @@ func (d *document) reportTable(title, note string, widths []float64, labels []st
 	}
 }
 
-func (d *document) vulnerabilityDetails(components []reportComponent, assessments []ssbom.ComponentAssessment) {
+func (d *document) vulnerabilityDetails(components []reportComponent, assessments []ssbom.ComponentAssessment, source *ssbom.ReportSource) {
 	byComponent := make(map[string]ssbom.ComponentAssessment, len(assessments))
 	for _, entry := range assessments {
 		byComponent[entry.Key] = entry
@@ -575,7 +587,11 @@ func (d *document) vulnerabilityDetails(components []reportComponent, assessment
 	var count int
 	for _, component := range components {
 		assessment := byComponent[component.key]
+		isGo := ssbom.IsGoComponent(source, component.key, component.sbom)
 		for i, vulnerability := range component.sbom.Vulns {
+			if isGo {
+				vulnerability = vulnerability.GoAdvisoryDisplay()
+			}
 			count++
 			d.ensureSpace(3 * lineHeight)
 			d.Ln(3)
@@ -610,17 +626,14 @@ func (d *document) vulnerabilityDetails(components []reportComponent, assessment
 				if vulnerability.LEVFirst != "" && vulnerability.LEVAsOf != "" {
 					d.field(d.label("LEV period (UTC)", "LEV 歷史期間（UTC）"), vulnerability.LEVFirst+" – "+vulnerability.LEVAsOf)
 				}
-			} else {
+			} else if !source.LEVDisabled() {
 				d.field("LEV", d.label("Unavailable or unverified", "未取得或未驗證"))
 			}
-			d.field(d.label("Exploitation signal", "綜合利用指標"), d.exploitationValue(vulnerability.ExploitationSignal(vulnerability.KEV)))
-			switch vulnerability.KEV {
+			kev, kevIDs := vulnerability.KEVEvidence()
+			d.field(d.label("Exploitation signal", "綜合利用指標"), d.exploitationValue(vulnerability.ExploitationSignal(kev, source)))
+			switch kev {
 			case ssbom.KEVListed:
-				ids := vulnerability.KEVCVEs
-				if len(ids) == 0 {
-					ids = []string{vulnerability.KEVCVE}
-				}
-				d.field("KEV", d.label("Listed in CISA catalog", "已列入 CISA 清單")+" · "+strings.Join(ids, ", "))
+				d.field("KEV", d.label("Listed in CISA catalog", "已列入 CISA 清單")+" · "+strings.Join(kevIDs, ", "))
 			case ssbom.KEVUnlisted:
 				d.field("KEV", d.label("Checked, not listed", "已查核，未列入"))
 			default:

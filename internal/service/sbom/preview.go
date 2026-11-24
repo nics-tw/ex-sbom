@@ -6,6 +6,7 @@ package ssbom
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -34,6 +35,11 @@ var (
 
 // Preview parses raw SBOM bytes and returns the result without saving to DB.
 func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, error) {
+	return s.PreviewContext(context.Background(), rawData)
+}
+
+// PreviewContext applies the request deadline to historical archive enrichment.
+func (s *Service) PreviewContext(ctx context.Context, rawData []byte) (FormattedSBOM, string, time.Time, error) {
 	switch detectFileType(rawData) {
 	case fileTypeJSON: // no-op: proceed to format detection below
 	case fileTypeXML:
@@ -54,7 +60,7 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		}
 		setReportSpecification(&bom, rawData, keySPDXVersion, "")
 		applyKEV(&bom, cisa.Current)
-		applyHistoricalLEV(&bom)
+		applyHistoricalLEV(ctx, &bom)
 		sortFormattedSBOM(&bom)
 		return bom, HashSBOM(bom), spdxTimestamp(doc), nil
 
@@ -73,7 +79,7 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		}
 		setReportSpecification(&result, rawData, keySpecVersion, "CycloneDX ")
 		applyKEV(&result, cisa.Current)
-		applyHistoricalLEV(&result)
+		applyHistoricalLEV(ctx, &result)
 		sortFormattedSBOM(&result)
 		return result, HashSBOM(result), bomTimestamp, nil
 

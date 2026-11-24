@@ -56,15 +56,23 @@ func applyKEV(bom *FormattedSBOM, current func() (cisa.Catalog, error)) {
 	}
 }
 
-func (v Vuln) listedCVEs() []string {
+// KEVEvidence returns the recorded status and the listed CVEs that match this finding.
+func (v Vuln) KEVEvidence() (KEVStatus, []string) {
 	if v.KEV != KEVListed {
-		return nil
+		return v.KEV, nil
 	}
-	if len(v.KEVCVEs) > 0 {
-		return v.KEVCVEs
+	ids := v.KEVCVEs
+	if len(ids) == 0 && v.KEVCVE != "" {
+		ids = []string{v.KEVCVE}
 	}
-	if v.KEVCVE != "" {
-		return []string{v.KEVCVE}
+	var matched []string
+	for _, id := range ids {
+		if slices.Contains(v.CVEIDs, id) {
+			matched = append(matched, id)
+		}
 	}
-	return nil
+	if len(matched) == 0 {
+		return KEVUnknown, nil
+	}
+	return KEVListed, matched
 }

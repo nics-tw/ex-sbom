@@ -6,31 +6,32 @@ import (
 	"cmp"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 type RemediationPriority int
 
 const (
-	RemediationReview RemediationPriority = iota
-	RemediationRoutine
+	RemediationRoutine RemediationPriority = iota
+	RemediationReview
 	RemediationAttention
 	RemediationElevated
 	RemediationUrgent
 )
 
-// RemediationPolicyVersion identifies the first report policy, calibrated on
-// the reference SBOM. The threshold applies to the exploitation signal.
 const (
-	RemediationPolicyVersion = "1"
+	RemediationPolicyVersion = "2"
 	RemediationThreshold     = 0.10
 )
 
 type FindingAssessment struct {
 	index    int
+	kevCVEs  []string
 	Finding  Vuln
 	Signal   ExploitationSignal
 	CVSS     float64
 	HasCVSS  bool
+	KEVMatch bool
 	Priority RemediationPriority
 }
 
@@ -74,7 +75,7 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 		}
 		findings := make([]FindingAssessment, 0, len(component.Vulns))
 		for i, finding := range component.Vulns {
-			item := assessFinding(finding, component.Version, threshold)
+			item := assessFinding(finding, component.Version, threshold, bom.ReportSource)
 			item.index = i
 			findings = append(findings, item)
 			for _, cve := range finding.CVEIDs {
@@ -87,12 +88,16 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 			case RemediationReview:
 				entry.NeedsReview++
 			case RemediationUrgent:
-				entry.UrgentCVEs = append(entry.UrgentCVEs, finding.listedCVEs()...)
+				entry.UrgentCVEs = append(entry.UrgentCVEs, item.kevCVEs...)
 			}
 		}
 		slices.Sort(entry.UrgentCVEs)
 		entry.UrgentCVEs = slices.Compact(entry.UrgentCVEs)
-		upgrade, covered := verifiedRepair(findings)
+		var upgrade string
+		var covered []FindingAssessment
+		if strings.TrimSpace(component.Version) != "" {
+			upgrade, covered = verifiedRepair(findings)
+		}
 		entry.Upgrade = upgrade
 		if evidence := entry.Driver.Finding.RepairEvidence; evidence != nil {
 			entry.Package, entry.Ecosystem = evidence.Package, evidence.Ecosystem
@@ -111,12 +116,12 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 			for _, id := range entry.UrgentCVEs {
 				total, resolved := 0, 0
 				for _, item := range findings {
-					if slices.Contains(item.Finding.listedCVEs(), id) {
+					if slices.Contains(item.kevCVEs, id) {
 						total++
 					}
 				}
 				for _, item := range covered {
-					if slices.Contains(item.Finding.listedCVEs(), id) {
+					if slices.Contains(item.kevCVEs, id) {
 						resolved++
 					}
 				}
@@ -156,23 +161,26 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 	return result
 }
 
-func assessFinding(finding Vuln, version string, threshold *float64) FindingAssessment {
+func assessFinding(finding Vuln, version string, threshold *float64, source *ReportSource) FindingAssessment {
 	score, err := strconv.ParseFloat(finding.CVSSScore, 64)
-	signal := finding.ExploitationSignal(finding.KEV)
-	item := FindingAssessment{Finding: finding, Signal: signal, CVSS: score, HasCVSS: err == nil && score >= 0 && score <= 10}
-	// The catalog match is saved only for scanner findings keyed to this
-	// component and version. A finding without an installed version needs review.
-	if version != "" && finding.KEV == KEVListed && slices.ContainsFunc(finding.listedCVEs(), func(id string) bool { return slices.Contains(finding.CVEIDs, id) }) {
+	kev, cves := finding.KEVEvidence()
+	kevMatch := len(cves) != 0
+	signal := finding.ExploitationSignal(kev, source)
+	item := FindingAssessment{
+		Finding: finding, Signal: signal, CVSS: score, HasCVSS: err == nil && score >= 0 && score <= 10,
+		KEVMatch: kevMatch, kevCVEs: cves, Priority: RemediationReview,
+	}
+	highCVSS := item.HasCVSS && score >= CVSSThreshold
+	highSignal := threshold != nil && signal.Available && signal.Value >= *threshold
+	switch {
+	case kevMatch && strings.TrimSpace(version) != "":
 		item.Priority = RemediationUrgent
-	} else if threshold != nil && item.HasCVSS && signal.Available {
-		switch {
-		case signal.Value >= *threshold && item.CVSS >= CVSSThreshold:
-			item.Priority = RemediationElevated
-		case signal.Value >= *threshold || (signal.Complete && item.CVSS >= CVSSThreshold):
-			item.Priority = RemediationAttention
-		case signal.Complete:
-			item.Priority = RemediationRoutine
-		}
+	case kevMatch || highCVSS && highSignal:
+		item.Priority = RemediationElevated
+	case threshold != nil && (highCVSS || highSignal):
+		item.Priority = RemediationAttention
+	case threshold != nil && item.HasCVSS && signal.Complete:
+		item.Priority = RemediationRoutine
 	}
 	return item
 }
@@ -182,19 +190,6 @@ func compareFindings(a, b FindingAssessment) int {
 }
 
 func compareAssessment(a, b FindingAssessment) int {
-	if a.Signal.Available != b.Signal.Available && a.Priority == b.Priority {
-		if a.Signal.Available {
-			return -1
-		}
-		return 1
-	}
-	certainty := 0
-	if a.Signal.Complete != b.Signal.Complete {
-		certainty = 1
-		if a.Signal.Complete {
-			certainty = -1
-		}
-	}
 	severity := 0
 	if a.HasCVSS && b.HasCVSS {
 		severity = cmp.Compare(b.CVSS, a.CVSS)
@@ -203,5 +198,20 @@ func compareAssessment(a, b FindingAssessment) int {
 	} else if b.HasCVSS {
 		severity = 1
 	}
-	return cmp.Or(cmp.Compare(b.Priority, a.Priority), cmp.Compare(b.Signal.Value, a.Signal.Value), certainty, severity)
+	if a.Priority == RemediationReview && b.Priority == RemediationReview && severity != 0 {
+		return severity
+	}
+	return cmp.Or(cmp.Compare(b.Priority, a.Priority), compareKnown(a.KEVMatch, b.KEVMatch),
+		compareKnown(a.Signal.Available, b.Signal.Available), cmp.Compare(b.Signal.Value, a.Signal.Value),
+		compareKnown(a.Signal.Complete, b.Signal.Complete), severity)
+}
+
+func compareKnown(a, b bool) int {
+	if a == b {
+		return 0
+	}
+	if a {
+		return -1
+	}
+	return 1
 }

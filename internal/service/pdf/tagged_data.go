@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-//go:build taggedpdf && ((darwin && !ios && arm64) || (linux && !android && (arm64 || amd64)))
+//go:build taggedpdf && ((darwin && !ios && arm64) || (linux && !android && (arm64 || amd64)) || (windows && amd64))
 
 package pdf
 
@@ -32,6 +32,7 @@ type taggedData struct {
 	OrderNote        string            `json:"order_note"`
 	Components       []taggedComponent `json:"components"`
 	Findings         []taggedFinding   `json:"findings"`
+	HasMissingGlyphs bool              `json:"has_missing_glyphs"`
 }
 
 type taggedField struct {
@@ -59,8 +60,12 @@ type taggedComponent struct {
 }
 
 type taggedFinding struct {
-	ID     string        `json:"id"`
-	Fields []taggedField `json:"fields"`
+	Title     string        `json:"title"`
+	Component taggedField   `json:"component"`
+	Version   taggedField   `json:"version"`
+	Summary   taggedField   `json:"summary"`
+	Fields    []taggedField `json:"fields"`
+	Details   taggedField   `json:"details"`
 }
 
 func buildTaggedData(report Report) taggedData {
@@ -74,7 +79,7 @@ func buildTaggedData(report Report) taggedData {
 		source = &ssbom.ReportSource{}
 	}
 	components := sortedComponents(report.SBOM)
-	evidenceComplete := remediationEvidenceComplete(source, report.SBOM.ComponentInfo)
+	kevCount, kevComplete, evidenceComplete := remediationEvidence(source, report.SBOM.ComponentInfo)
 	data := taggedData{
 		Title:        label("Software Bill of Materials (SBOM) Analysis Report", "軟體物料清單（SBOM）分析報告"),
 		Language:     label("en", "zh"),
@@ -118,7 +123,6 @@ func buildTaggedData(report Report) taggedData {
 	}
 
 	byComponent := make(map[string]ssbom.ComponentAssessment, len(assessments))
-	kevCVEs := make(map[string]struct{})
 	urgentComponents := 0
 	for i, entry := range assessments {
 		byComponent[entry.Key] = entry
@@ -131,12 +135,9 @@ func buildTaggedData(report Report) taggedData {
 		if entry.NeedsReview > 0 {
 			data.NeedsReview++
 		}
-		for _, id := range entry.UrgentCVEs {
-			kevCVEs[id] = struct{}{}
-		}
 	}
 	data.UrgentComponents = d.urgencyCount(urgentComponents, evidenceComplete)
-	data.KEVCount = d.urgencyCount(len(kevCVEs), evidenceComplete)
+	data.KEVCount = d.urgencyCount(kevCount, kevComplete)
 	if urgentComponents > 1 {
 		data.AdditionalUrgent = d.urgencyCount(urgentComponents-1, evidenceComplete)
 	}
@@ -173,7 +174,11 @@ func buildTaggedData(report Report) taggedData {
 			Count:   count,
 		})
 		assessment := byComponent[component.key]
+		isGo := ssbom.IsGoComponent(source, component.key, component.sbom)
 		for i, vuln := range component.sbom.Vulns {
+			if isGo {
+				vuln = vuln.GoAdvisoryDisplay()
+			}
 			severities[severity(vuln.CVSSScore)]++
 			countRiskThresholds(&epssBands, vuln.EPSS)
 			if _, valid := vuln.VerifiedLEV(); valid {
@@ -181,7 +186,7 @@ func buildTaggedData(report Report) taggedData {
 			} else {
 				unavailableLEV++
 			}
-			data.Findings = append(data.Findings, d.taggedVulnerability(component, assessment, i, vuln))
+			data.Findings = append(data.Findings, d.taggedVulnerability(component, assessment, i, vuln, source))
 		}
 	}
 	data.Summary = []taggedField{
@@ -193,10 +198,14 @@ func buildTaggedData(report Report) taggedData {
 		{label("Component-vulnerability findings", "元件弱點紀錄數"), strconv.Itoa(len(data.Findings))},
 		{label("CVSS critical / high / medium / low / none / unavailable", "CVSS 極高／高／中／低／無／未提供"), fmt.Sprintf("%d / %d / %d / %d / %d / %d", severities[5], severities[4], severities[3], severities[2], severities[1], severities[0])},
 		{"EPSS ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", epssBands[0], epssBands[1], epssBands[2])},
-		{"LEV ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", levBands[0], levBands[1], levBands[2])},
 	}
-	if unavailableLEV > 0 {
-		data.Summary = append(data.Summary, taggedField{label("LEV unavailable or unverified", "LEV 未取得或未驗證"), strconv.Itoa(unavailableLEV)})
+	if source.LEVDisabled() {
+		data.Summary = append(data.Summary, taggedField{"LEV", label("Disabled at scan time", "掃描時未啟用")})
+	} else {
+		data.Summary = append(data.Summary, taggedField{"LEV ≥ 10% / 50% / 90%", fmt.Sprintf("%d / %d / %d", levBands[0], levBands[1], levBands[2])})
+		if unavailableLEV > 0 {
+			data.Summary = append(data.Summary, taggedField{label("LEV unavailable or unverified", "LEV 未取得或未驗證"), strconv.Itoa(unavailableLEV)})
+		}
 	}
 	data.Summary = append(data.Summary, taggedField{
 		label("Analysis scope", "分析範圍"),
@@ -211,7 +220,7 @@ func buildTaggedData(report Report) taggedData {
 	}
 	data.Summary = append(data.Summary, taggedField{
 		label("Review notes", "查核說明"),
-		label("Confirm actual deployment and exposure with the operations team. Verify findings with insufficient evidence.", "請維運單位確認實際部署與曝險。證據不足的弱點仍待查證。"),
+		d.reviewNotes(),
 	})
 	return data
 }
@@ -292,19 +301,22 @@ func (d *document) taggedRemediationAction(rank int, entry ssbom.ComponentAssess
 	if homepage && urgent {
 		next = label("Confirm actual deployment and exposure. ", "確認實際部署與曝險。") + next
 	}
+	if entry.Driver.KEVMatch && strings.TrimSpace(entry.Version) == "" {
+		next = d.confirmInstalledVersionAction()
+	}
 	field(label("Next action", "下一步"), next)
 	return action
 }
 
-func (d *document) taggedVulnerability(component reportComponent, assessment ssbom.ComponentAssessment, i int, vuln ssbom.Vuln) taggedFinding {
+func (d *document) taggedVulnerability(component reportComponent, assessment ssbom.ComponentAssessment, i int, vuln ssbom.Vuln, source *ssbom.ReportSource) taggedFinding {
 	label := d.label
 	finding := taggedFinding{
-		ID: vuln.ID,
+		Title:     vuln.ID + " · " + strings.TrimSpace(component.sbom.Name+" "+component.sbom.Version),
+		Component: taggedField{label("Component", "元件"), component.sbom.Name},
+		Version:   taggedField{label("Version", "版本"), component.sbom.Version},
+		Summary:   taggedField{label("Summary", "摘要"), vuln.Summary},
+		Details:   taggedField{label("Details", "詳細說明"), vuln.Details},
 		Fields: []taggedField{
-			{label("Component", "元件"), component.sbom.Name},
-			{label("Version", "版本"), component.sbom.Version},
-			{label("Vulnerability ID", "弱點識別碼"), vuln.ID},
-			{label("Summary", "摘要"), vuln.Summary},
 			{"CVSS", vuln.CVSSScore},
 			{label("CVSS version", "CVSS 指標版本"), vuln.CVSSVersion},
 			{label("EPSS score date", "EPSS 評分日期"), vuln.EPSSDate},
@@ -338,17 +350,14 @@ func (d *document) taggedVulnerability(component reportComponent, assessment ssb
 		if vuln.LEVFirst != "" && vuln.LEVAsOf != "" {
 			field(label("LEV period (UTC)", "LEV 歷史期間（UTC）"), vuln.LEVFirst+" – "+vuln.LEVAsOf)
 		}
-	} else {
+	} else if !source.LEVDisabled() {
 		field("LEV", label("Unavailable or unverified", "未取得或未驗證"))
 	}
-	field(label("Exploitation signal", "綜合利用指標"), d.exploitationValue(vuln.ExploitationSignal(vuln.KEV)))
-	switch vuln.KEV {
+	kev, kevIDs := vuln.KEVEvidence()
+	field(label("Exploitation signal", "綜合利用指標"), d.exploitationValue(vuln.ExploitationSignal(kev, source)))
+	switch kev {
 	case ssbom.KEVListed:
-		ids := vuln.KEVCVEs
-		if len(ids) == 0 {
-			ids = []string{vuln.KEVCVE}
-		}
-		field("KEV", label("Listed in CISA catalog", "已列入 CISA 清單")+" · "+strings.Join(ids, ", "))
+		field("KEV", label("Listed in CISA catalog", "已列入 CISA 清單")+" · "+strings.Join(kevIDs, ", "))
 	case ssbom.KEVUnlisted:
 		field("KEV", label("Checked, not listed", "已查核，未列入"))
 	default:
@@ -365,6 +374,5 @@ func (d *document) taggedVulnerability(component reportComponent, assessment ssb
 	if vuln.OtherFixVersions != "" {
 		field(label("Other advisory candidates", "其他公告候選版本"), vuln.OtherFixVersions)
 	}
-	field(label("Details", "詳細說明"), vuln.Details)
 	return finding
 }

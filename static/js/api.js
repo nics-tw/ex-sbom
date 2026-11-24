@@ -39,8 +39,8 @@ const Api = {
       body: JSON.stringify({ version, bom_result: bomResult, sha256, bom_timestamp: bomTimestamp, preview_token: previewToken }),
     });
   },
-  getReport(projectID, version, language) {
-    return fetch(`/projects/${encodeURIComponent(projectID)}/sboms/${encodeURIComponent(version)}/report?lang=${encodeURIComponent(language)}`, { redirect: "error" });
+  getReport(projectID, version, language, signal) {
+    return fetch(`/projects/${encodeURIComponent(projectID)}/sboms/${encodeURIComponent(version)}/report?lang=${encodeURIComponent(language)}`, { redirect: "error", signal });
   },
   listVersions(projectID, signal) {
     return this._json(`/projects/${projectID}/versions`, { signal });

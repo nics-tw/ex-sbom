@@ -30,31 +30,43 @@ func (c Catalog) Contains(id string) bool {
 	return found
 }
 
-var cache struct {
+type catalogCache struct {
 	sync.Mutex
 	catalog Catalog
 	err     error
 	retryAt time.Time
 }
 
-// Current reuses a successfully checked catalog for one hour. Errors are
-// cached briefly to keep catalog downtime from delaying repeated imports.
+var cache catalogCache
+
+// Current reuses a successfully checked catalog for one hour. On refresh
+// failure, it returns the last successful catalog with the refresh error.
 func Current() (Catalog, error) {
-	cache.Lock()
-	defer cache.Unlock()
-	if time.Now().Before(cache.retryAt) {
-		return cache.catalog, cache.err
-	}
-	cache.catalog, cache.err = fetch(&http.Client{Timeout: 5 * time.Second}, CatalogURL)
-	delay := time.Hour
-	if cache.err != nil {
-		delay = time.Minute
-	}
-	cache.retryAt = time.Now().Add(delay)
-	return cache.catalog, cache.err
+	return cache.current(time.Now, func() (Catalog, error) {
+		return Fetch(&http.Client{Timeout: 5 * time.Second}, CatalogURL)
+	})
 }
 
-func fetch(client *http.Client, url string) (Catalog, error) {
+func (c *catalogCache) current(now func() time.Time, fetch func() (Catalog, error)) (Catalog, error) {
+	c.Lock()
+	defer c.Unlock()
+	if now().Before(c.retryAt) {
+		return c.catalog, c.err
+	}
+	catalog, err := fetch()
+	c.err = err
+	delay := time.Hour
+	if err == nil {
+		c.catalog = catalog
+	} else {
+		delay = time.Minute
+	}
+	c.retryAt = now().Add(delay)
+	return c.catalog, err
+}
+
+// Fetch loads and validates a KEV catalog from URL.
+func Fetch(client *http.Client, url string) (Catalog, error) {
 	resp, err := client.Get(url)
 	if err != nil {
 		return Catalog{}, err

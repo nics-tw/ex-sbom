@@ -28,6 +28,8 @@ function makeElement(tag = "div") {
     showModal() { this.open = true; },
     close() { this.open = false; },
     setAttribute(name, value) { this[name] = String(value); },
+    getAttribute(name) { return this[name] ?? null; },
+    removeAttribute(name) { delete this[name]; },
     focus() {},
     classList: {
       add(...names) { names.forEach(name => classes.add(name)); },
@@ -51,6 +53,7 @@ function makeElement(tag = "div") {
       }
     },
     appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+    append(...children) { children.forEach(child => this.appendChild(child)); },
     removeChild(child) { this.children.splice(this.children.indexOf(child), 1); child.parentNode = null; },
     remove() { this.parentNode?.removeChild(this); },
     addEventListener(type, listener) {
@@ -93,12 +96,43 @@ function makeApp() {
     prompt: () => "renamed", confirm: () => true, alert() {},
   };
   vm.createContext(sandbox);
-  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api, VersionHistory, Sbom, SbomModal, MainTab };", sandbox);
+  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api, VersionHistory, Sbom, SbomModal, MainTab, ComponentModal };", sandbox);
   return { ...sandbox.__test, getElementById };
 }
 
 const version = name => ({ version: name, created_at: "2026-01-01T00:00:00Z" });
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test("switching versions cancels a PDF download and ignores a late cache error", async () => {
+  const { State, Api, Sbom } = makeApp();
+  const pending = deferred();
+  let signal;
+  Api.getReport = (_project, _version, _language, pendingSignal) => {
+    signal = pendingSignal;
+    return pending.promise;
+  };
+  Sbom.fetchTopology = () => {};
+  State.projectID = "A";
+  State.activeTab = makeElement();
+  State.activeTab.dataset.version = "Earlier";
+  const status = makeElement();
+  const button = Object.assign(makeElement("button"), { isConnected: true });
+  const download = Sbom.downloadReport("Earlier", button, status);
+  assert.match(status.textContent, /preparing/i);
+  const next = makeElement();
+  next.dataset.version = "Later";
+  Sbom.selectTab(next);
+  assert.equal(signal?.aborted, true);
+  status.textContent = "Later report";
+  pending.resolve({
+    ok: false,
+    headers: new Headers({ "Content-Type": "application/json" }),
+    json: async () => ({ code: "pdf_cache_unavailable" }),
+  });
+  await download;
+  assert.equal(status.textContent, "Later report");
+  assert.equal(button.getAttribute("aria-disabled"), null);
+});
 
 test("save sends the preview token and ignores completion after switching projects", async () => {
   const { State, Api, Sbom, SbomModal, VersionHistory, getElementById } = makeApp();
@@ -394,3 +428,26 @@ for (const action of ["rename", "delete"]) {
     );
   });
 }
+
+test("component details show one LEV note for disabled scans and retain individual evidence elsewhere", () => {
+  const { ComponentModal, getElementById } = makeApp();
+  const vulns = [{ id: "CVE-2025-0001" }, { id: "CVE-2025-0002" }];
+  const content = getElementById("component-modal-content");
+
+  ComponentModal._renderDetails({ vulns, lev_archive_status: "disabled" });
+  assert.equal((content.innerHTML.match(/LEV was disabled at scan time/g) || []).length, 1);
+  assert.doesNotMatch(content.innerHTML, /Unavailable or unverified/);
+
+  ComponentModal._renderDetails({
+    vulns: [vulns[0], { ...vulns[1], epss: "0.5", epss_partial: true, lev: "0.37", lev_partial: true }],
+    lev_archive_status: "configured",
+  });
+  assert.doesNotMatch(content.innerHTML, /LEV was disabled/);
+  assert.match(content.innerHTML, /Unavailable or unverified/);
+  assert.match(content.innerHTML, /At least 0\.5 \(missing alias scores\)/);
+  assert.match(content.innerHTML, /At least 0\.37 \(historical gaps\)/);
+
+  ComponentModal._renderDetails({ vulns });
+  assert.doesNotMatch(content.innerHTML, /LEV was disabled/);
+  assert.match(content.innerHTML, /Unavailable or unverified/);
+});

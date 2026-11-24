@@ -67,28 +67,32 @@ func (d *document) remediationCardField(label, value string) {
 	d.SetXY(margin, y+height+1)
 }
 
-func remediationEvidenceComplete(source *ssbom.ReportSource, components map[string]ssbom.Component) bool {
-	if source.Status != ssbom.QueryCompleted {
-		return false
-	}
+func remediationEvidence(source *ssbom.ReportSource, components map[string]ssbom.Component) (kevCount int, kevComplete, urgencyComplete bool) {
+	kevComplete = source.Status == ssbom.QueryCompleted
+	versionKnown := true
+	listed := make(map[string]struct{})
 	for _, component := range components {
 		for _, finding := range component.Vulns {
 			if len(finding.CVEIDs) == 0 {
-				// Older snapshots could record a CVE only as the displayed ID.
 				if cisa.IsCVE(finding.ID) {
-					return false
+					kevComplete = false
 				}
 				continue
 			}
-			if source.KEVCheckedAt == nil || (finding.KEV != ssbom.KEVListed && finding.KEV != ssbom.KEVUnlisted) {
-				return false
+			kev, ids := finding.KEVEvidence()
+			if source.KEVCheckedAt == nil || (kev != ssbom.KEVListed && kev != ssbom.KEVUnlisted) {
+				kevComplete = false
 			}
-			if finding.KEV == ssbom.KEVListed && strings.TrimSpace(component.Version) == "" {
-				return false
+			if kev != ssbom.KEVListed {
+				continue
 			}
+			for _, id := range ids {
+				listed[id] = struct{}{}
+			}
+			versionKnown = versionKnown && strings.TrimSpace(component.Version) != ""
 		}
 	}
-	return true
+	return len(listed), kevComplete, kevComplete && versionKnown
 }
 
 func (d *document) urgencyCount(count int, evidenceComplete bool) string {
@@ -109,7 +113,7 @@ func (d *document) pendingRemediationCoverage() string {
 	)
 }
 
-func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, levels map[string]int, source *ssbom.ReportSource, evidenceComplete bool) int {
+func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, levels map[string]int, source *ssbom.ReportSource, kevCount string, evidenceComplete bool) int {
 	d.section(d.label("Remediation summary", "修補摘要"))
 	if len(entries) == 0 {
 		if source.Status == ssbom.QueryCompleted {
@@ -130,21 +134,17 @@ func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, level
 	}
 
 	urgent, review := 0, 0
-	kevCVEs := make(map[string]struct{})
 	for _, entry := range entries {
 		if entry.Driver.Priority == ssbom.RemediationUrgent {
 			urgent++
-		}
-		for _, id := range entry.UrgentCVEs {
-			kevCVEs[id] = struct{}{}
 		}
 		if entry.NeedsReview > 0 {
 			review++
 		}
 	}
-	d.remediationMetrics(d.urgencyCount(urgent, evidenceComplete), d.urgencyCount(len(kevCVEs), evidenceComplete))
+	d.remediationMetrics(d.urgencyCount(urgent, evidenceComplete), kevCount)
 	if review != 0 {
-		d.field(d.label("Components with findings to assess", "有待評估弱點的元件"), strconv.Itoa(review))
+		d.field(d.label("Components with unclassified findings", "含未分級弱點的元件"), strconv.Itoa(review))
 	}
 
 	if urgent > 1 {
@@ -179,8 +179,8 @@ func (d *document) remediationContinuation(entries []ssbom.ComponentAssessment, 
 
 func (d *document) remediationOrderNote() string {
 	return d.label(
-		"Max CVSS is the highest severity score for the component. The exploitation signal comes from the finding that determines its remediation order.",
-		"最高 CVSS 為該元件各筆弱點的最高分數。綜合利用指標取自決定順位的弱點。",
+		"Max CVSS is the highest severity score for the component. The exploitation signal comes from the finding that determines its remediation order. Each finding uses the highest valid CVSS 2.0, 3.0, 3.1, or 4.0 score from its advisory. If the advisory has no usable score, check matching-package vectors, then use the scanner’s alias-group score if needed. Show the CVSS version when a vector matches the score.",
+		"最高 CVSS 為該元件各筆弱點的最高分數。綜合利用指標取自決定順位的弱點。每筆弱點先從公告的 CVSS 2.0、3.0、3.1 與 4.0 向量中取有效最高分。公告缺少有效分數時，查找相符套件的向量，其次採用掃描器的別名群組分數。能對應到相符向量時才標示 CVSS 版本。",
 	)
 }
 
@@ -293,16 +293,14 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 	}
 	if entry.Upgrade != "" {
 		field(d.label("Upgrade to test", "建議驗測版本"), entry.Upgrade)
-		if homepage {
-			var coveredKEV []string
-			for _, id := range entry.UrgentCVEs {
-				if !slices.Contains(entry.ResidualUrgentCVEs, id) {
-					coveredKEV = append(coveredKEV, id)
-				}
+		var coveredKEV []string
+		for _, id := range entry.UrgentCVEs {
+			if !slices.Contains(entry.ResidualUrgentCVEs, id) {
+				coveredKEV = append(coveredKEV, id)
 			}
-			if len(coveredKEV) != 0 {
-				field(d.label("KEV findings expected to be addressed", "預計涵蓋的 KEV 弱點"), d.remediationKEVList(coveredKEV, homepage))
-			}
+		}
+		if len(coveredKEV) != 0 {
+			field(d.label("KEV findings expected to be addressed", "預計涵蓋的 KEV 弱點"), d.remediationKEVList(coveredKEV, homepage))
 		}
 	} else {
 		field(d.label("Common fix version", "共同修補版本"),
@@ -326,6 +324,9 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 	}
 	if homepage && urgent {
 		action = d.label("Confirm actual deployment and exposure. ", "確認實際部署與曝險。") + action
+	}
+	if entry.Driver.KEVMatch && strings.TrimSpace(entry.Version) == "" {
+		action = d.confirmInstalledVersionAction()
 	}
 	field(d.label("Next action", "下一步"), action)
 	if homepage {
@@ -357,17 +358,24 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 	field(d.label("Components still requiring immediate updates", "仍需立即更新的元件"), d.urgencyCount(entry.RemainingUrgent, evidenceComplete))
 }
 
+func (d *document) confirmInstalledVersionAction() string {
+	return d.label(
+		"Confirm the installed version and exposure manually before selecting a fix.",
+		"請先人工確認已安裝版本與曝險情形，再選擇修補版本。",
+	)
+}
+
 func (d *document) remediationPolicy() string {
 	return fmt.Sprintf(d.label(
-		"ex-sbom policy v%s. Update immediately when CISA KEV matches a vulnerability found for an identified component version. Prioritize fix assessment when CVSS ≥ %.1f and the exploitation signal ≥ %.0f%% for the same vulnerability.",
-		"ex-sbom 排序規則 v%s。已識別元件版本，且其弱點列入 CISA KEV 時，列為「立即更新」。同一弱點的 CVSS ≥ %.1f 且綜合利用指標 ≥ %.0f%% 時，列為「優先評估修補」。"),
+		"ex-sbom policy v%s. Update immediately for a matching CISA KEV entry with an identified installed version. Prioritize fix assessment for a KEV match with no installed version, or when a finding meets both thresholds (CVSS ≥ %.1f and exploitation signal ≥ %.0f%%). Schedule assessment when either threshold is met. Routine maintenance requires known CVSS and a complete signal below the thresholds. Other findings are marked Assess next and rank above routine maintenance, with higher CVSS first. When LEV was disabled at scan time, complete EPSS and KEV are sufficient.",
+		"ex-sbom 排序規則 v%s。弱點列入 CISA KEV 且已識別安裝版本時，列為「立即更新」。KEV 命中但安裝版本不明，或同一弱點同時達到兩項門檻（CVSS ≥ %.1f 且綜合利用指標 ≥ %.0f%%），列為「優先評估修補」。僅達一項門檻時，列為「安排評估」。CVSS 已知、利用指標資料完整且兩項均低於門檻，列為「例行維護」。其餘列為「待評估」，排在例行維護之前，並優先處理 CVSS 較高者。掃描時未啟用 LEV，EPSS 與 KEV 資料齊全即可。"),
 		ssbom.RemediationPolicyVersion, ssbom.CVSSThreshold, ssbom.RemediationThreshold*100)
 }
 
 func (d *document) repairVersionPolicy() string {
 	return fmt.Sprintf(d.label(
-		"Select the lowest stable upgrade verified against the advisories for all findings in this component with CVSS ≥ %.1f or missing severity. When all findings score below %.1f, consider all findings. Keep the same major version, or the same minor series for 0.x. Check remaining findings and rescan after testing the upgrade.",
-		"優先查核元件內 CVSS ≥ %.1f 或嚴重性分數缺漏的弱點。若所有弱點都低於 %.1f，則查核全部弱點。依弱點公告選擇可涵蓋查核目標的最低穩定版本。升級限同一主要版本，0.x 限同一次要版本。請檢查其餘弱點，並於驗測後複掃。"),
+		"For npm, Go and crates.io, select the lowest stable upgrade that addresses the advisories found in this scan for findings with CVSS ≥ %.1f or missing severity. When all findings score below %.1f, consider all findings in this scan. Keep the same major version, or the same minor series for 0.x. Check remaining findings and rescan after testing the upgrade.",
+		"支援 npm、Go 與 crates.io。優先查核本次掃描中 CVSS ≥ %.1f 或缺少分數的弱點。若所有弱點都低於 %.1f，則查核本次掃描的全部弱點。依本次查到的公告選擇可涵蓋查核目標的最低穩定版本。升級限同一主要版本，0.x 限同一次要版本。請檢查其餘弱點，並於驗測後複掃。"),
 		ssbom.CVSSThreshold, ssbom.CVSSThreshold)
 }
 

@@ -74,6 +74,7 @@
           reportPreparing: "Preparing the PDF report…",
           reportDownloadStarted: "Download requested for {0}. You can find it in your browser’s downloads.",
           reportDownloadError: "Could not create the PDF report. Please try again.",
+  reportCacheUnavailable: "The PDF renderer cache is unavailable. Ask the administrator to check its permissions, then retry.",
           delete: "Delete",
           deletedSuccessfully: "{0} deleted successfully",
           errorDeleting: "Error deleting file: {0}",
@@ -138,6 +139,7 @@
           epssLowerBound: "At least {0} (missing alias scores)",
           levLowerBound: "At least {0} (historical gaps)",
           levUnavailable: "Unavailable or unverified",
+          levDisabled: "LEV was disabled at scan time.",
           diffFiles: "Diff Files",
           diffSbomTitle: "Compare SBOMs",
           diffSbomA: "SBOM A (before)",
@@ -224,6 +226,7 @@
           reportPreparing: "正在產製 PDF 報告…",
           reportDownloadStarted: "已交由瀏覽器下載 {0}，請在瀏覽器的下載清單查找。",
           reportDownloadError: "無法產製 PDF 報告，請再試一次。",
+  reportCacheUnavailable: "PDF 產生器的快取無法使用。請管理者確認快取目錄的權限後，再試一次。",
           delete: "刪除",
           deletedSuccessfully: "{0} 刪除成功",
           errorDeleting: "刪除檔案錯誤: {0}",
@@ -288,6 +291,7 @@
           epssLowerBound: "至少 {0}（別名分數未齊）",
           levLowerBound: "至少 {0}（歷史資料有缺口）",
           levUnavailable: "未取得或未驗證",
+          levDisabled: "掃描時未啟用 LEV。",
           diffFiles: "Diff 檔案",
           diffSbomTitle: "比較 SBOM",
           diffSbomA: "SBOM A（舊版）",
@@ -478,6 +482,7 @@
     // ═══════════════════════════════════════════════════════════════════════════
     const Sbom = {
       _topology: new RequestSlot(),
+      _report: new RequestSlot(),
 
       reset() {
         document.getElementById("file-tabs").innerHTML = "";
@@ -487,6 +492,7 @@
 
       _clearActiveTab() {
         this._topology.cancel();
+        this._report.cancel();
         State.activeTab = null;
         document.getElementById("tab-content").innerHTML =
           `<div id="no-tabs-message" class="text-gray-500 italic" data-i18n="noFilesUploaded">${t("noFilesUploaded")}</div>`;
@@ -545,6 +551,7 @@
       },
 
       selectTab(tabEl) {
+        this._report.cancel();
         const previous = State.activeTab;
         previous?.classList.remove("tab-active");
         previous?.querySelector(".sbom-tab-label")?.setAttribute("aria-pressed", "false");
@@ -595,14 +602,23 @@
       },
 
       async downloadReport(version, button, status) {
-        const projectID = State.projectID;
-        const isCurrent = () => State.projectID === projectID && State.activeTab?.dataset.version === version && button.isConnected;
         if (button.getAttribute("aria-disabled") === "true") return;
+        const request = this._report.begin({ projectID: State.projectID, version });
+        const isCurrent = () => this._report.owns(request) && State.projectID === request.projectID &&
+          State.activeTab?.dataset.version === request.version && button.isConnected;
         button.setAttribute("aria-disabled", "true");
         localizeText(status, "reportPreparing");
         try {
-          const response = await Api.getReport(projectID, version, State.language);
-          if (!response.ok || response.headers.get("Content-Type")?.split(";")[0] !== "application/pdf") {
+          const response = await Api.getReport(request.projectID, version, State.language, request.controller.signal);
+      const contentType = response.headers.get("Content-Type")?.split(";")[0];
+      if (!response.ok && contentType === "application/json") {
+        const error = await response.json();
+        if (error?.code === "pdf_cache_unavailable") {
+          if (isCurrent()) localizeText(status, "reportCacheUnavailable");
+          return;
+        }
+      }
+      if (!response.ok || contentType !== "application/pdf") {
             throw new Error("PDF report unavailable");
           }
           const filename = this._reportFilename(response.headers.get("Content-Disposition"));
@@ -622,6 +638,7 @@
         } catch {
           if (isCurrent()) localizeText(status, "reportDownloadError");
         } finally {
+          this._report.finish(request);
           button.removeAttribute("aria-disabled");
         }
       },
@@ -989,12 +1006,14 @@
           suggested_fix_version: suggestedFix,
           is_breaking_change: false,
           has_severe_vuln: hasSevere,
+          lev_archive_status: bomResult.report_source?.lev_archive_status,
         }, paths);
       },
 
       _renderDetails(comp, vulnDepPaths = []) {
         const { name, version, vuln_number = 0, vulns: _vulns = [],
-                suggested_fix_version, is_breaking_change, has_severe_vuln, licences } = comp;
+                suggested_fix_version, is_breaking_change, has_severe_vuln, licences, lev_archive_status } = comp;
+        const levDisabled = lev_archive_status === "disabled";
         const vulns = _vulns ?? [];
 
         const warnIcon = (color) => _warnSVG(color, "", "h-5 w-5 mr-1 flex-shrink-0 mt-0.5");
@@ -1060,6 +1079,9 @@
           </div>`;
 
         if (vulns.length > 0) {
+          if (levDisabled) {
+            html += `<p class="mt-2 text-sm text-gray-600">${t("levDisabled")}</p>`;
+          }
           vulns.forEach((vuln, i) => {
             const severity  = _severityFromCvss(vuln.cvss_score);
             const sevClass  = _severityClass(severity);
@@ -1076,7 +1098,7 @@
                   <span class="flex flex-wrap items-center gap-y-1">
                     ${vuln.cvss_score ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${esc(vuln.cvss_score)}</span>` : ""}
                     ${vuln.epss       ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${vuln.epss_partial ? esc(t("epssLowerBound", vuln.epss)) : esc(vuln.epss)}</span>` : ""}
-                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${vuln.lev ? (vuln.lev_partial ? esc(t("levLowerBound", vuln.lev)) : esc(vuln.lev)) : t("levUnavailable")}</span>
+                    ${levDisabled ? "" : `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${vuln.lev ? (vuln.lev_partial ? esc(t("levLowerBound", vuln.lev)) : esc(vuln.lev)) : t("levUnavailable")}</span>`}
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${sevClass}">${t("severity" + severity)}</span>
                     <svg aria-hidden="true" id="vuln-chevron-${i}" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 transform motion-safe:transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -1702,7 +1724,7 @@
               <span class="text-gray-500">${t("uploadComponentCount")} <strong class="text-gray-800">${data.summary.component_count}</strong></span>
               <span class="text-gray-500">${t("uploadVulnCount")} <strong class="${data.summary.vuln_count > 0 ? 'text-red-700' : 'text-green-700'}">${data.summary.vuln_count}</strong></span>
             </div>`;
-          this._renderPreviewTopology(summary, data.bom_result);
+      this._renderPreviewTopology(summary, data.bom_result, data.go_advisories);
 
           const displayName = data.filename || req.file.name;
           document.getElementById("sbom-preview-title").innerHTML =
@@ -1804,7 +1826,7 @@
         }
       },
 
-      _renderPreviewTopology(container, bomResult) {
+      _renderPreviewTopology(container, bomResult, goAdvisories = {}) {
         const depLevel = bomResult?.DependencyLevel || {};
         const compInfo = bomResult?.ComponentInfo || {};
         const levels = Object.entries(depLevel).map(([lvlStr, components]) => {
@@ -1824,12 +1846,12 @@
         if (levels.length === 0) {
           wrap.innerHTML = `<div class="text-gray-400 italic text-sm">無元件資料</div>`;
         } else {
-          levels.forEach(lvl => wrap.appendChild(this._buildPreviewLevelPanel(lvl, compInfo, bomResult)));
+          levels.forEach(lvl => wrap.appendChild(this._buildPreviewLevelPanel(lvl, compInfo, bomResult, goAdvisories)));
         }
         container.appendChild(wrap);
       },
 
-      _buildPreviewLevelPanel(level, compInfo, bomResult) {
+      _buildPreviewLevelPanel(level, compInfo, bomResult, goAdvisories) {
         const panel = document.createElement("div");
         panel.className = "mb-4 border border-gray-200 rounded-md overflow-hidden";
 
@@ -1857,7 +1879,12 @@
         const body = document.createElement("div");
         body.className = "px-4 py-3";
         body.appendChild(Sbom._buildTopologyList(level, level.components, (comp, trigger) => {
-          ComponentModal.showFromLocal(comp, compInfo[comp] || {}, bomResult, trigger);
+          const info = Object.hasOwn(compInfo, comp) ? compInfo[comp] : {};
+          const candidates = Object.hasOwn(goAdvisories, comp) ? goAdvisories[comp] : null;
+          const details = candidates
+            ? { ...info, vulns: info.vulns.map((vuln, i) => ({ ...vuln, ...candidates[i] })) }
+            : info;
+          ComponentModal.showFromLocal(comp, details, bomResult, trigger);
         }));
         panel.appendChild(body);
         return panel;
