@@ -757,7 +757,7 @@ test("formats Go advisory candidates in preview, saved details and PDF", async (
   await page.locator("#select-sbom-btn").click();
   await page.locator("#sbom-file-input").setInputFiles(file);
   await page.locator("#sbom-modal-preview-btn").click();
-  const previewComponent = page.locator("#sbom-preview-summary").getByRole("button", { name: /example\.com\/widget/ });
+  const previewComponent = page.locator("#sbom-preview-summary").getByRole("button", { name: component });
   await previewComponent.click();
   const details = page.locator("#component-modal-content");
   await expect(details).toContainText("v1.2.4");
@@ -770,7 +770,7 @@ test("formats Go advisory candidates in preview, saved details and PDF", async (
   await page.goto(service.url);
   await selectProject(page, project, "Go candidate fixture");
   await versionRow(page, "Go release").locator(".version-load-btn").click();
-  await page.locator("#active-topology").getByRole("button", { name: /example\.com\/widget/ }).click();
+  await page.locator("#active-topology").getByRole("button", { name: component }).click();
   await expect(details).toContainText("v1.2.4");
   await page.keyboard.press("Escape");
   const response = await page.request.get(new URL(`/projects/${project}/sboms/Go%20release/topology/component?component=${encodeURIComponent(component)}`, service.url).href);
@@ -792,7 +792,7 @@ test("formats Go advisory candidates in preview, saved details and PDF", async (
     testInfo.annotations.push({ type: "PDF text check", description: "Install Poppler to verify candidate versions" });
     return;
   }
-  expect(content.replaceAll("\u200b", "")).toMatch(/Advisory candidates for this finding\s+v1\.2\.4/);
+  expect(content.replaceAll("\u200b", "")).toMatch(/Advisory candidates for this finding\s+(?:\|\s+)?v1\.2\.4(?:\s|$)/);
 });
 
 test("keeps remediation findings and PDF download available when risk feeds fail", async ({ page, service }, testInfo) => {
