@@ -181,9 +181,7 @@ func generateUntagged(w io.Writer, report Report) error {
 	evidenceComplete := remediationEvidenceComplete(source, report.SBOM.ComponentInfo)
 	continuationLink := doc.remediationSummary(assessments, report.SBOM.ComponentToLevel, source, evidenceComplete)
 	if continuationLink != 0 {
-		doc.remediationContinuation(assessments, report.SBOM.ComponentToLevel, continuationLink, evidenceComplete)
-	} else if len(assessments) != 0 {
-		doc.AddPage()
+		doc.remediationContinuation(assessments, report.SBOM, continuationLink, evidenceComplete)
 	}
 
 	doc.section(doc.label("Report information", "報告資訊"))
@@ -486,14 +484,40 @@ func joinTextLine(characters []textLine) textLine {
 
 func (d *document) componentTable(components []reportComponent) {
 	title := d.label("Component inventory", "元件清單")
-	d.ensureSpace(4 + 6.5 + 7 + lineHeight)
-	d.section(title)
 	if len(components) == 0 {
+		d.section(title)
 		d.write(d.label("No component records.", "沒有元件紀錄"), lineHeight)
 		return
 	}
-	widths := []float64{96, 33, 23, d.width - 152}
-	labels := []string{d.label("Component", "元件"), d.label("Version", "版本"), d.label("Scope", "類型"), d.label("Findings", "弱點數")}
+	rows := make([]reportTableRow, 0, len(components))
+	for _, component := range components {
+		scope := d.label("Unknown", "未分類")
+		switch component.scope {
+		case "direct":
+			scope = d.label("Direct", "直接")
+		case "transitive":
+			scope = d.label("Transitive", "間接")
+		}
+		rows = append(rows, reportTableRow{
+			Cells: []string{component.sbom.Name, component.sbom.Version, scope, strconv.Itoa(len(component.sbom.Vulns))},
+		})
+	}
+	d.reportTable(title, "", []float64{96, 33, 23, d.width - 152},
+		[]string{d.label("Component", "元件"), d.label("Version", "版本"), d.label("Scope", "類型"), d.label("Findings", "弱點數")}, rows, -1)
+}
+
+type reportTableRow struct {
+	Cells  []string `json:"cells"`
+	Urgent bool     `json:"urgent"`
+}
+
+func (d *document) reportTable(title, note string, widths []float64, labels []string, rows []reportTableRow, urgentColumn int) {
+	d.ensureSpace(4 + 6.5 + 7 + lineHeight)
+	d.section(title)
+	if note != "" {
+		d.write(note, lineHeight)
+		d.Ln(2)
+	}
 	header := func() {
 		d.SetFont(reportFont, "", 9)
 		d.SetTextColor(20, 52, 66)
@@ -505,15 +529,8 @@ func (d *document) componentTable(components []reportComponent) {
 		d.SetTextColor(24, 37, 42)
 	}
 	header()
-	for _, component := range components {
-		scope := d.label("Unknown", "未分類")
-		switch component.scope {
-		case "direct":
-			scope = d.label("Direct", "直接")
-		case "transitive":
-			scope = d.label("Transitive", "間接")
-		}
-		values := []string{component.sbom.Name, component.sbom.Version, scope, strconv.Itoa(len(component.sbom.Vulns))}
+	for _, row := range rows {
+		values := row.Cells
 		lines := make([][]textLine, len(values))
 		height := 1
 		for i, value := range values {
@@ -531,7 +548,13 @@ func (d *document) componentTable(components []reportComponent) {
 				if n < len(lines[i]) {
 					value = lines[i][n]
 				}
+				if i == urgentColumn && row.Urgent {
+					d.SetTextColor(128, 26, 36)
+				}
 				d.textCell(widths[i], lineHeight, value, 0)
+				if i == urgentColumn && row.Urgent {
+					d.SetTextColor(24, 37, 42)
+				}
 			}
 			d.Ln(lineHeight)
 		}

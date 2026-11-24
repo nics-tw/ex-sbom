@@ -27,6 +27,9 @@ type taggedData struct {
 	AdditionalUrgent string            `json:"additional_urgent"`
 	NeedsReview      int               `json:"needs_review"`
 	Actions          []taggedAction    `json:"actions"`
+	OrderHeaders     []string          `json:"order_headers"`
+	OrderRows        []reportTableRow  `json:"order_rows"`
+	OrderNote        string            `json:"order_note"`
 	Components       []taggedComponent `json:"components"`
 	Findings         []taggedFinding   `json:"findings"`
 }
@@ -73,8 +76,11 @@ func buildTaggedData(report Report) taggedData {
 	components := sortedComponents(report.SBOM)
 	evidenceComplete := remediationEvidenceComplete(source, report.SBOM.ComponentInfo)
 	data := taggedData{
-		Title:    label("Software Bill of Materials (SBOM) Analysis Report", "軟體物料清單（SBOM）分析報告"),
-		Language: label("en", "zh"),
+		Title:        label("Software Bill of Materials (SBOM) Analysis Report", "軟體物料清單（SBOM）分析報告"),
+		Language:     label("en", "zh"),
+		OrderHeaders: d.remediationHeaders(),
+		OrderRows:    d.remediationRows(assessments, report.SBOM.ComponentInfo),
+		OrderNote:    d.remediationOrderNote(),
 		Metadata: []taggedField{
 			{label("Project", "專案"), report.Project.Name},
 			{label("Version", "版本"), report.Version},
@@ -214,19 +220,13 @@ func (d *document) taggedRemediationAction(rank int, entry ssbom.ComponentAssess
 	label := d.label
 	homepage := rank == 1
 	urgent := entry.Driver.Priority == ssbom.RemediationUrgent
-	priority := label("Assess next", "待評估")
+	priority := d.remediationPriorityLabel(entry.Driver.Priority)
 	priorityStyle := "ordinary"
 	switch entry.Driver.Priority {
 	case ssbom.RemediationUrgent:
-		priority = label("Update immediately", "立即更新")
 		priorityStyle = "urgent"
 	case ssbom.RemediationElevated:
-		priority = label("Prioritize fix assessment", "優先評估修補")
 		priorityStyle = "elevated"
-	case ssbom.RemediationAttention:
-		priority = label("Schedule assessment", "安排評估")
-	case ssbom.RemediationRoutine:
-		priority = label("Routine maintenance", "例行維護")
 	}
 
 	action := taggedAction{

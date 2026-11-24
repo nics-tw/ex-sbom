@@ -113,13 +113,13 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 			"en", "Update immediately", "Upgrade to test", "KEV findings expected to be addressed",
 			"KEV findings without confirmed coverage in this version", "Components still requiring immediate updates",
 			"Prioritize fix assessment", "Assess next", "At least", "Components with findings to assess",
-			"CVEs expected to be addressed across all known affected components", "See remaining remediation priorities",
+			"CVEs expected to be addressed across all known affected components", "View remediation order",
 		},
 		{
 			"zh-Hant", "立即更新", "建議驗測版本", "預計涵蓋的 KEV 弱點",
 			"此版本未確認涵蓋的 KEV 弱點", "仍需立即更新的元件",
 			"優先評估修補", "待評估", "至少", "有待評估弱點的元件",
-			"已知受影響元件均有方案的 CVE 數", "查看其餘修補項目",
+			"已知受影響元件均有方案的 CVE 數", "查看修補順序表",
 		},
 	} {
 		t.Run(tc.language, func(t *testing.T) {
@@ -193,7 +193,7 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 			require.Regexp(t, `(?m)^ +Link \(inline\)\n(?:[^\n]*\n){0,3} +/TextDecorationType /Underline\n +"\Q`+tc.continuationLink+`\E"$`, string(structure))
 			destinations, err := exec.Command(inspect, "-dests", pdf).Output()
 			require.NoError(t, err)
-			require.Regexp(t, `(?m)^\s*2 \[.*\] "remaining-priorities"$`, string(destinations))
+			require.Regexp(t, `(?m)^\s*2 \[.*\] "remediation-order"$`, string(destinations))
 
 			if xmlExtractor, err := exec.LookPath("pdftohtml"); err == nil {
 				verifyPriorityColors(t, xmlExtractor, pdf, map[string]string{

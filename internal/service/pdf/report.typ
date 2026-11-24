@@ -59,9 +59,7 @@
   if data.additional_urgent != "" {
     field((label: tr("Additional components to update immediately", "另有需立即更新的元件"), value: data.additional_urgent))
   }
-  if data.actions.len() > 1 {
-    link(<remaining-priorities>, underline(tr("See remaining remediation priorities", "查看其餘修補項目")))
-  }
+  link(<remediation-order>, underline(tr("View remediation order", "查看修補順序表")))
   let first = data.actions.first()
   heading(level: 2, tr("Priority action", "優先交辦項目"))
   block(width: 100%, inset: 4mm, stroke: (left: 1.25mm + priority-color(first), rest: 0.35pt + rgb("#bac5cb")))[
@@ -75,8 +73,18 @@
   block(width: 100%, inset: 3mm, fill: neutral)[#counts(first)]
   pagebreak()
 }
+#if data.order_rows.len() > 0 {
+  [== #tr("Remediation order", "修補順序表") <remediation-order>]
+  par(data.order_note)
+  table(columns: (13mm, 1fr, 21mm, 30mm, 28mm, 27mm), stroke: none, inset: 4pt,
+    table.header(..data.order_headers.map(label => table.cell(fill: neutral)[#label])),
+    ..data.order_rows.map(item => item.cells.enumerate().map(((i, value)) => {
+      if i == 4 and item.urgent { text(fill: rgb("#801a24"), value) } else { value }
+    })).flatten(),
+  )
+}
 #if data.actions.len() > 1 {
-  [== #tr("Remediation priorities (continued)", "修補處理順序（續）") <remaining-priorities>]
+  [== #tr("Remediation priorities (continued)", "修補處理順序（續）")]
   for action in data.actions.slice(1) {
     heading(level: 3, text(fill: priority-color(action), action.title))
     for item in action.fields { field(item) }

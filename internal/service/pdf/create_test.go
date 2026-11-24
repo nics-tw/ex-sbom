@@ -106,13 +106,65 @@ func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 			pages := strings.Split(string(raw), "\f")
 			doc := &document{language: lang}
 			require.Contains(t, pages[0], doc.label("Additional components to update immediately | 3", "另有需立即更新的元件 | 3"))
-			require.Contains(t, pages[0], doc.label("See Remediation priorities (continued)", "其餘元件請見「修補處理順序（續）」。"))
+			require.Contains(t, pages[0], doc.label("View remediation order", "查看修補順序表"))
 			require.Contains(t, pages[0], doc.label("1. Update immediately |", "1. 立即更新 |"))
 			require.NotContains(t, pages[0], doc.label("2. Update immediately |", "2. 立即更新 |"))
 			continuation := strings.Join(pages[1:], "\n")
 			require.Contains(t, continuation, doc.label("2. Update immediately |", "2. 立即更新 |"))
 			require.Contains(t, continuation, doc.label("4. Update immediately |", "4. 立即更新 |"))
 			require.Contains(t, continuation, "d-long-component-name-")
+		})
+	}
+}
+
+func TestPDFRemediationOrderListsEveryScoredComponent(t *testing.T) {
+	extract, err := exec.LookPath("pdftotext")
+	if err != nil {
+		t.Skip("pdftotext required to verify PDF remediation order")
+	}
+	bom := ssbom.FormattedSBOM{
+		ReportSource: &ssbom.ReportSource{Status: ssbom.QueryCompleted},
+		ComponentInfo: map[string]ssbom.Component{
+			"first": {Name: "rank-first", Version: "2.0", Vulns: []ssbom.Vuln{
+				{ID: "TEST-1", CVSSScore: "8.8", EPSS: "0.2"},
+				{ID: "TEST-2", CVSSScore: "10", EPSS: "0.02"},
+			}},
+			"second": {Name: "rank-second", Version: "2.0", Vulns: []ssbom.Vuln{
+				{ID: "TEST-3", CVSSScore: "9.8", EPSS: "0.15"},
+			}},
+			"missing": {Name: "rank-missing", Version: "2.0", Vulns: []ssbom.Vuln{
+				{ID: "TEST-4", CVSSScore: "7.5"},
+			}},
+			"zero": {Name: "rank-zero", Version: "2.0", Vulns: []ssbom.Vuln{
+				{ID: "TEST-5", CVSSScore: "0"},
+			}},
+			"clean": {Name: "rank-clean", Version: "2.0"},
+		},
+	}
+	for _, lang := range []string{English, TraditionalChinese} {
+		t.Run(lang, func(t *testing.T) {
+			doc := &document{language: lang}
+			var output bytes.Buffer
+			require.NoError(t, Generate(&output, Report{Language: lang, SBOM: bom}))
+			cmd := exec.Command(extract, "-layout", "-", "-")
+			cmd.Stdin = &output
+			raw, err := cmd.Output()
+			require.NoError(t, err)
+			first, remaining, found := strings.Cut(string(raw), "\f")
+			require.True(t, found)
+			require.Contains(t, first, doc.label("View remediation order", "查看修補順序表"))
+			table, _, found := strings.Cut(remaining, doc.label("Remediation priorities (continued)", "修補處理順序（續）"))
+			require.True(t, found)
+			table = strings.Join(strings.Fields(table), " ")
+			require.Contains(t, table, doc.label("Max CVSS", "最高 CVSS"))
+			require.NotContains(t, table, "rank-clean")
+			order := []string{"1 rank-first 2.0 10", "2 rank-second 2.0 9.8", "3 rank-missing 2.0 7.5", "4 rank-zero 2.0 0"}
+			last := -1
+			for _, row := range order {
+				position := strings.Index(table, row)
+				require.Greater(t, position, last, table)
+				last = position
+			}
 		})
 	}
 }

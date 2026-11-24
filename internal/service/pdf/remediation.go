@@ -150,31 +150,83 @@ func (d *document) remediationSummary(entries []ssbom.ComponentAssessment, level
 	if urgent > 1 {
 		d.field(d.label("Additional components to update immediately", "另有需立即更新的元件"), d.urgencyCount(urgent-1, evidenceComplete))
 	}
-	var continuationLink int
-	if len(entries) > 1 {
-		continuationLink = d.AddLink()
-		label := d.label("See Remediation priorities (continued) for remaining components.", "其餘元件請見「修補處理順序（續）」。")
-		for _, line := range d.wrap(label, d.width) {
-			d.ensureSpace(lineHeight)
-			d.SetTextColor(20, 76, 88)
-			d.Link(d.GetX(), d.GetY(), d.GetStringWidth(line.display), lineHeight, continuationLink)
-			d.textCell(d.width, lineHeight, line, 1)
-		}
+	continuationLink := d.AddLink()
+	label := d.label("View remediation order", "查看修補順序表")
+	for _, line := range d.wrap(label, d.width) {
+		d.ensureSpace(lineHeight)
+		d.SetTextColor(20, 76, 88)
+		d.Link(d.GetX(), d.GetY(), d.GetStringWidth(line.display), lineHeight, continuationLink)
+		d.textCell(d.width, lineHeight, line, 1)
 	}
 	d.section(d.label("Priority action", "優先交辦項目"))
 	d.remediationEntry(1, entries[0], levels, evidenceComplete)
 	return continuationLink
 }
 
-func (d *document) remediationContinuation(entries []ssbom.ComponentAssessment, levels map[string]int, link int, evidenceComplete bool) {
-	if link == 0 {
-		return
-	}
+func (d *document) remediationContinuation(entries []ssbom.ComponentAssessment, bom ssbom.FormattedSBOM, link int, evidenceComplete bool) {
 	d.AddPage()
 	d.SetLink(link, d.GetY(), d.PageNo())
-	d.section(d.label("Remediation priorities (continued)", "修補處理順序（續）"))
+	d.reportTable(d.label("Remediation order", "修補順序表"),
+		d.remediationOrderNote(), []float64{13, d.width - 119, 21, 30, 28, 27},
+		d.remediationHeaders(), d.remediationRows(entries, bom.ComponentInfo), 4)
+	if len(entries) > 1 {
+		d.section(d.label("Remediation priorities (continued)", "修補處理順序（續）"))
+	}
 	for i := 1; i < len(entries); i++ {
-		d.remediationEntry(i+1, entries[i], levels, evidenceComplete)
+		d.remediationEntry(i+1, entries[i], bom.ComponentToLevel, evidenceComplete)
+	}
+}
+
+func (d *document) remediationOrderNote() string {
+	return d.label(
+		"Max CVSS is the highest severity score for the component. The exploitation signal comes from the finding that determines its remediation order.",
+		"最高 CVSS 為該元件各筆弱點的最高分數。綜合利用指標取自決定順位的弱點。",
+	)
+}
+
+func (d *document) remediationHeaders() []string {
+	return []string{
+		d.label("Order", "順位"), d.label("Component and version", "元件與版本"), d.label("Max CVSS", "最高 CVSS"),
+		d.label("Exploit signal", "綜合利用指標"), d.label("Action", "處理建議"), d.label("Test version", "建議驗測版本"),
+	}
+}
+
+func (d *document) remediationRows(entries []ssbom.ComponentAssessment, components map[string]ssbom.Component) []reportTableRow {
+	rows := make([]reportTableRow, 0, len(entries))
+	for i, entry := range entries {
+		cvss := d.label("Unscored", "未評分")
+		highest := -1.0
+		for _, finding := range components[entry.Key].Vulns {
+			score, err := strconv.ParseFloat(finding.CVSSScore, 64)
+			if err == nil && score > highest && score >= 0 && score <= 10 {
+				highest, cvss = score, finding.CVSSScore
+			}
+		}
+		version := entry.Upgrade
+		if version == "" {
+			version = d.label("Pending", "待確認")
+		}
+		rows = append(rows, reportTableRow{
+			Cells: []string{strconv.Itoa(i + 1), strings.TrimSpace(entry.Name + " " + entry.Version), cvss,
+				d.exploitationValue(entry.Driver.Signal), d.remediationPriorityLabel(entry.Driver.Priority), version},
+			Urgent: entry.Driver.Priority == ssbom.RemediationUrgent,
+		})
+	}
+	return rows
+}
+
+func (d *document) remediationPriorityLabel(priority ssbom.RemediationPriority) string {
+	switch priority {
+	case ssbom.RemediationUrgent:
+		return d.label("Update immediately", "立即更新")
+	case ssbom.RemediationElevated:
+		return d.label("Prioritize fix assessment", "優先評估修補")
+	case ssbom.RemediationAttention:
+		return d.label("Schedule assessment", "安排評估")
+	case ssbom.RemediationRoutine:
+		return d.label("Routine maintenance", "例行維護")
+	default:
+		return d.label("Assess next", "待評估")
 	}
 }
 
@@ -200,18 +252,12 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 		field = d.remediationCardField
 		d.Ln(3)
 	}
-	label := d.label("Assess next", "待評估")
+	label := d.remediationPriorityLabel(entry.Driver.Priority)
 	switch entry.Driver.Priority {
 	case ssbom.RemediationUrgent:
-		label = d.label("Update immediately", "立即更新")
 		d.SetTextColor(128, 26, 36)
 	case ssbom.RemediationElevated:
-		label = d.label("Prioritize fix assessment", "優先評估修補")
 		d.SetTextColor(117, 71, 0)
-	case ssbom.RemediationAttention:
-		label = d.label("Schedule assessment", "安排評估")
-	case ssbom.RemediationRoutine:
-		label = d.label("Routine maintenance", "例行維護")
 	}
 	if homepage {
 		d.SetFont(reportFont, "", 11)
