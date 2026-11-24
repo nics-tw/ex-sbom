@@ -115,7 +115,6 @@ jobs:
           path-type: inherit
           update: true
           install: >-
-            mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-poppler
             unzip
 
@@ -155,7 +154,8 @@ jobs:
           MSYS2_ROOT: ${{ steps.ucrt.outputs.msys2-location }}
         run: |
           (Join-Path $env:MSYS2_ROOT 'ucrt64\bin') >> $env:GITHUB_PATH
-          'CC=gcc' >> $env:GITHUB_ENV
+          # The bundled DuckDB archive expects emulated TLS symbols absent from MSYS2 GCC 16.
+          'CC=C:/mingw64/bin/gcc.exe' >> $env:GITHUB_ENV
 
       - name: Verify native platform and install Poppler
         run: |
@@ -167,7 +167,9 @@ jobs:
           elif [[ "$RUNNER_OS" == macOS ]]; then
             brew install poppler
           else
-            test "$(gcc -dumpmachine)" = x86_64-w64-mingw32
+            compiler="$(cygpath -u "$CC")"
+            test "$("$compiler" -dumpmachine)" = x86_64-w64-mingw32
+            "$compiler" --version
             command -v python pdfinfo pdftotext pdffonts pdftohtml objdump
           fi
 
