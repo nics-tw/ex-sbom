@@ -93,11 +93,7 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 		}
 		slices.Sort(entry.UrgentCVEs)
 		entry.UrgentCVEs = slices.Compact(entry.UrgentCVEs)
-		var upgrade string
-		var covered []FindingAssessment
-		if strings.TrimSpace(component.Version) != "" {
-			upgrade, covered = verifiedRepair(findings)
-		}
+		upgrade, covered := verifiedRepair(component.Version, findings)
 		entry.Upgrade = upgrade
 		if evidence := entry.Driver.Finding.RepairEvidence; evidence != nil {
 			entry.Package, entry.Ecosystem = evidence.Package, evidence.Ecosystem

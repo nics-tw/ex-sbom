@@ -125,18 +125,19 @@ func TestRepairVersionUsesGoPrefixAndMatchingEvidence(t *testing.T) {
 		}}
 	}
 	for _, tc := range []struct {
-		name, score, pkg, version, wantUpgrade string
-		wantCoverage                           int
+		name, displayedVersion, score, pkg, version, wantUpgrade string
+		wantCoverage                                             int
 	}{
-		{"matching evidence", "8.0", "example", installed, "v1.2.4", 2},
-		{"different target package", "8.0", "other", installed, "", 0},
-		{"different target version", "8.0", "example", "v1.2.2", "", 0},
-		{"different secondary package", "6.0", "other", installed, "v1.2.4", 1},
-		{"different secondary version", "6.0", "example", "v1.2.2", "v1.2.4", 1},
+		{"matching evidence", "1.2.3", "8.0", "example", installed, "v1.2.4", 2},
+		{"different displayed version", "v1.2.5", "8.0", "example", installed, "", 0},
+		{"different target package", installed, "8.0", "other", installed, "", 0},
+		{"different target version", installed, "8.0", "example", "v1.2.2", "", 0},
+		{"different secondary package", installed, "6.0", "other", installed, "v1.2.4", 1},
+		{"different secondary version", installed, "6.0", "example", "v1.2.2", "v1.2.4", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bom := FormattedSBOM{ComponentInfo: map[string]Component{
-				"example": {Name: "example", Version: installed, Vulns: []Vuln{
+				"example": {Name: "example", Version: tc.displayedVersion, Vulns: []Vuln{
 					newFinding("TEST-1", "9.0", "example", installed),
 					newFinding("TEST-2", tc.score, tc.pkg, tc.version),
 				}},

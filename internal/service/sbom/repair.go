@@ -163,8 +163,8 @@ func (e RepairEvidence) affects(value string) bool {
 	return false
 }
 
-func verifiedRepair(findings []FindingAssessment) (string, []FindingAssessment) {
-	if len(findings) == 0 {
+func verifiedRepair(displayedVersion string, findings []FindingAssessment) (string, []FindingAssessment) {
+	if len(findings) == 0 || strings.TrimSpace(displayedVersion) == "" {
 		return "", nil
 	}
 	var targets []FindingAssessment
@@ -178,7 +178,7 @@ func verifiedRepair(findings []FindingAssessment) (string, []FindingAssessment) 
 	}
 	var candidates []string
 	identity := targets[0].Finding.RepairEvidence
-	if identity == nil {
+	if identity == nil || repairVersion(identity.Installed) != repairVersion(displayedVersion) {
 		return "", nil
 	}
 	for _, item := range targets {
