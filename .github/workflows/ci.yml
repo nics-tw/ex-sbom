@@ -417,6 +417,7 @@ jobs:
             ${{ runner.temp }}/tagged-pdf-evidence/*.log
             ${{ runner.temp }}/tagged-pdf-evidence/*.xml
             ${{ runner.temp }}/tagged-pdf-evidence/*.json
+            ${{ runner.temp }}/tagged-pdf-long-report/**/report-long-version.pdf
             tests/e2e/test-results/
           if-no-files-found: ignore
 

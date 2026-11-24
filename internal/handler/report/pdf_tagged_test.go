@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"ex-sbom/client/first"
 	"ex-sbom/internal/handler/middleware"
@@ -69,15 +70,16 @@ func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
 	pdf := filepath.Join(t.ArtifactDir(), "report-long-version.pdf")
 	require.NoError(t, os.WriteFile(pdf, response.Body.Bytes(), 0600))
 
-	raw, err := exec.Command(extract, "-raw", pdf, "-").Output()
+	raw, err := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-raw", pdf, "-").Output()
 	require.NoError(t, err)
 	text := strings.ReplaceAll(string(raw), "\u200b", "")
 	_, inventory, ok := strings.Cut(text, "元件清單")
-	require.True(t, ok)
+	require.Truef(t, ok, "missing inventory heading in %s output (%d bytes, valid UTF-8: %t), prefix %q",
+		extract, len(raw), utf8.Valid(raw), raw[:min(len(raw), 512)])
 	inventory, _, ok = strings.Cut(inventory, "弱點明細")
 	require.True(t, ok)
 	require.Contains(t, strings.Join(strings.Fields(inventory), ""), version)
-	bounds, err := exec.Command(extract, "-bbox-layout", pdf, "-").Output()
+	bounds, err := exec.Command(extract, "-enc", "UTF-8", "-bbox-layout", pdf, "-").Output()
 	require.NoError(t, err)
 	requireVersionColumnBounds(t, bounds, version)
 	require.Contains(t, strings.Join(strings.Fields(text), " "), "摘要 English advisory summary")
@@ -95,7 +97,7 @@ func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
 	require.NotContains(t, text, "LEV 未取得或未驗證")
 	require.NotContains(t, text, "弱點識別碼")
 
-	structure, err := exec.Command(inspect, "-struct-text", pdf).Output()
+	structure, err := exec.Command(inspect, "-enc", "UTF-8", "-struct-text", pdf).Output()
 	require.NoError(t, err)
 	structureText := strings.ReplaceAll(string(structure), "\r\n", "\n")
 	require.Regexp(t, `(?m)^  P \(block\)\n    "專案"\n    " 測試專案"\n  P \(block\)\n    "版本"\n    " fixture"`, structureText)
@@ -106,7 +108,7 @@ func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
 	require.Regexp(t, `(?m)^ +P \(block\)\n +"依據"\n +" `+advisory, firstAction,
 		"the first action's evidence label and value must share a paragraph")
 	require.Contains(t, string(structure), advisory+" · second-component 2.3.4")
-	bookmarks, err := exec.Command(outline, "-q", "-xml", "-i", "-stdout", pdf).Output()
+	bookmarks, err := exec.Command(outline, "-enc", "UTF-8", "-q", "-xml", "-i", "-stdout", pdf).Output()
 	require.NoError(t, err)
 	require.True(t, strings.Contains(string(bookmarks), advisory+" · "+firstName+" "+version+"</item>"), "the long bookmark title must preserve the source text")
 	require.True(t, strings.Contains(string(bookmarks), advisory+" · second-component 2.3.4</item>"), "bookmarks must identify each affected component")
@@ -301,7 +303,7 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 			pdf := filepath.Join(t.TempDir(), "report.pdf")
 			require.NoError(t, os.WriteFile(pdf, resp.Body.Bytes(), 0600))
 
-			raw, err := exec.Command(extract, "-raw", pdf, "-").Output()
+			raw, err := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-raw", pdf, "-").Output()
 			require.NoError(t, err)
 			home, later, ok := strings.Cut(strings.ReplaceAll(string(raw), "\u200b", ""), "\f")
 			require.True(t, ok)
@@ -356,16 +358,17 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 
 			properties, err := exec.Command(inspect, pdf).Output()
 			require.NoError(t, err)
-			require.Regexp(t, `(?m)^Tagged:\s+yes$`, string(properties))
-			structure, err := exec.Command(inspect, "-struct-text", pdf).Output()
+			require.Regexp(t, `(?m)^Tagged:\s+yes\r?$`, string(properties))
+			structure, err := exec.Command(inspect, "-enc", "UTF-8", "-struct-text", pdf).Output()
 			require.NoError(t, err)
+			structureText := strings.ReplaceAll(string(structure), "\r\n", "\n")
 			for _, tag := range []string{" H1 ", " H2 ", " H3 ", "Link (inline)", "Table", "TH ", "/Scope /Column", "/Headers ["} {
-				require.Contains(t, string(structure), tag)
+				require.Contains(t, structureText, tag)
 			}
-			require.Regexp(t, `(?m)^ +Link \(inline\)\n(?:[^\n]*\n){0,3} +/TextDecorationType /Underline\n +"\Q`+tc.continuationLink+`\E"$`, string(structure))
+			require.Regexp(t, `(?m)^ +Link \(inline\)\n(?:[^\n]*\n){0,3} +/TextDecorationType /Underline\n +"\Q`+tc.continuationLink+`\E"$`, structureText)
 			destinations, err := exec.Command(inspect, "-dests", pdf).Output()
 			require.NoError(t, err)
-			require.Regexp(t, `(?m)^\s*2 \[.*\] "remediation-order"$`, string(destinations))
+			require.Regexp(t, `(?m)^\s*2 \[.*\] "remediation-order"\r?$`, string(destinations))
 
 			if xmlExtractor, err := exec.LookPath("pdftohtml"); err == nil {
 				verifyPriorityColors(t, xmlExtractor, pdf, map[string]string{
@@ -423,7 +426,7 @@ func TestTaggedReportDownloadDistinguishesMissingUrgencyEvidence(t *testing.T) {
 					router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/projects/1/sboms/fixture/report?lang="+language.code, nil))
 					require.Equal(t, http.StatusOK, resp.Code)
 
-					cmd := exec.Command(extract, "-f", "1", "-l", "1", "-raw", "-", "-")
+					cmd := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-f", "1", "-l", "1", "-raw", "-", "-")
 					cmd.Stdin = resp.Body
 					raw, err := cmd.Output()
 					require.NoError(t, err)
@@ -445,7 +448,7 @@ func TestTaggedReportDownloadDistinguishesMissingUrgencyEvidence(t *testing.T) {
 
 func verifyPriorityColors(t *testing.T, extractor, pdf string, expected map[string]string) {
 	t.Helper()
-	raw, err := exec.Command(extractor, "-xml", "-stdout", "-i", pdf).Output()
+	raw, err := exec.Command(extractor, "-enc", "UTF-8", "-xml", "-stdout", "-i", pdf).Output()
 	require.NoError(t, err)
 	var document struct {
 		Pages []struct {

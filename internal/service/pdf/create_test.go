@@ -53,7 +53,7 @@ func TestRemediationHomepageWithoutFindings(t *testing.T) {
 					Language: lang,
 					SBOM:     ssbom.FormattedSBOM{ReportSource: &ssbom.ReportSource{Status: status}},
 				}))
-				cmd := exec.Command(extract, "-f", "1", "-l", "1", "-layout", "-", "-")
+				cmd := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-f", "1", "-l", "1", "-layout", "-", "-")
 				cmd.Stdin = &output
 				page, err := cmd.Output()
 				require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 			require.NoError(t, generateUntagged(&output, Report{Language: lang, SBOM: bom}))
 			require.Contains(t, output.String(), "/Subtype /Link")
 			require.Contains(t, output.String(), "/Dest [")
-			cmd := exec.Command(extract, "-layout", "-", "-")
+			cmd := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-layout", "-", "-")
 			cmd.Stdin = &output
 			raw, err := cmd.Output()
 			require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestPDFRemediationOrderListsEveryScoredComponent(t *testing.T) {
 			doc := &document{language: lang}
 			var output bytes.Buffer
 			require.NoError(t, Generate(&output, Report{Language: lang, SBOM: bom}))
-			cmd := exec.Command(extract, "-layout", "-", "-")
+			cmd := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-layout", "-", "-")
 			cmd.Stdin = &output
 			raw, err := cmd.Output()
 			require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestRemediationHomepageKEVEvidence(t *testing.T) {
 			}
 			var output bytes.Buffer
 			require.NoError(t, Generate(&output, Report{Language: English, SBOM: bom}))
-			cmd := exec.Command(extract, "-f", "1", "-l", "1", "-raw", "-", "-")
+			cmd := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-f", "1", "-l", "1", "-raw", "-", "-")
 			cmd.Stdin = &output
 			page, err := cmd.Output()
 			require.NoError(t, err)
@@ -243,7 +243,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 			require.Contains(t, output.String(), "/ToUnicode")
 			require.Contains(t, output.String(), "/FontFile2")
 			if command, err := exec.LookPath("pdftotext"); err == nil {
-				cmd := exec.Command(command, "-layout", "-", "-")
+				cmd := exec.Command(command, "-enc", "UTF-8", "-eol", "unix", "-layout", "-", "-")
 				cmd.Stdin = bytes.NewReader(output.Bytes())
 				result, err := cmd.Output()
 				require.NoError(t, err)
@@ -344,7 +344,7 @@ func TestGenerateRepeatsInventoryHeadingsAndPreservesRowsAcrossPages(t *testing.
 				"c": {Name: "after-inventory-row", Version: "after-version"},
 			}}
 			require.NoError(t, generateUntagged(&output, Report{Language: tc.language, SBOM: bom}))
-			command := exec.Command(tool, "-layout", "-", "-")
+			command := exec.Command(tool, "-enc", "UTF-8", "-eol", "unix", "-layout", "-", "-")
 			command.Stdin = bytes.NewReader(output.Bytes())
 			result, err := command.CombinedOutput()
 			require.NoError(t, err, string(result))
@@ -384,7 +384,7 @@ func TestGeneratePreservesOriginalTextForUnavailableGlyphs(t *testing.T) {
 			require.NoError(t, generateUntagged(&output, report))
 			require.True(t, bytes.HasPrefix(output.Bytes(), []byte("%PDF-1.4")))
 			if tool, err := exec.LookPath("pdftotext"); err == nil {
-				command := exec.Command(tool, "-layout", "-", "-")
+				command := exec.Command(tool, "-enc", "UTF-8", "-eol", "unix", "-layout", "-", "-")
 				command.Stdin = bytes.NewReader(output.Bytes())
 				result, err := command.CombinedOutput()
 				require.NoError(t, err, string(result))
@@ -427,7 +427,7 @@ func TestRemediationHomepageKeepsCheckpointWithManyKEVFindings(t *testing.T) {
 			}
 			require.NoError(t, generateUntagged(&output, Report{Language: lang, SBOM: bom}))
 
-			command := exec.Command(extract, "-layout", "-", "-")
+			command := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-layout", "-", "-")
 			command.Stdin = &output
 			extracted, err := command.Output()
 			require.NoError(t, err)
