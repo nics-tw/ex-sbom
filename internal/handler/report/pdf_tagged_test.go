@@ -6,6 +6,7 @@ package report
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,17 @@ func requireTaggedPDFTool(t *testing.T, name string) string {
 	}
 	require.NoError(t, err)
 	return path
+}
+
+func requireTaggedPDFCommand(t *testing.T, cmd *exec.Cmd) []byte {
+	t.Helper()
+	output, err := cmd.Output()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		require.NoError(t, err, "%s: %s", cmd, exitErr.Stderr)
+	}
+	require.NoError(t, err, "%s", cmd)
+	return output
 }
 
 func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
@@ -70,8 +82,7 @@ func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
 	pdf := filepath.Join(t.ArtifactDir(), "report-long-version.pdf")
 	require.NoError(t, os.WriteFile(pdf, response.Body.Bytes(), 0600))
 
-	raw, err := exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-raw", pdf, "-").Output()
-	require.NoError(t, err)
+	raw := requireTaggedPDFCommand(t, exec.Command(extract, "-enc", "UTF-8", "-eol", "unix", "-raw", pdf, "-"))
 	text := strings.ReplaceAll(string(raw), "\u200b", "")
 	_, inventory, ok := strings.Cut(text, "元件清單")
 	require.Truef(t, ok, "missing inventory heading in %s output (%d bytes, valid UTF-8: %t), prefix %q",
@@ -79,8 +90,7 @@ func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
 	inventory, _, ok = strings.Cut(inventory, "弱點明細")
 	require.True(t, ok)
 	require.Contains(t, strings.Join(strings.Fields(inventory), ""), version)
-	bounds, err := exec.Command(extract, "-enc", "UTF-8", "-bbox-layout", pdf, "-").Output()
-	require.NoError(t, err)
+	bounds := requireTaggedPDFCommand(t, exec.Command(extract, "-enc", "UTF-8", "-bbox-layout", pdf, "-"))
 	requireVersionColumnBounds(t, bounds, version)
 	require.Contains(t, strings.Join(strings.Fields(text), " "), "摘要 English advisory summary")
 	require.Contains(t, text, "版本 未記錄")
@@ -97,8 +107,7 @@ func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
 	require.NotContains(t, text, "LEV 未取得或未驗證")
 	require.NotContains(t, text, "弱點識別碼")
 
-	structure, err := exec.Command(inspect, "-enc", "UTF-8", "-struct-text", pdf).Output()
-	require.NoError(t, err)
+	structure := requireTaggedPDFCommand(t, exec.Command(inspect, "-enc", "UTF-8", "-struct-text", pdf))
 	structureText := strings.ReplaceAll(string(structure), "\r\n", "\n")
 	require.Regexp(t, `(?m)^  P \(block\)\n    "專案"\n    " 測試專案"\n  P \(block\)\n    "版本"\n    " fixture"`, structureText)
 	_, firstAction, found := strings.Cut(structureText, `"優先交辦項目"`)
@@ -108,14 +117,12 @@ func TestTaggedReportPreservesAccessibleFieldsAndLongVersions(t *testing.T) {
 	require.Regexp(t, `(?m)^ +P \(block\)\n +"依據"\n +" `+advisory, firstAction,
 		"the first action's evidence label and value must share a paragraph")
 	require.Contains(t, string(structure), advisory+" · second-component 2.3.4")
-	bookmarks, err := exec.Command(outline, "-enc", "UTF-8", "-q", "-xml", "-i", "-stdout", pdf).Output()
-	require.NoError(t, err)
+	bookmarks := requireTaggedPDFCommand(t, exec.Command(outline, "-enc", "UTF-8", "-q", "-xml", "-i", "-stdout", pdf))
 	require.True(t, strings.Contains(string(bookmarks), advisory+" · "+firstName+" "+version+"</item>"), "the long bookmark title must preserve the source text")
 	require.True(t, strings.Contains(string(bookmarks), advisory+" · second-component 2.3.4</item>"), "bookmarks must identify each affected component")
 	require.Regexp(t, `/Lang\s*\(zh-TW\)`, response.Body.String())
 	require.GreaterOrEqual(t, len(regexp.MustCompile(`/Lang\s*\(en\)`).FindAll(response.Body.Bytes(), -1)), 2)
-	fontList, err := exec.Command(fonts, pdf).Output()
-	require.NoError(t, err)
+	fontList := requireTaggedPDFCommand(t, exec.Command(fonts, pdf))
 	require.Contains(t, string(fontList), "NotoSansCJKtc-Bold")
 }
 

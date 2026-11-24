@@ -153,7 +153,8 @@ jobs:
         env:
           MSYS2_ROOT: ${{ steps.ucrt.outputs.msys2-location }}
         run: |
-          (Join-Path $env:MSYS2_ROOT 'ucrt64\bin') >> $env:GITHUB_PATH
+          $poppler = Join-Path $env:MSYS2_ROOT 'ucrt64\bin'
+          "MSYS2_POPPLER_BIN=$poppler" >> $env:GITHUB_ENV
           # The bundled DuckDB archive expects emulated TLS symbols absent from MSYS2 GCC 16.
           'CC=C:/mingw64/bin/gcc.exe' >> $env:GITHUB_ENV
 
@@ -170,6 +171,12 @@ jobs:
             compiler="$(cygpath -u "$CC")"
             test "$("$compiler" -dumpmachine)" = x86_64-w64-mingw32
             "$compiler" --version
+            poppler_bin="$(cygpath -u "$MSYS2_POPPLER_BIN")"
+            export PATH="$poppler_bin:$PATH"
+            for tool in pdftotext pdfinfo pdffonts pdftohtml; do
+              test "$(command -v "$tool")" -ef "$poppler_bin/$tool.exe"
+            done
+            pdftotext -v
             command -v python pdfinfo pdftotext pdffonts pdftohtml objdump
           fi
 
@@ -228,6 +235,7 @@ jobs:
           set -euo pipefail
           runner_temp="$RUNNER_TEMP"
           if [[ "$RUNNER_OS" == Windows ]]; then
+            export PATH="$(cygpath -u "$MSYS2_POPPLER_BIN"):$PATH"
             runner_temp="$(cygpath -u "$runner_temp")"
           fi
           release_dir="$runner_temp/tagged-pdf-release"
@@ -266,6 +274,7 @@ jobs:
           set -euo pipefail
           runner_temp="$RUNNER_TEMP"
           if [[ "$RUNNER_OS" == Windows ]]; then
+            export PATH="$(cygpath -u "$MSYS2_POPPLER_BIN"):$PATH"
             runner_temp="$(cygpath -u "$runner_temp")"
             test_tmp="$(mktemp -d "$(cygpath -u "$LOCALAPPDATA")/ex-sbom-long-report.XXXXXX")"
             export TEMP="$(cygpath -w "$test_tmp")" TMP="$(cygpath -w "$test_tmp")"
@@ -365,6 +374,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$RUNNER_OS" == Windows ]]; then
+            export PATH="$(cygpath -u "$MSYS2_POPPLER_BIN"):$PATH"
             test_tmp="$(mktemp -d "$(cygpath -u "$LOCALAPPDATA")/ex-sbom-test.XXXXXX")"
             export TEMP="$(cygpath -w "$test_tmp")"
             export TMP="$TEMP"
