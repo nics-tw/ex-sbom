@@ -448,12 +448,60 @@ func TestDiffSBOMs_ChangedLevelToZeroIsPreserved(t *testing.T) {
 	assert.Contains(t, string(data), `"level_b":0`, "level 0 must not be dropped by omitempty")
 }
 
-func TestRiskFieldsIgnoreUnverifiedAndPartialLEV(t *testing.T) {
-	comp := Component{Vulns: []Vuln{
-		{LEV: "1"},
-		{LEV: "0.8", LEVMethod: first.LEVMethod, LEVPartial: true},
-		{LEV: "0.2", LEVMethod: first.LEVMethod},
-	}}
-	_, _, lev, _ := riskFields(comp)
-	assert.Equal(t, "0.2", lev)
+func TestRiskFieldsProbabilityMaxima(t *testing.T) {
+	cases := []struct {
+		name     string
+		findings []Vuln
+		wantEPSS string
+		wantLEV  string
+	}{
+		{
+			name: "partial EPSS above the complete score",
+			findings: []Vuln{
+				{EPSS: "0.2", LEV: "0.3", LEVMethod: first.LEVMethod},
+				{EPSS: "0.8", EPSSPartial: true},
+			},
+			wantLEV: "0.3",
+		},
+		{
+			name: "partial verified LEV above the complete score",
+			findings: []Vuln{
+				{EPSS: "0.2", LEV: "0.3", LEVMethod: first.LEVMethod},
+				{LEV: "0.8", LEVMethod: first.LEVMethod, LEVPartial: true},
+			},
+			wantEPSS: "0.2",
+		},
+		{
+			name: "explicitly missing EPSS alongside a complete score",
+			findings: []Vuln{
+				{EPSS: "0.2"},
+				{EPSSPartial: true},
+			},
+		},
+		{
+			name: "unknown legacy LEV and valid zero",
+			findings: []Vuln{
+				{LEV: "1", LEVPartial: true},
+				{EPSS: "0", LEV: "0", LEVMethod: first.LEVMethod},
+			},
+			wantEPSS: "0",
+			wantLEV:  "0",
+		},
+		{
+			name: "complete findings use the highest verified scores",
+			findings: []Vuln{
+				{EPSS: "0.4", LEV: "1", LEVMethod: first.LEVMethod},
+				{EPSS: "0.8", LEV: "0.8", LEVMethod: first.LEVMethod},
+			},
+			wantEPSS: "0.8",
+			wantLEV:  "1",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, epss, lev, _ := riskFields(Component{Vulns: tc.findings})
+			assert.Equal(t, tc.wantEPSS, epss)
+			assert.Equal(t, tc.wantLEV, lev)
+		})
+	}
 }

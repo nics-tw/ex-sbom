@@ -7,6 +7,8 @@ package ssbom
 import (
 	"math"
 	"strconv"
+
+	"ex-sbom/client/first"
 )
 
 // ComponentDiff represents a single component difference between two SBOMs.
@@ -80,19 +82,35 @@ func maxVulnScore(vulns []Vuln, getter func(Vuln) string) string {
 	return result
 }
 
+// maxVulnProbability omits the aggregate when any finding's evidence is partial.
+func maxVulnProbability(vulns []Vuln, evidence func(Vuln) (string, bool)) string {
+	var maximum string
+	var maxProbability float64
+	for _, vuln := range vulns {
+		raw, lowerBound := evidence(vuln)
+		if lowerBound {
+			return ""
+		}
+		probability, valid := first.ParseProbability(raw)
+		if !valid {
+			continue
+		}
+		if maximum == "" || probability > maxProbability {
+			maximum = raw
+			maxProbability = probability
+		}
+	}
+	return maximum
+}
+
 func riskFields(comp Component) (maxCvss, maxEpss, maxLev string, severe bool) {
 	maxCvss = maxVulnScore(comp.Vulns, func(v Vuln) string { return v.CVSSScore })
-	maxEpss = maxVulnScore(comp.Vulns, func(v Vuln) string {
-		if v.EPSSPartial {
-			return ""
-		}
-		return v.EPSS
+	maxEpss = maxVulnProbability(comp.Vulns, func(v Vuln) (string, bool) {
+		return v.EPSS, v.EPSSPartial
 	})
-	maxLev = maxVulnScore(comp.Vulns, func(v Vuln) string {
-		if v.LEVPartial {
-			return ""
-		}
-		return v.verifiedLEVText()
+	maxLev = maxVulnProbability(comp.Vulns, func(v Vuln) (string, bool) {
+		value := v.verifiedLEVText()
+		return value, value != "" && v.LEVPartial
 	})
 	severe = HasSevereVuln(comp.Vulns)
 	return
