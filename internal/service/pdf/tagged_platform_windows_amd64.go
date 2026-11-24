@@ -152,7 +152,12 @@ func checkTaggedWindowsACL(path string, user *windows.SID, directory, private bo
 		case windows.ACCESS_DENIED_ACE_TYPE:
 			continue
 		case windows.ACCESS_ALLOWED_ACE_TYPE:
-			if trusted((*windows.SID)(unsafe.Pointer(&ace.SidStart))) {
+			sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
+			// Owner Rights only applies to the already-validated owner of this ancestor.
+			if !private && sid.IsWellKnown(windows.WinCreatorOwnerRightsSid) {
+				continue
+			}
+			if trusted(sid) {
 				const inheritBoth = windows.OBJECT_INHERIT_ACE | windows.CONTAINER_INHERIT_ACE
 				if ace.Header.AceFlags&inheritBoth == inheritBoth && ace.Header.AceFlags&windows.NO_PROPAGATE_INHERIT_ACE == 0 {
 					inherits = true

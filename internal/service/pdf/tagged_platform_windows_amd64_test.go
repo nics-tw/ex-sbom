@@ -14,6 +14,23 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+func TestTaggedWindowsCacheAcceptsOwnerRightsParent(t *testing.T) {
+	parent := t.TempDir()
+	// Python 3.13+ uses this ACL for a private temporary directory.
+	descriptor, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)")
+	require.NoError(t, err)
+	acl, _, err := descriptor.DACL()
+	require.NoError(t, err)
+	require.NoError(t, windows.SetNamedSecurityInfo(parent, windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil))
+
+	cache := filepath.Join(parent, "cache")
+	actual, err := privateTaggedCache(cache)
+	require.NoError(t, err)
+	require.Equal(t, cache, actual)
+	require.DirExists(t, cache)
+}
+
 func TestTaggedWindowsCacheRejectsWritableParent(t *testing.T) {
 	parent := filepath.Join(t.TempDir(), "shared")
 	require.NoError(t, os.Mkdir(parent, 0700))
