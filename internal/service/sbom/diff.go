@@ -130,7 +130,7 @@ func diffVulnRisk(v Vuln) vulnRiskKey {
 		epss:        v.EPSS,
 		lev:         lev,
 		levPartial:  lev != "" && v.LEVPartial,
-		epssPartial: v.EPSS != "" && v.EPSSPartial,
+		epssPartial: v.EPSSPartial,
 		kev:         v.KEV,
 	}
 }

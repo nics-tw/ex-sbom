@@ -134,6 +134,7 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 			c.Vulns[0].KEVCVEs = c.Vulns[0].CVEIDs
 		}, true},
 		{"changed unverified LEV", func(c *Component) { c.Vulns[1].LEV = "0.9" }, false},
+		{"changed unverified LEV certainty", func(c *Component) { c.Vulns[1].LEVPartial = true }, false},
 		{"changed dependency risk", func(c *Component) { c.ContainsVulnDep = true }, true},
 	}
 	for _, tt := range tests {
@@ -150,6 +151,27 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 				assert.Empty(t, result.ByLevel)
 			}
 		})
+	}
+}
+
+func TestDiffSBOMs_EmptyEPSScoreBecomesPartial(t *testing.T) {
+	before := Component{Version: "1.0.0", VulnNumber: 2, Vulns: []Vuln{
+		{ID: "TEST-SCORED", EPSS: "0.2"},
+		{ID: "TEST-MISSING"},
+	}}
+	after := before
+	after.Vulns = append([]Vuln(nil), before.Vulns...)
+	after.Vulns[1].EPSSPartial = true
+
+	a := makeSBOM(map[string]Component{"pkg": before}, map[string]int{"pkg": 0})
+	b := makeSBOM(map[string]Component{"pkg": after}, map[string]int{"pkg": 0})
+	result := DiffSBOMs(a, b)
+	if assert.Contains(t, result.ByLevel, 0) {
+		changes := result.ByLevel[0].Changed
+		if assert.Len(t, changes, 1) {
+			assert.Equal(t, "0.2", changes[0].MaxEpssA)
+			assert.Empty(t, changes[0].MaxEpssB)
+		}
 	}
 }
 
