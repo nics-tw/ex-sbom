@@ -102,7 +102,7 @@ def inspect_pe(path, log):
     system_libraries = {
         "advapi32", "bcrypt", "bcryptprimitives", "crypt32", "dbghelp", "gdi32", "iphlpapi",
         "kernel32", "msvcrt", "ncrypt", "netapi32", "normaliz", "ntdll", "ole32", "oleaut32",
-        "psapi", "rpcrt4", "secur32", "shell32", "shlwapi", "ucrtbase", "user32", "userenv",
+        "psapi", "rpcrt4", "rstrtmgr", "secur32", "shell32", "shlwapi", "ucrtbase", "user32", "userenv",
         "version", "winhttp", "winmm", "ws2_32", "wtsapi32",
     }
     unknown = sorted(name for name in imports if not (
