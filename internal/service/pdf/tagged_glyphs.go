@@ -80,11 +80,14 @@ func prepareTaggedGlyphs(report *taggedData, fontDir string) error {
 		visit(&report.Components[i].Version)
 		visit(&report.Components[i].Scope)
 	}
-	for i := range report.Components {
-		component := &report.Components[i]
-		visit(&component.Name)
-		visit(&component.Version)
-		visit(&component.Scope)
+	visit(&report.OrderNote)
+	for i := range report.OrderHeaders {
+		visit(&report.OrderHeaders[i])
+	}
+	for _, row := range report.OrderRows {
+		for i := range row.Cells {
+			visit(&row.Cells[i])
+		}
 	}
 	for i := range report.Findings {
 		visit(&report.Findings[i].ID)

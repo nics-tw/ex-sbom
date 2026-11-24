@@ -37,7 +37,7 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 	const sourceFile = "來源-𠮷-🔒-\U0010FFFC.spdx.json"
 	const componentName = "example-𠮷-🧪-\U0002EBF1"
 	const covered, residual = "CVE-2099-1000", "CVE-2099-1001"
-	const urgentName, elevatedName, nearBoundaryName, reviewName = "synthetic-urgent", "synthetic-elevated", "synthetic-near-boundary", "synthetic-review"
+	const urgentName, elevatedName, nearBoundaryName, reviewName = "urgent[U+202E]component", "synthetic-elevated", "synthetic-near-boundary", "synthetic-review"
 	checksum := strings.Repeat("0123456789abcdef", 4)
 	queriedAt := time.Date(2026, 11, 23, 1, 2, 3, 0, time.UTC)
 	bom := ssbom.FormattedSBOM{
@@ -71,7 +71,7 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 				},
 			},
 			"urgent": {
-				Name: urgentName, Version: "2.0.0",
+				Name: "urgent\u202Ecomponent", Version: "2.0.0",
 				Vulns: []ssbom.Vuln{{
 					ID: "CVE-2099-1002", CVEIDs: []string{"CVE-2099-1002"}, CVSSScore: "7.1",
 					KEV: ssbom.KEVListed, KEVCVE: "CVE-2099-1002",
@@ -152,6 +152,7 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 			}
 
 			continuation := strings.Join(strings.Fields(later), " ")
+			require.Contains(t, continuation, "2 "+urgentName+" 2.0.0 7.1")
 			if tc.language == "en" {
 				require.Contains(t, continuation, "verify missing inputs before deferring work")
 				require.Contains(t, continuation, "ex-sbom policy v1")
