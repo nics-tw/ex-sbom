@@ -13,8 +13,62 @@ import (
 	"testing"
 	"time"
 
+	"ex-sbom/client/first"
+
 	"github.com/stretchr/testify/require"
 )
+
+func TestHistoricalLEVStopsWaitingForBlockedWork(t *testing.T) {
+	slot := make(chan struct{}, 1)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		close(release)
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Error("blocked worker did not clean up")
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	require.True(t, acquireHistoricalLEV(ctx, slot))
+	go func() {
+		<-started
+		cancel()
+	}()
+	type result struct{ value string }
+	value, ok := runHistoricalLEV(ctx, slot, func() result {
+		defer close(done)
+		close(started)
+		<-release
+		return result{value: "late"}
+	})
+	require.False(t, ok)
+	require.Empty(t, value.value)
+	require.False(t, acquireHistoricalLEV(context.Background(), slot))
+}
+
+func TestHistoricalLEVPrefersCompleteIndexOrUsesSameDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	const id = "CVE-2026-0001"
+	want := map[string]first.HistoricalLEV{id: {Score: 0.25, First: "2026-11-23", AsOf: "2026-11-23", Partial: true}}
+	failedIndex := func(context.Context, string, string, string, []string) (map[string]first.HistoricalLEV, error) {
+		return map[string]first.HistoricalLEV{id: {Score: 1}}, os.ErrInvalid
+	}
+	fallback := func(got context.Context, dir, firstDay, asOf string, cves []string, reserved map[string]string) (map[string]first.HistoricalLEV, error) {
+		parentDeadline, _ := ctx.Deadline()
+		gotDeadline, hasDeadline := got.Deadline()
+		require.True(t, hasDeadline)
+		require.True(t, gotDeadline.Before(parentDeadline))
+		require.Equal(t, first.FirstArchiveDay, firstDay)
+		require.Equal(t, "2026-11-23", asOf)
+		return want, nil
+	}
+	got := lookupHistoricalScores(ctx, t.TempDir(), "", "2026-11-23", []string{id}, failedIndex, fallback)
+	require.Equal(t, want, got)
+}
 
 func TestApplyHistoricalLEVUsesIndependentReservationDates(t *testing.T) {
 	const id, other, day = "CVE-2026-0001", "CVE-2026-0002", "2026-11-23"
@@ -58,13 +112,4 @@ func TestApplyHistoricalLEVUsesIndependentReservationDates(t *testing.T) {
 	require.Empty(t, findings[1].LEV)
 	require.Equal(t, findings[0].LEV, findings[2].LEV)
 	require.True(t, findings[2].LEVPartial)
-}
-
-func TestReadCVEReservationsRejectsOversizedFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "reservations.json")
-	require.NoError(t, os.WriteFile(path, []byte("{}"), 0600))
-	require.NoError(t, os.Truncate(path, maxReservationBytes+1))
-	dates, err := readCVEReservations(context.Background(), path, []string{"CVE-2026-0001"})
-	require.ErrorContains(t, err, "invalid CVE reservation file type or size")
-	require.Empty(t, dates)
 }

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -69,6 +71,16 @@ func defaultDBPath() string {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "lev-index" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		_, err := runArchiveIndexCommand(ctx, os.Args[1:], os.Stdout, os.Stderr)
+		stop()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	config := getConfig()
 	if !isLoopbackBind(config.BindAddr) {
 		slog.Error("BIND_ADDR must be a loopback IP", "address", util.LogSafe(config.BindAddr))

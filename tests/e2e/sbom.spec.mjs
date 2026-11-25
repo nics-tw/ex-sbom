@@ -690,7 +690,7 @@ test("preserves comparison disclosures and horizontal scroll when translating", 
 });
 
 test("downloads verified remediation findings after storing and reopening an SBOM", async ({ page, service }, testInfo) => {
-  await service.restart({ historicalLEV: true });
+  await service.restart({ historicalLEV: "0.37" });
   await page.goto(service.url);
   const project = await createProject(page, "Remediation fixture");
   const [preview] = await Promise.all([
@@ -710,9 +710,15 @@ test("downloads verified remediation findings after storing and reopening an SBO
   expect(findings.find(vuln => vuln.id === "CVE-2025-99998")).toMatchObject({ kev: "unlisted" });
   expect(finding.lev_first).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(finding.lev_as_of).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-  await service.restart();
+  await service.restart({ historicalLEV: "0.41" });
   await page.goto(service.url);
   await selectProject(page, project, "Remediation fixture");
+  const [updatedPreview] = await Promise.all([
+    page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+    upload(page, sbom("fixture-remediation", "1.1.0"), "Repair after archive refresh"),
+  ]);
+  const updated = (await updatedPreview.json()).data.bom_result.ComponentInfo["fixture-remediation"];
+  expect(updated.vulns.find(vuln => vuln.id === finding.id).lev).toBe("0.41");
   await versionRow(page, "Repair exercise").locator(".version-load-btn").click();
   const component = await page.request.get(
     new URL(`/projects/${project}/sboms/Repair%20exercise/topology/component?component=fixture-remediation`, service.url).href,
@@ -793,6 +799,64 @@ test("formats Go advisory candidates in preview, saved details and PDF", async (
     return;
   }
   expect(content.replaceAll("\u200b", "")).toMatch(/Advisory candidates for this finding\s+(?:\|\s+)?v1\.2\.4(?:\s|$)/);
+});
+
+test("preserves KEV while conflicting installed versions await confirmation", async ({ page, service }, testInfo) => {
+  await page.goto(service.url);
+  const projectName = "KEV version evidence";
+  const project = await createProject(page, projectName);
+  const component = "fixture-remediation";
+  const confirmed = "Confirmed version";
+  const pending = "Conflicting version";
+  for (const [version, purlVersion, expected] of [
+    [pending, "2.0.0", false],
+    [confirmed, "1.0.0", true],
+  ]) {
+    const [preview] = await Promise.all([
+      page.waitForResponse((res) => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+      upload(page, sbom(component, "1.0.0", `pkg:npm/${component}@${purlVersion}`), version),
+    ]);
+    const { ComponentInfo } = (await preview.json()).data.bom_result;
+    expect(ComponentInfo[component].installed_version).toMatchObject({
+      package: component,
+      version: "1.0.0",
+      confirmed: expected,
+    });
+    expect(ComponentInfo[component].vulns.find((finding) => finding.id === "CVE-2025-99999").kev).toBe("listed");
+  }
+
+  await service.restart();
+  await page.goto(service.url);
+  await selectProject(page, project, projectName);
+  for (const [version, priority, count, path] of [
+    [pending, /Prioritize fix assessment[\s\S]*?fixture-remediation/i, "Pending", "pending.pdf"],
+    [confirmed, /Update immediately[\s\S]*?fixture-remediation/i, "1", "confirmed.pdf"],
+  ]) {
+    const response = await page.request.get(new URL(
+      `/projects/${project}/sboms/${encodeURIComponent(version)}/report?lang=en`, service.url,
+    ).href);
+    expect(response.ok()).toBe(true);
+    const output = testInfo.outputPath(path);
+    await writeFile(output, await response.body());
+    let text;
+    try {
+      ({ stdout: text } = await promisify(execFile)("pdftotext", ["-raw", output, "-"]));
+    } catch (error) {
+      if (error.code !== "ENOENT" || process.env.CI) throw error;
+      testInfo.annotations.push({ type: "PDF text check", description: "Install Poppler to verify report wording" });
+      return;
+    }
+    text = text.replaceAll("\u200b", "").replace(/\s+/g, " ");
+    expect(text).toMatch(priority);
+    expect(text).toMatch(new RegExp(`Components (?:to )?update immediately ${count}(?: |$)`));
+    expect(text).toContain("CVEs listed in CISA KEV 1");
+    expect(text).toContain("CVE-2025-99999");
+    if (version === pending) {
+      expect(text).toContain("Confirm the installed version");
+      expect(text).toContain("Upgrade to test Pending");
+      expect(text).toMatch(/Coverage (?:is )?pending/);
+    }
+  }
 });
 
 test("keeps remediation findings and PDF download available when risk feeds fail", async ({ page, service }, testInfo) => {

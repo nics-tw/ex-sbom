@@ -104,6 +104,20 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 | `EPSS_ARCHIVE_DIR` | — | 選填。存放官方每日 `epss_scores-YYYY-MM-DD.csv.gz` 的目錄。請保留自 2021-04-14 起至前一個 UTC 日的封存。每次匯入最多花 3 秒查詢封存，檔案未變更時可重用記憶體中的查詢結果。若已驗證首次評分日期，報告可用查得的 30 天視窗分數計算 LEV 下界。若無法驗證該日期，報告會標示 LEV 未取得。 |
 | `CVE_RESERVATIONS_FILE` | — | 選填。指定本機 JSON 檔，內容為 CVE 識別碼對應官方保留日期（`YYYY-MM-DD`）。CVE 保留日前的歷史封存缺檔不影響該 CVE。請使用 CVE Program 整批封存的日期。 |
 
+### 歷史 EPSS 與 LEV
+
+可選的封存索引適合匯入時需要查詢多年歷史 LEV 的情境。維運人員可在離線環境用同一個執行檔預先建立索引。
+
+```bash
+./ex-sbom lev-index build --archive /path/to/epss --as-of 2026-11-22 --output /private/ex-sbom/epss-2026-11-22 --reservations /path/to/reservations.json
+```
+
+輸出路徑須尚未使用，且位於服務帳號可控的目錄。指令會複製來源資料，完整建置後發布為唯讀快照。沒有可信的保留日期檔時省略 `--reservations`。將 `EPSS_ARCHIVE_DIR` 指向新快照。有保留日期時，另將 `CVE_RESERVATIONS_FILE` 指向快照內的 `cve-reservations.json`。匯入以掃描時間的前一個 UTC 日為截日。索引不符或無法使用時，可在三秒預算剩餘時間內查詢原始封存。LEV 分為完整值、下界與未取得。
+
+截日更新、日檔補齊或來源修正時先建立新快照，再一起切換兩個設定並重啟程式。需要回復時，以相同步驟指回先前驗證過的快照。已儲存的報告使用該次掃描留下的 LEV 證據。
+
+46 個 CVE 的選用驗收可執行 `go test -v -count=1 -tags unit -run '^TestHistoricalLEVOfficialArchiveAcceptance$' ./internal/service/sbom`。將 `EX_SBOM_LEV_ACCEPT_SNAPSHOT`、`EX_SBOM_LEV_ACCEPT_SOURCE`、`EX_SBOM_LEV_ACCEPT_CUTOFF`、`EX_SBOM_LEV_ACCEPT_CVES` 分別設為快照、原始封存、UTC 截日及包含 46 個不同 CVE 的文字檔。使用保留日期檔時設定 `EX_SBOM_LEV_ACCEPT_RESERVATIONS`。若要保存逐筆結果，將 `EX_SBOM_LEV_ACCEPT_REPORT` 指向新的私有檔案路徑。
+
 預設情況下，資料庫檔案會儲存於各平台原生的設定目錄：
 - macOS：`~/Library/Application Support/ex-sbom/data.duckdb`
 - Linux：`~/.config/ex-sbom/data.duckdb`

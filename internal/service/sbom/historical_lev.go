@@ -4,9 +4,7 @@ package ssbom
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"log/slog"
 	"os"
 	"slices"
@@ -16,10 +14,10 @@ import (
 	"ex-sbom/client/first"
 )
 
-const (
-	historicalLEVBudget = 3 * time.Second
-	maxReservationBytes = 32 << 20
-)
+const historicalLEVBudget = 3 * time.Second
+
+// A blocked native call cannot keep the preview waiting or multiply workers.
+var historicalLEVSlots = make(chan struct{}, 1)
 
 func applyHistoricalLEV(ctx context.Context, bom *FormattedSBOM) {
 	if bom.ReportSource == nil {
@@ -34,93 +32,125 @@ func applyHistoricalLEV(ctx context.Context, bom *FormattedSBOM) {
 	if bom.ReportSource.QueriedAt == nil {
 		return
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, historicalLEVBudget)
 	defer cancel()
-	var cves []string
-	for _, component := range bom.ComponentInfo {
-		for _, finding := range component.Vulns {
-			cves = append(cves, finding.CVEIDs...)
-		}
-	}
-	if len(cves) == 0 {
+	asOf := bom.ReportSource.QueriedAt.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
+	reservations := os.Getenv("CVE_RESERVATIONS_FILE")
+	if !acquireHistoricalLEV(ctx, historicalLEVSlots) {
 		return
 	}
-	slices.Sort(cves)
-	cves = slices.Compact(cves)
-	// A UTC day that has ended is independent of the time an import runs.
-	asOf := bom.ReportSource.QueriedAt.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
+	components, cves := copyHistoricalComponents(ctx, bom.ComponentInfo)
+	if len(cves) == 0 {
+		<-historicalLEVSlots
+		return
+	}
+	result, ready := runHistoricalLEV(ctx, historicalLEVSlots, func() map[string]Component {
+		slices.Sort(cves)
+		scores := lookupHistoricalScores(ctx, dir, reservations, asOf, slices.Compact(cves), first.LookupArchiveIndex, first.ArchiveLEVContext)
+		if len(scores) == 0 || ctx.Err() != nil {
+			return nil
+		}
+		enriched := FormattedSBOM{ComponentInfo: components}
+		setHistoricalLEV(&enriched, scores)
+		return enriched.ComponentInfo
+	})
+	if ready && result != nil {
+		bom.ComponentInfo = result
+	}
+}
+
+func copyHistoricalComponents(ctx context.Context, source map[string]Component) (map[string]Component, []string) {
+	components := make(map[string]Component, len(source))
+	var cves []string
+	for key, component := range source {
+		if ctx.Err() != nil {
+			return nil, nil
+		}
+		component.Vulns = slices.Clone(component.Vulns)
+		for i := range component.Vulns {
+			if ctx.Err() != nil {
+				return nil, nil
+			}
+			finding := &component.Vulns[i]
+			// Preview can sort its original findings and CVE IDs after timeout.
+			finding.CVEIDs = slices.Clone(finding.CVEIDs)
+			cves = append(cves, finding.CVEIDs...)
+		}
+		components[key] = component
+	}
+	return components, cves
+}
+
+func acquireHistoricalLEV(ctx context.Context, slots chan struct{}) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case slots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// The caller reserves a slot before copying input; the worker releases it.
+func runHistoricalLEV[T any](ctx context.Context, slots chan struct{}, work func() T) (T, bool) {
+	var zero T
+	done := make(chan T, 1)
+	go func() {
+		var result T
+		if ctx.Err() == nil {
+			result = work()
+		}
+		<-slots
+		done <- result
+	}()
+	select {
+	case result := <-done:
+		return result, ctx.Err() == nil
+	case <-ctx.Done():
+		return zero, false
+	}
+}
+
+func lookupHistoricalScores(
+	ctx context.Context,
+	dir, reservationFile, asOf string,
+	cves []string,
+	lookup func(context.Context, string, string, string, []string) (map[string]first.HistoricalLEV, error),
+	fallback func(context.Context, string, string, string, []string, map[string]string) (map[string]first.HistoricalLEV, error),
+) map[string]first.HistoricalLEV {
+	scores, err := lookup(ctx, dir, reservationFile, asOf, cves)
+	if err == nil {
+		return scores
+	}
+	if ctx.Err() != nil {
+		return nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		slog.Warn("Cannot use EPSS archive index", "error", err)
+	}
+
+	// Leave part of the same budget for turning available raw observations
+	// into a result and applying the alias aggregation.
+	rawContext := ctx
+	if deadline, ok := ctx.Deadline(); ok {
+		var cancel context.CancelFunc
+		rawContext, cancel = context.WithDeadline(ctx, deadline.Add(-50*time.Millisecond))
+		defer cancel()
+	}
 	var reservations map[string]string
-	if path := os.Getenv("CVE_RESERVATIONS_FILE"); path != "" {
-		var err error
-		reservations, err = readCVEReservations(ctx, path, cves)
-		if err != nil {
+	if reservationFile != "" {
+		reservations, err = first.ReadCVEReservations(rawContext, reservationFile, cves)
+		if err != nil && rawContext.Err() == nil {
 			slog.Warn("Cannot read CVE reservation dates", "error", err)
 		}
 	}
-	scores, err := first.ArchiveLEVContext(ctx, dir, first.FirstArchiveDay, asOf, cves, reservations)
-	if err != nil {
+	scores, err = fallback(rawContext, dir, first.FirstArchiveDay, asOf, cves, reservations)
+	if err != nil && rawContext.Err() == nil {
 		slog.Warn("EPSS archive has unusable data", "error", err)
 	}
-	setHistoricalLEV(bom, scores)
-}
-
-func readCVEReservations(ctx context.Context, path string, cves []string) (map[string]string, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() || info.Size() > maxReservationBytes {
-		return nil, fmt.Errorf("invalid CVE reservation file type or size")
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	limited := &io.LimitedReader{R: file, N: maxReservationBytes + 1}
-	decoder := json.NewDecoder(limited)
-	if start, err := decoder.Token(); err != nil || start != json.Delim('{') {
-		return nil, fmt.Errorf("invalid CVE reservation JSON object")
-	}
-	dates := make(map[string]string)
-	badRows := 0
-	for decoder.More() {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		key, err := decoder.Token()
-		if err != nil {
-			return nil, err
-		}
-		id := key.(string) // JSON object keys are strings.
-		var raw json.RawMessage
-		if err := decoder.Decode(&raw); err != nil {
-			return nil, err
-		}
-		if _, needed := slices.BinarySearch(cves, id); !needed {
-			continue
-		}
-		var date string
-		_, duplicate := dates[id]
-		if err := json.Unmarshal(raw, &date); err != nil || date == "" || duplicate {
-			badRows++
-			date = ""
-		}
-		dates[id] = date
-	}
-	if end, err := decoder.Token(); err != nil || end != json.Delim('}') {
-		return nil, fmt.Errorf("invalid CVE reservation JSON object")
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF || limited.N == 0 {
-		return nil, fmt.Errorf("invalid trailing data or size for CVE reservations")
-	}
-	if badRows > 0 {
-		return dates, fmt.Errorf("ignored %d invalid or duplicate CVE reservation entries", badRows)
-	}
-	return dates, nil
+	return scores
 }
 
 func setHistoricalLEV(bom *FormattedSBOM, scores map[string]first.HistoricalLEV) {

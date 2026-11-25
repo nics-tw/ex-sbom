@@ -4,13 +4,13 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 
-export async function startServer(binary, dbPath, { failScan = false, historicalLEV = false, failRiskFeeds = false } = {}) {
+export async function startServer(binary, dbPath, { failScan = false, historicalLEV = "", failRiskFeeds = false } = {}) {
   const server = spawn(binary, ["-test.run", "^TestE2EServer$", "-test.v"], {
     env: {
       ...process.env,
       DB_PATH: dbPath,
       EX_SBOM_E2E_FAIL_SCAN: failScan ? "1" : "0",
-      EX_SBOM_E2E_HISTORY: historicalLEV ? "1" : "0",
+      EX_SBOM_E2E_HISTORY_SCORE: historicalLEV,
       EX_SBOM_E2E_FAIL_RISK_FEEDS: failRiskFeeds ? "1" : "0",
     },
     stdio: ["ignore", "pipe", "pipe"],

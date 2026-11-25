@@ -18,11 +18,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"ex-sbom/client/first"
 	"ex-sbom/internal/db"
 	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
@@ -42,8 +44,8 @@ func TestE2EServer(t *testing.T) {
 		failRiskFeeds: os.Getenv("EX_SBOM_E2E_FAIL_RISK_FEEDS") == "1",
 	}
 	t.Cleanup(func() { http.DefaultTransport = transport })
-	if os.Getenv("EX_SBOM_E2E_HISTORY") == "1" {
-		seedE2EEPSSHistory(t)
+	if score := os.Getenv("EX_SBOM_E2E_HISTORY_SCORE"); score != "" {
+		seedE2EEPSSHistory(t, score)
 	}
 
 	if err := db.Init(path); err != nil {
@@ -85,7 +87,7 @@ func TestE2EServer(t *testing.T) {
 	}
 }
 
-func seedE2EEPSSHistory(t *testing.T) {
+func seedE2EEPSSHistory(t *testing.T, score string) {
 	t.Helper()
 	dir := t.TempDir()
 	asOf := time.Now().UTC().AddDate(0, 0, -1)
@@ -95,7 +97,7 @@ func seedE2EEPSSHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	compressed := gzip.NewWriter(archive)
-	_, writeErr := fmt.Fprintf(compressed, "#model_version:fixture,score_date:%sT00:00:00+0000\ncve,epss,percentile\nCVE-2025-99999,0.37,0.95\n", start.Format(time.DateOnly))
+	_, writeErr := fmt.Fprintf(compressed, "#model_version:fixture,score_date:%sT00:00:00+0000\ncve,epss,percentile\nCVE-2025-99999,%s,0.95\n", start.Format(time.DateOnly), score)
 	if err := errors.Join(writeErr, compressed.Close(), archive.Close()); err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +105,20 @@ func seedE2EEPSSHistory(t *testing.T) {
 	if err := os.WriteFile(reservations, []byte(fmt.Sprintf(`{"CVE-2025-99999":%q}`, start.Format(time.DateOnly))), 0600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("EPSS_ARCHIVE_DIR", dir)
-	t.Setenv("CVE_RESERVATIONS_FILE", reservations)
+	if runtime.GOOS == "windows" {
+		// The Windows archive package tests exercise sealed ACLs and cleanup.
+		t.Setenv("EPSS_ARCHIVE_DIR", dir)
+		t.Setenv("CVE_RESERVATIONS_FILE", reservations)
+		return
+	}
+	snapshot := filepath.Join(t.TempDir(), "snapshot")
+	if err := first.BuildArchiveIndex(context.Background(), dir, reservations, asOf.Format(time.DateOnly), snapshot); err != nil {
+		t.Fatal(err)
+	}
+	// A temp directory needs writable permissions when the test removes it.
+	t.Cleanup(func() { _ = os.Chmod(snapshot, 0700) })
+	t.Setenv("EPSS_ARCHIVE_DIR", snapshot)
+	t.Setenv("CVE_RESERVATIONS_FILE", filepath.Join(snapshot, first.ArchiveIndexReservations))
 }
 
 // e2eOSVTransport exercises the real scanner with deterministic query results.

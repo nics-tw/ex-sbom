@@ -13,6 +13,11 @@ import (
 // LEVMethod identifies the calculation used for persisted LEV values.
 const LEVMethod = "nist-cswp41-eq10-v1"
 
+const (
+	levWindowDays = 30
+	levWindow     = levWindowDays * 24 * time.Hour
+)
+
 // ParseProbability distinguishes an actual zero from absent or invalid data.
 func ParseProbability(raw string) (float64, bool) {
 	p, err := strconv.ParseFloat(raw, 64)
@@ -55,9 +60,8 @@ func calculateLEV(series []TimeSeries, firstDate, assessmentDate string, require
 		scores[entry.Date] = score
 	}
 
-	const window = 30 * 24 * time.Hour
 	logSurvival := 0.0
-	for day := start; day.Before(end); day = day.Add(window) {
+	for day := start; day.Before(end); day = day.Add(levWindow) {
 		score, found := scores[day.Format(time.DateOnly)]
 		if !found {
 			if requireEveryWindow {
@@ -65,12 +69,20 @@ func calculateLEV(series []TimeSeries, firstDate, assessmentDate string, require
 			}
 			continue
 		}
-		fraction := float64(min(end.Sub(day), window)) / float64(window)
-		logSurvival += math.Log1p(-score * fraction)
+		logSurvival += levWindowSurvival(score, end.Sub(day))
 	}
+	return levFromSurvival(logSurvival), true
+}
+
+func levWindowSurvival(score float64, remaining time.Duration) float64 {
+	fraction := float64(min(remaining, levWindow)) / float64(levWindow)
+	return math.Log1p(-score * fraction)
+}
+
+func levFromSurvival(logSurvival float64) float64 {
 	score := -math.Expm1(logSurvival)
 	if score == 1 && !math.IsInf(logSurvival, -1) {
 		score = math.Nextafter(1, 0)
 	}
-	return score, true
+	return score
 }

@@ -118,7 +118,7 @@ func ArchiveLEVContext(ctx context.Context, dir, firstDay, asOf string, cves []s
 		if len(wanted) == 0 {
 			continue
 		}
-		rows, err := archiveDay(ctx, filepath.Join(dir, "epss_scores-"+date+".csv.gz"), date, wanted)
+		rows, err := archiveDay(ctx, filepath.Join(dir, archiveDayName(date)), date, wanted)
 		if err != nil && firstError == nil && !errors.Is(err, os.ErrNotExist) && ctx.Err() == nil {
 			firstError = fmt.Errorf("EPSS archive %s: %w", date, err)
 		}
@@ -134,7 +134,7 @@ func ArchiveLEVContext(ctx context.Context, dir, firstDay, asOf string, cves []s
 				}
 				finding.first = date
 			}
-			finding.next = day.AddDate(0, 0, 30).Format(time.DateOnly)
+			finding.next = day.AddDate(0, 0, levWindowDays).Format(time.DateOnly)
 			if !row.found {
 				finding.partial = true
 				continue
@@ -254,40 +254,58 @@ func (r archiveReader) Read(p []byte) (int, error) {
 }
 
 func readArchiveDay(ctx context.Context, file io.Reader, day string, wanted map[string]*archiveFinding) (map[string]archiveScore, error) {
+	rows := make(map[string]archiveScore, len(wanted))
+	usable, uncertain, err := readArchiveScores(ctx, file, day, rows, func(id string) bool {
+		_, needed := wanted[id]
+		return needed
+	})
+	if !usable {
+		return nil, err
+	}
+	for cve := range wanted {
+		if _, seen := rows[cve]; !seen {
+			rows[cve] = archiveScore{unknown: uncertain}
+		}
+	}
+	return rows, err
+}
+
+// A usable day can contain recoverable bad rows. An uncertain day cannot prove
+// that a CVE absent from its rows was actually unscored.
+func readArchiveScores(ctx context.Context, file io.Reader, day string, rows map[string]archiveScore, wanted func(string) bool) (usable, uncertain bool, err error) {
 	compressed := &io.LimitedReader{R: archiveReader{ctx, file}, N: maxArchiveBytes + 1}
 	stream, err := gzip.NewReader(compressed)
 	if err != nil {
-		return nil, err
+		return false, false, err
 	}
 	defer stream.Close()
 	limited := &io.LimitedReader{R: stream, N: maxArchiveBytes + 1}
 	reader := bufio.NewReaderSize(limited, maxArchiveRow)
 	header, err := archiveCSVHeader(ctx, reader)
 	if err != nil {
-		return nil, err
+		return false, false, err
 	}
 	if strings.HasPrefix(header[0], "#") {
 		if len(header) != 2 || !strings.HasPrefix(header[0], "#model_version:") || !strings.HasPrefix(header[1], "score_date:"+day+"T") {
-			return nil, fmt.Errorf("invalid model or score date")
+			return false, false, fmt.Errorf("invalid model or score date")
 		}
 		header, err = archiveCSVHeader(ctx, reader)
 		if err != nil {
-			return nil, err
+			return false, false, err
 		}
 	}
 	hasPercentile := len(header) == 3 && header[2] == "percentile"
 	if (len(header) != 2 && !hasPercentile) || header[0] != "cve" || header[1] != "epss" {
-		return nil, fmt.Errorf("invalid EPSS CSV header")
+		return false, false, fmt.Errorf("invalid EPSS CSV header")
 	}
-	rows := make(map[string]archiveScore, len(wanted))
-	badRows, uncertain := 0, false
+	badRows := 0
 	for {
 		line, overlong, err := nextArchiveLine(ctx, reader)
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return false, false, err
 		}
 		if line == "" && !overlong {
 			continue
@@ -314,22 +332,17 @@ func readArchiveDay(ctx context.Context, file io.Reader, day string, wanted map[
 		if !valid {
 			badRows++
 		}
-		if _, needed := wanted[id]; needed {
+		if wanted(id) {
 			rows[strings.Clone(id)] = archiveScore{score: score, found: valid, unknown: !valid}
 		}
 	}
 	if limited.N == 0 || compressed.N == 0 {
-		return nil, fmt.Errorf("EPSS archive exceeds compressed or decompressed size limit")
-	}
-	for cve := range wanted {
-		if _, seen := rows[cve]; !seen {
-			rows[cve] = archiveScore{unknown: uncertain}
-		}
+		return false, false, fmt.Errorf("EPSS archive exceeds compressed or decompressed size limit")
 	}
 	if badRows > 0 {
-		return rows, fmt.Errorf("skipped %d invalid or duplicate EPSS CSV rows", badRows)
+		return true, uncertain, fmt.Errorf("skipped %d invalid or duplicate EPSS CSV rows", badRows)
 	}
-	return rows, nil
+	return true, uncertain, nil
 }
 
 func archiveCSVHeader(ctx context.Context, reader *bufio.Reader) ([]string, error) {

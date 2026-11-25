@@ -104,6 +104,20 @@ The following environment variables can be used to configure the tool:
 | `EPSS_ARCHIVE_DIR` | — | Optional directory of official daily `epss_scores-YYYY-MM-DD.csv.gz` files. Keep the archive from 2021-04-14 through the previous UTC day. Import gives the archive lookup up to 3 seconds and reuses in-memory results while the files are unchanged. If the first score date is verified, the report can show a LEV lower bound from the available 30-day window scores. If that date cannot be verified, the report marks LEV unavailable. |
 | `CVE_RESERVATIONS_FILE` | — | Optional local JSON map of CVE IDs to official reservation dates (`YYYY-MM-DD`). Older archive gaps before a CVE was reserved do not invalidate that CVE's history. Use dates from the CVE Program bulk archive. |
 
+### Historical EPSS and LEV
+
+The optional index is useful when a fresh import needs historical LEV from many years of daily EPSS files. An operator prepares it offline with the same executable used to serve reports.
+
+```bash
+./ex-sbom lev-index build --archive /path/to/epss --as-of 2026-11-22 --output /private/ex-sbom/epss-2026-11-22 --reservations /path/to/reservations.json
+```
+
+Use an unused output path under a directory controlled by the service account. The command copies the inputs and publishes the read-only snapshot after the index is complete. Omit `--reservations` when there is no trusted reservations file. Set `EPSS_ARCHIVE_DIR` to the published directory. If reservations were supplied, set `CVE_RESERVATIONS_FILE` to `cve-reservations.json` inside that snapshot. An import uses the UTC day before the scan as its cutoff. When the index does not match or is unavailable, the app can scan the raw archive within the remaining three-second budget. Results distinguish an exact value, a lower bound, and unavailable evidence.
+
+Build a new snapshot for a new cutoff or corrected inputs. Switch both settings together and restart the app. A rollback uses the same steps with a previously verified snapshot. Stored reports read their recorded LEV evidence.
+
+Run `TestHistoricalLEVOfficialArchiveAcceptance` with `go test -v -count=1 -tags unit -run '^TestHistoricalLEVOfficialArchiveAcceptance$' ./internal/service/sbom` for the optional 46-CVE acceptance check. Set `EX_SBOM_LEV_ACCEPT_SNAPSHOT`, `EX_SBOM_LEV_ACCEPT_SOURCE`, `EX_SBOM_LEV_ACCEPT_CUTOFF` and `EX_SBOM_LEV_ACCEPT_CVES` to the snapshot, original archive, UTC cutoff and a file with 46 distinct CVEs. Set `EX_SBOM_LEV_ACCEPT_RESERVATIONS` if the original archive has a reservations file. Set `EX_SBOM_LEV_ACCEPT_REPORT` to a new private file path to retain per-CVE results.
+
 By default, the database file is stored under the platform-native config directory:
 - macOS: `~/Library/Application Support/ex-sbom/data.duckdb`
 - Linux: `~/.config/ex-sbom/data.duckdb`
