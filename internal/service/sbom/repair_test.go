@@ -41,6 +41,39 @@ func TestVerifiedRepair(t *testing.T) {
 	require.Empty(t, bom.RemediationAssessments(nil)[0].Upgrade)
 }
 
+func TestRepairCoverageUsesConfirmedInstalledEvidence(t *testing.T) {
+	for _, kev := range []KEVStatus{KEVUnlisted, KEVUnknown} {
+		for _, tc := range []struct {
+			name, display, upgrade string
+			evidence               *InstalledVersionEvidence
+			covered                int
+		}{
+			{"conflict", "1.19.0", "", &InstalledVersionEvidence{Ecosystem: "npm", Package: "fixture", Version: "1.19.0"}, 0},
+			{"confirmed PURL with placeholder display", "NOASSERTION", "1.20.3", &InstalledVersionEvidence{Ecosystem: "npm", Package: "fixture", Version: "1.19.0", Confirmed: true}, 1},
+			{"legacy without evidence", "1.19.0", "1.20.3", nil, 1},
+		} {
+			t.Run(tc.name+"/"+string(kev), func(t *testing.T) {
+				finding := Vuln{
+					ID: "CVE-2026-1000", CVSSScore: "8.0", KEV: kev,
+					SuggestFixVersion: "1.20.3",
+					RepairEvidence: &RepairEvidence{
+						Ecosystem: "npm", Package: "fixture", Installed: "1.19.0",
+						Ranges: []RepairInterval{{Start: "0", Fixed: "1.20.3"}},
+					},
+				}
+				bom := FormattedSBOM{ComponentInfo: map[string]Component{
+					"fixture": {Name: "fixture", Version: tc.display, InstalledVersion: tc.evidence, Vulns: []Vuln{finding}},
+				}}
+
+				assessment := bom.RemediationAssessments(nil)[0]
+				require.Equal(t, tc.upgrade, assessment.Upgrade)
+				require.Equal(t, tc.covered, assessment.Covered)
+				require.Equal(t, finding.SuggestFixVersion, assessment.Driver.Finding.SuggestFixVersion)
+			})
+		}
+	}
+}
+
 func TestCompatibleRepairSeries(t *testing.T) {
 	require.True(t, compatibleRepairSeries("v0.1.9", "v0.1.0"))
 	require.False(t, compatibleRepairSeries("v0.2.0", "v0.1.0"))

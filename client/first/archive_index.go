@@ -190,8 +190,8 @@ func sealedArchiveFileIdentity(path string, maxBytes int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0222 != 0 || info.Size() > maxBytes {
-		return "", fmt.Errorf("archive file %s must be a bounded read-only regular file", filepath.Base(path))
+	if !info.Mode().IsRegular() || info.Size() > maxBytes {
+		return "", fmt.Errorf("archive file %s must be a bounded regular file", filepath.Base(path))
 	}
 	return archiveIndexSealedIdentity(path)
 }

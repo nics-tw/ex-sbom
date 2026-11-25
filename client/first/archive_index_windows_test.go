@@ -36,6 +36,8 @@ func TestArchiveIndexRequiresReadOnlyWindowsDACL(t *testing.T) {
 			_, err = sealedArchiveFileIdentity(path, archiveIndexDatabaseLimit)
 			require.NoError(t, err)
 			require.NoError(t, setArchiveWindowsPathDACL(path, "FA", false, false))
+			t.Cleanup(func() { require.NoError(t, os.Chmod(path, 0600)) })
+			require.NoError(t, os.Chmod(path, 0400))
 			info, err := os.Stat(path)
 			require.NoError(t, err)
 			require.Zero(t, info.Mode().Perm()&0222)

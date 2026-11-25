@@ -182,7 +182,7 @@ func setArchiveWindowsDACL(handle windows.Handle, path, rights string, staging b
 }
 
 func setArchiveWindowsPathDACL(path, rights string, directory, staging bool) error {
-	handle, err := archiveWindowsHandle(path, windows.WRITE_DAC|windows.FILE_READ_ATTRIBUTES)
+	handle, err := archiveWindowsHandle(path, windows.READ_CONTROL|windows.WRITE_DAC|windows.FILE_READ_ATTRIBUTES)
 	if err != nil {
 		return err
 	}
@@ -206,30 +206,11 @@ func unsealArchiveDirectory(path string) error {
 }
 
 func sealArchiveFile(path string) error {
-	handle, err := archiveWindowsHandle(path, windows.FILE_READ_ATTRIBUTES|windows.FILE_WRITE_ATTRIBUTES|windows.WRITE_DAC)
-	if err != nil {
-		return err
-	}
-	defer windows.CloseHandle(handle)
-	info, err := archiveWindowsInfo(handle, path)
-	if err != nil {
-		return err
-	}
-	if info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0 {
-		return fmt.Errorf("archive snapshot file must be a regular file: %s", path)
-	}
-	basic := archiveWindowsBasicInfo{attributes: info.FileAttributes&^windows.FILE_ATTRIBUTE_NORMAL | windows.FILE_ATTRIBUTE_READONLY}
-	if err := windows.SetFileInformationByHandle(handle, windows.FileBasicInfo, (*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic))); err != nil {
-		return &os.PathError{Op: "mark archive file read-only", Path: path, Err: err}
-	}
-	return setArchiveWindowsDACL(handle, path, "FR", false)
+	return setArchiveWindowsPathDACL(path, "FR", false, false)
 }
 
 func unsealArchiveFile(path string) error {
-	if err := setArchiveWindowsPathDACL(path, "FA", false, false); err != nil {
-		return err
-	}
-	return os.Chmod(path, 0600)
+	return setArchiveWindowsPathDACL(path, "FA", false, false)
 }
 
 func removeArchiveStaging(path string) error {
@@ -253,7 +234,7 @@ func removeArchiveStaging(path string) error {
 
 func sealAndPublishArchiveDirectory(ctx context.Context, staging, output string) error {
 	// Keep the rename right on this handle while removing it from the DACL.
-	handle, err := archiveWindowsHandle(staging, windows.DELETE|windows.FILE_READ_ATTRIBUTES|windows.WRITE_DAC)
+	handle, err := archiveWindowsHandle(staging, windows.DELETE|windows.READ_CONTROL|windows.FILE_READ_ATTRIBUTES|windows.WRITE_DAC)
 	if err != nil {
 		return err
 	}
@@ -289,6 +270,10 @@ func sealAndPublishArchiveDirectory(ctx context.Context, staging, output string)
 	rename.fileNameLength = uint32((len(name) - 1) * 2)
 	size := uint32(unsafe.Offsetof(rename.fileName)) + uint32(len(name))*2
 	if err := windows.SetFileInformationByHandle(handle, windows.FileRenameInfo, (*byte)(unsafe.Pointer(&rename)), size); err != nil {
+		// Some Windows filesystems report access denied for a name collision.
+		if _, existingErr := os.Lstat(output); existingErr == nil {
+			err = os.ErrExist
+		}
 		return &os.LinkError{Op: "publish archive", Old: staging, New: output, Err: err}
 	}
 	return nil

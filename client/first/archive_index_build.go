@@ -176,9 +176,6 @@ func BuildArchiveIndex(ctx context.Context, source, reservations, asOf, output s
 		}
 	}
 	if err := sealAndPublishArchiveDirectory(ctx, staging, output); err != nil {
-		if _, exists := os.Lstat(output); exists == nil {
-			return fmt.Errorf("output %s: %w", output, os.ErrExist)
-		}
 		return err
 	}
 	published = true

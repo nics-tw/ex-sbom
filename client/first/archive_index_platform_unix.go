@@ -5,16 +5,26 @@
 package first
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"syscall"
 )
 
 func archiveIndexIdentity(path string) (string, error) {
+	return archiveUnixIdentity(path, false)
+}
+
+func archiveIndexSealedIdentity(path string) (string, error) {
+	return archiveUnixIdentity(path, true)
+}
+
+func archiveUnixIdentity(path string, sealed bool) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return "", err
+	}
+	if sealed && info.Mode().Perm()&0222 != 0 {
+		return "", fmt.Errorf("archive snapshot path must be read-only: %s", path)
 	}
 	stat := info.Sys().(*syscall.Stat_t)
 	if !info.IsDir() && (!info.Mode().IsRegular() || stat.Nlink != 1) {
@@ -22,10 +32,6 @@ func archiveIndexIdentity(path string) (string, error) {
 	}
 	return fmt.Sprintf("%d:%d:%d:%d:%d:%d", stat.Dev, stat.Ino, info.Size(), info.ModTime().UnixNano(),
 		archiveChangeTime(stat), info.Mode()), nil
-}
-
-func archiveIndexSealedIdentity(path string) (string, error) {
-	return archiveIndexIdentity(path)
 }
 
 func checkSealedArchiveDirectory(path string) error {
@@ -52,14 +58,4 @@ func unsealArchiveDirectory(path string) error { return os.Chmod(path, 0700) }
 func removeArchiveStaging(path string) error {
 	_ = unsealArchiveDirectory(path)
 	return os.RemoveAll(path)
-}
-
-func sealAndPublishArchiveDirectory(ctx context.Context, staging, output string) error {
-	if err := sealArchiveDirectory(staging); err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return publishArchiveDirectory(staging, output)
 }

@@ -98,12 +98,12 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 			entry.UrgentCVEs = entry.KEVCVEs
 		}
 
-		var covered []FindingAssessment
-		if len(entry.KEVCVEs) == 0 {
-			entry.Upgrade, covered = verifiedRepair(component.Version, findings)
-		} else if !entry.KEVVersionPending {
-			entry.Upgrade, covered = verifiedRepair(confirmedVersion, findings)
+		repairVersion := confirmedVersion
+		if component.InstalledVersion == nil && !entry.KEVVersionPending {
+			repairVersion = component.Version
 		}
+		upgrade, covered := verifiedRepair(repairVersion, findings)
+		entry.Upgrade = upgrade
 		if evidence := entry.Driver.Finding.RepairEvidence; evidence != nil {
 			entry.Package, entry.Ecosystem = evidence.Package, evidence.Ecosystem
 		}
