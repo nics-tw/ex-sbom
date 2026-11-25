@@ -10,6 +10,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRemediationPolicyAtDefaultThresholds(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		finding  Vuln
+		archive  string
+		priority RemediationPriority
+	}{
+		{"both inclusive", Vuln{CVSSScore: "7.0", EPSS: "0.10"}, LEVArchiveDisabled, RemediationElevated},
+		{"rounded display only", Vuln{CVSSScore: "7.0", EPSS: "0.09999"}, LEVArchiveDisabled, RemediationAttention},
+		{"CVSS only", Vuln{CVSSScore: "9.8"}, LEVArchiveDisabled, RemediationAttention},
+		{"EPSS only", Vuln{EPSS: "0.95"}, LEVArchiveDisabled, RemediationAttention},
+		{"valid zero", Vuln{CVSSScore: "0", EPSS: "0", KEV: KEVUnlisted}, LEVArchiveDisabled, RemediationRoutine},
+		{"unknown severity", Vuln{EPSS: "0", KEV: KEVUnlisted}, LEVArchiveDisabled, RemediationReview},
+		{"KEV check missing", Vuln{CVSSScore: "0", EPSS: "0"}, LEVArchiveDisabled, RemediationReview},
+		{"LEV status missing", Vuln{CVSSScore: "0", EPSS: "0", KEV: KEVUnlisted}, "", RemediationReview},
+		{"lower bound below threshold", Vuln{CVSSScore: "3.1", EPSS: "0.02", KEV: KEVUnlisted, LEV: "0.06", LEVMethod: first.LEVMethod, LEVPartial: true}, LEVArchiveConfigured, RemediationReview},
+		{"lower bound reaches threshold", Vuln{CVSSScore: "3.1", EPSS: "0.02", KEV: KEVUnlisted, LEV: "0.10", LEVMethod: first.LEVMethod, LEVPartial: true}, LEVArchiveConfigured, RemediationAttention},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := &ReportSource{LEVArchiveStatus: tc.archive}
+			got := assessFinding(tc.finding, "1.0.0", new(RemediationThreshold), source)
+			require.Equal(t, tc.priority, got.Priority)
+			withoutPolicy := assessFinding(tc.finding, "1.0.0", nil, source)
+			require.Equal(t, RemediationReview, withoutPolicy.Priority)
+		})
+	}
+}
+
+func TestRemediationDoesNotCombineThresholdsAcrossFindings(t *testing.T) {
+	findings := []Vuln{
+		{ID: "severity-only", CVSSScore: "9.8"},
+		{ID: "likelihood-only", EPSS: "0.2"},
+	}
+	bom := FormattedSBOM{
+		ReportSource: &ReportSource{LEVArchiveStatus: LEVArchiveDisabled},
+		ComponentInfo: map[string]Component{
+			"split":   {Vulns: findings},
+			"routine": {Vulns: []Vuln{{CVSSScore: "1", EPSS: "0", KEV: KEVUnlisted}}},
+			"review":  {Vulns: []Vuln{{CVSSScore: "1"}}},
+		},
+	}
+	for range 2 {
+		got := bom.RemediationAssessments(new(RemediationThreshold))
+		require.Len(t, got, 3)
+		require.Equal(t, "split", got[0].Key)
+		require.Equal(t, RemediationAttention, got[0].Driver.Priority)
+		require.Equal(t, "likelihood-only", got[0].Driver.Finding.ID)
+		require.Equal(t, "review", got[1].Key)
+		require.Equal(t, "routine", got[2].Key)
+		slices.Reverse(findings)
+	}
+}
+
 func TestRemediationAssessmentOrderIsStableAcrossFindingOrder(t *testing.T) {
 	threshold := RemediationThreshold
 	tiedEPSS := Vuln{ID: "CVE-2025-0001", CVSSScore: "8.0", EPSS: "0.5"}
