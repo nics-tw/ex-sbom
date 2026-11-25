@@ -85,7 +85,7 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
    ./ex-sbom
    ```
 5. 您的瀏覽器應該會自動打開一個新標籤頁，網址為 `http://localhost:8080`。如果沒有自動打開，您可以手動在瀏覽器中輸入此網址。
-   （如果是本地開發，您可以直接執行 `go run main.go` 來啟動它。）
+本機開發時，可執行 `go run .` 啟動服務。
 
 從原始碼執行上述 `go build`，可使用開發用 PDF 產生器。正式發布版的 Windows x64、macOS ARM64、Linux ARM64 與 Linux x64 執行檔由 [GitHub Actions 建置與驗證](.github/workflows/ci.yml)，並內嵌產生器與字型。
 

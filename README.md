@@ -85,7 +85,7 @@ go build -o ex-sbom
 
 5. Your browser should automatically open a new tab with the URL `http://localhost:8080`. If it doesn't, you can manually open your browser and enter the URL.
 
-（If for local development, you can merely run the command `go run main.go` to start the server.）
+For local development, run `go run .` to start the server.
 
 The `go build` command above uses the development PDF renderer. [GitHub Actions builds and verifies](.github/workflows/ci.yml) official releases for Windows x64, macOS ARM64, Linux ARM64 and Linux x64 with the PDF renderer and fonts bundled.
 
