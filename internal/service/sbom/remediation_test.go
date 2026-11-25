@@ -89,6 +89,27 @@ func TestRemediationAssessmentOrderIsStableAcrossFindingOrder(t *testing.T) {
 	}
 }
 
+func TestRemediationDriverBreaksTieByLastAffectedVersion(t *testing.T) {
+	first := Vuln{ID: "CVE-2025-0001", CVSSScore: "8.0", EPSS: "0.5", RepairEvidence: &RepairEvidence{
+		AdvisoryID: "CVE-2025-0001", Ecosystem: "npm", Package: "fixture", Installed: "1.0.0",
+		Ranges: []RepairInterval{{Start: "0", Last: "1.1.0"}},
+	}}
+	second := first
+	evidence := *first.RepairEvidence
+	evidence.Ranges = []RepairInterval{{Start: "0", Last: "1.2.0"}}
+	second.RepairEvidence = &evidence
+	findings := []Vuln{first, second}
+	bom := FormattedSBOM{ComponentInfo: map[string]Component{
+		"fixture": {Name: "fixture", Version: "1.0.0", Vulns: findings},
+	}}
+	for range 2 {
+		got := bom.RemediationAssessments(new(RemediationThreshold))
+		require.Len(t, got, 1)
+		require.Equal(t, first, got[0].Driver.Finding)
+		slices.Reverse(findings)
+	}
+}
+
 func TestRemediationAssessments(t *testing.T) {
 	urgent := Vuln{ID: "GHSA-test", KEV: KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"}}
 	unversionedKEV := urgent

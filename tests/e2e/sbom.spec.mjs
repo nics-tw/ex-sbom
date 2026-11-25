@@ -752,6 +752,20 @@ test("downloads verified remediation findings after storing and reopening an SBO
     } finally {
       await handle.close();
     }
+    let content;
+    try {
+      ({ stdout: content } = await promisify(execFile)("pdftotext", ["-raw", "-eol", "unix", "-enc", "UTF-8", output, "-"]));
+    } catch (error) {
+      if (error.code !== "ENOENT" || process.env.CI) throw error;
+      testInfo.annotations.push({ type: "PDF text check", description: "Install Poppler to verify stored LEV values" });
+      continue;
+    }
+    content = content.replaceAll("\u200b", "");
+    const findingHeading = /^(?:CVE-2025-99999 · fixture-remediation 1\.0\.0|(?:Component|元件)\s*\|\s*fixture-remediation\n(?:Version|版本)\s*\|\s*1\.0\.0\n(?:Vulnerability ID|弱點識別碼)\s*\|\s*CVE-2025-99999)$/m;
+    expect(content).toMatch(findingHeading);
+    const findingText = content.split(findingHeading)[1].split(/^(?:CVE-\d{4}-\d+ · |(?:Component|元件)\s*\|)/m)[0];
+    expect(findingText).toMatch(/^LEV[ \t]+(?:\|[ \t]+)?37%$/m);
+    expect(content).not.toMatch(/^LEV[ \t]+(?:\|[ \t]+)?41%$/m);
   }
 });
 
