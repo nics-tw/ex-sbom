@@ -266,8 +266,8 @@ func (d *document) taggedRemediationAction(rank int, entry ssbom.ComponentAssess
 		signal = label("Known exploitation (CISA KEV)", "已知遭利用（CISA KEV）")
 	}
 	field(label("Basis", "依據"), finding.ID+" · CVSS "+score+" · "+signal)
-	if len(entry.UrgentCVEs) > 0 {
-		field(label("Listed by CISA KEV", "列入 CISA KEV"), d.remediationKEVList(entry.UrgentCVEs, homepage))
+	if len(entry.KEVCVEs) > 0 {
+		field(label("Listed by CISA KEV", "列入 CISA KEV"), d.remediationKEVList(entry.KEVCVEs, homepage))
 	}
 	if entry.Upgrade != "" {
 		field(label("Upgrade to test", "建議驗測版本"), entry.Upgrade)
@@ -279,6 +279,8 @@ func (d *document) taggedRemediationAction(rank int, entry ssbom.ComponentAssess
 		if len(action.Coverage) > 0 {
 			field(label("KEV findings expected to be addressed", "預計涵蓋的 KEV 弱點"), d.remediationKEVList(action.Coverage, homepage))
 		}
+	} else if entry.KEVVersionPending {
+		field(label("Upgrade to test", "建議驗測版本"), label("Pending", "待確認"))
 	} else {
 		field(label("Common fix version", "共同修補版本"),
 			label("Unverified. See individual advisory candidates in the details.", "尚未驗證，個別公告候選請見弱點明細。"))
@@ -301,8 +303,11 @@ func (d *document) taggedRemediationAction(rank int, entry ssbom.ComponentAssess
 	if homepage && urgent {
 		next = label("Confirm actual deployment and exposure. ", "確認實際部署與曝險。") + next
 	}
-	if entry.Driver.KEVMatch && strings.TrimSpace(entry.Version) == "" {
+	if entry.KEVVersionPending {
 		next = d.confirmInstalledVersionAction()
+		if !homepage {
+			field(label("Fix coverage", "修補涵蓋範圍"), d.pendingRemediationCoverage())
+		}
 	}
 	field(label("Next action", "下一步"), next)
 	return action

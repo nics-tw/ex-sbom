@@ -6,6 +6,7 @@ package ssbom
 
 import (
 	"cmp"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,15 +20,26 @@ import (
 	"ex-sbom/util/file"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
+	"github.com/google/osv-scalibr/purl"
 	"github.com/google/osv-scanner/v2/pkg/osvscanner"
 )
 
 func buildCDXResult(bom cdx.BOM, rawData []byte, name string) (FormattedSBOM, string, time.Time, error) {
 	components := flattenCdxComponents(nil, bom.Components)
+	scanData := rawData
+	if scanComponents := cdxScanComponents(bom.Components); scanComponents != bom.Components {
+		scanBOM := bom
+		scanBOM.Components = scanComponents
+		var err error
+		scanData, err = json.Marshal(scanBOM)
+		if err != nil {
+			return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("%w: preparing scan input: %w", ErrScanFailed, err)
+		}
+	}
 	refToName := getCdxBomRefToName(&components)
 	keys := getCdxComponents(&components)
 	goComponents := make(map[string]bool)
-	componentInfo, observation, err := getCdxComponentInfo(&components, rawData, name, keys, refToName, goComponents)
+	componentInfo, observation, err := getCdxComponentInfo(&components, scanData, name, keys, refToName, goComponents)
 	if err != nil {
 		return FormattedSBOM{}, "", time.Time{}, err
 	}
@@ -416,17 +428,23 @@ func getCdxComponentInfo(input *[]cdx.Component, files []byte, filename string, 
 			if c.BOMRef != "" {
 				refToName[c.BOMRef] = key
 			}
-			pkg := file.IdentifyPackage(c.Name, c.Version, c.PackageURL)
+			pkg := file.IdentifyPackage(c.Name, cdxScanVersion(c), c.PackageURL)
 			vulns := packageFindings(vulnPkgs, pkg)
+			var installed *InstalledVersionEvidence
+			if len(vulns) > 0 {
+				locator, _ := purl.FromString(c.PackageURL)
+				installed = scannedInstalledVersion(pkg, c.Version, locator.Version)
+			}
 			if pkg.Ecosystem == "Go" && len(vulns) > 0 {
 				goComponents[key] = true
 			}
 			componentInfo[key] = Component{
-				Name:       c.Name,
-				Version:    cmp.Or(c.Version, pkg.Version),
-				VulnNumber: len(vulns),
-				Vulns:      vulns,
-				Licences:   getCdxLicences(c.Licenses),
+				Name:             c.Name,
+				Version:          cmp.Or(c.Version, pkg.Version),
+				InstalledVersion: installed,
+				VulnNumber:       len(vulns),
+				Vulns:            vulns,
+				Licences:         getCdxLicences(c.Licenses),
 			}
 		}
 	}
@@ -472,10 +490,42 @@ func flattenCdxComponents(flat []cdx.Component, components *[]cdx.Component) []c
 	return flat
 }
 
+func cdxScanComponents(components *[]cdx.Component) *[]cdx.Component {
+	if components == nil {
+		return nil
+	}
+	scanned := components
+	for i, component := range *components {
+		version := cdxScanVersion(component)
+		children := cdxScanComponents(component.Components)
+		if version == component.Version && children == component.Components {
+			continue
+		}
+		if scanned == components {
+			clone := slices.Clone(*components)
+			scanned = &clone
+		}
+		(*scanned)[i].Version = version
+		(*scanned)[i].Components = children
+	}
+	return scanned
+}
+
+func cdxScanVersion(component cdx.Component) string {
+	// SCALIBR already uses the PURL version when the declaration is empty.
+	if component.Version != "" && usableVersion(component.Version) == "" {
+		locator, err := purl.FromString(component.PackageURL)
+		if err == nil && usableVersion(locator.Version) != "" {
+			return locator.Version
+		}
+	}
+	return component.Version
+}
+
 func cdxReportPackages(components []cdx.Component) []file.PackageVersion {
 	packages := make([]file.PackageVersion, 0, len(components))
 	for _, component := range components {
-		packages = append(packages, file.IdentifyPackage(component.Name, component.Version, component.PackageURL))
+		packages = append(packages, file.IdentifyPackage(component.Name, cdxScanVersion(component), component.PackageURL))
 	}
 	return packages
 }

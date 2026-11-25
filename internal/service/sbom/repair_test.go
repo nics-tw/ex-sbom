@@ -21,7 +21,7 @@ func TestVerifiedRepair(t *testing.T) {
 	late := makeFinding("CVE-2025-99999", "7.5", "1.20.9")
 	urgent := makeFinding("CVE-2024-99999", "6.5", "2.0.0")
 	urgent.KEV, urgent.KEVCVE = KEVListed, urgent.ID
-	component := Component{Name: "body-parser", Version: "1.19.0", Vulns: []Vuln{early, late, urgent}}
+	component := Component{Name: "body-parser", Version: "1.19.0", InstalledVersion: confirmedVersion("npm", "body-parser", "1.19.0"), Vulns: []Vuln{early, late, urgent}}
 	bom := FormattedSBOM{ComponentInfo: map[string]Component{"a": component, "b": component}}
 	rows := bom.RemediationAssessments(nil)
 	require.Equal(t, "1.20.9", rows[0].Upgrade)

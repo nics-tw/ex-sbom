@@ -41,8 +41,9 @@ type (
 
 	// Component is a struct that contains the information from both the original SBOM file and scanned info from the osv-scanner util
 	Component struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
+		Name             string                    `json:"name"`
+		Version          string                    `json:"version"`
+		InstalledVersion *InstalledVersionEvidence `json:"installed_version,omitempty"`
 		// VulnNumber is the number of total vulnerabilities that the component has
 		VulnNumber      int    `json:"vuln_number"`
 		Vulns           []Vuln `json:"vulns"`

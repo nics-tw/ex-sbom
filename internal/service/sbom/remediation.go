@@ -6,7 +6,6 @@ import (
 	"cmp"
 	"slices"
 	"strconv"
-	"strings"
 )
 
 type RemediationPriority int
@@ -20,7 +19,7 @@ const (
 )
 
 const (
-	RemediationPolicyVersion = "2"
+	RemediationPolicyVersion = "3"
 	RemediationThreshold     = 0.10
 )
 
@@ -36,6 +35,8 @@ type FindingAssessment struct {
 }
 
 type ComponentAssessment struct {
+	KEVCVEs                    []string
+	KEVVersionPending          bool
 	Key                        string
 	Name                       string
 	Version                    string
@@ -74,27 +75,35 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 			entry.Name += " (" + key + ")"
 		}
 		findings := make([]FindingAssessment, 0, len(component.Vulns))
+		confirmedVersion := component.ConfirmedInstalledVersion()
 		for i, finding := range component.Vulns {
-			item := assessFinding(finding, component.Version, threshold, bom.ReportSource)
+			item := assessFinding(finding, confirmedVersion, threshold, bom.ReportSource)
 			item.index = i
 			findings = append(findings, item)
+			entry.KEVCVEs = append(entry.KEVCVEs, item.kevCVEs...)
 			for _, cve := range finding.CVEIDs {
 				remainingByCVE[cve]++
 			}
 			if i == 0 || compareFindings(item, entry.Driver) < 0 {
 				entry.Driver = item
 			}
-			switch item.Priority {
-			case RemediationReview:
+			if item.Priority == RemediationReview {
 				entry.NeedsReview++
-			case RemediationUrgent:
-				entry.UrgentCVEs = append(entry.UrgentCVEs, item.kevCVEs...)
 			}
 		}
-		slices.Sort(entry.UrgentCVEs)
-		entry.UrgentCVEs = slices.Compact(entry.UrgentCVEs)
-		upgrade, covered := verifiedRepair(component.Version, findings)
-		entry.Upgrade = upgrade
+		slices.Sort(entry.KEVCVEs)
+		entry.KEVCVEs = slices.Compact(entry.KEVCVEs)
+		entry.KEVVersionPending = len(entry.KEVCVEs) != 0 && confirmedVersion == ""
+		if !entry.KEVVersionPending {
+			entry.UrgentCVEs = entry.KEVCVEs
+		}
+
+		var covered []FindingAssessment
+		if len(entry.KEVCVEs) == 0 {
+			entry.Upgrade, covered = verifiedRepair(component.Version, findings)
+		} else if !entry.KEVVersionPending {
+			entry.Upgrade, covered = verifiedRepair(confirmedVersion, findings)
+		}
 		if evidence := entry.Driver.Finding.RepairEvidence; evidence != nil {
 			entry.Package, entry.Ecosystem = evidence.Package, evidence.Ecosystem
 		}
@@ -108,7 +117,7 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 			}
 		}
 		entry.ResidualUrgentCVEs = append([]string(nil), entry.UrgentCVEs...)
-		if upgrade != "" {
+		if entry.Upgrade != "" {
 			for _, id := range entry.UrgentCVEs {
 				total, resolved := 0, 0
 				for _, item := range findings {
@@ -157,7 +166,7 @@ func (bom FormattedSBOM) RemediationAssessments(threshold *float64) []ComponentA
 	return result
 }
 
-func assessFinding(finding Vuln, version string, threshold *float64, source *ReportSource) FindingAssessment {
+func assessFinding(finding Vuln, confirmedVersion string, threshold *float64, source *ReportSource) FindingAssessment {
 	score, err := strconv.ParseFloat(finding.CVSSScore, 64)
 	kev, cves := finding.KEVEvidence()
 	kevMatch := len(cves) != 0
@@ -169,7 +178,7 @@ func assessFinding(finding Vuln, version string, threshold *float64, source *Rep
 	highCVSS := item.HasCVSS && score >= CVSSThreshold
 	highSignal := threshold != nil && signal.Available && signal.Value >= *threshold
 	switch {
-	case kevMatch && strings.TrimSpace(version) != "":
+	case kevMatch && confirmedVersion != "":
 		item.Priority = RemediationUrgent
 	case kevMatch || highCVSS && highSignal:
 		item.Priority = RemediationElevated

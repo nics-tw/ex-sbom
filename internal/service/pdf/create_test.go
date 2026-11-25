@@ -76,6 +76,10 @@ func TestRemediationHomepageWithoutFindings(t *testing.T) {
 	}
 }
 
+func pdfConfirmedVersion(name, version string) *ssbom.InstalledVersionEvidence {
+	return &ssbom.InstalledVersionEvidence{Ecosystem: "npm", Package: name, Version: version, Confirmed: true}
+}
+
 func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 	extract, err := exec.LookPath("pdftotext")
 	if err != nil {
@@ -89,6 +93,7 @@ func TestRemediationHomepageLinksToAdditionalUrgentFindings(t *testing.T) {
 	for _, key := range []string{"a", "b", "c", "d"} {
 		bom.ComponentInfo[key] = ssbom.Component{
 			Name: key + "-" + strings.Repeat("long-component-name-", 20), Version: "1.0.0",
+			InstalledVersion: pdfConfirmedVersion(key, "1.0.0"),
 			Vulns: []ssbom.Vuln{{ID: "CVE-2025-0001", CVEIDs: []string{"CVE-2025-0001"},
 				KEV: ssbom.KEVListed, KEVCVE: "CVE-2025-0001"}},
 		}
@@ -180,14 +185,17 @@ func TestRemediationHomepageKEVEvidence(t *testing.T) {
 		KEV: ssbom.KEVListed, KEVCVE: "CVE-2025-0002"}
 	unlisted := ssbom.Vuln{ID: "CVE-2025-0003", CVEIDs: []string{"CVE-2025-0003"}, KEV: ssbom.KEVUnlisted}
 	for _, tc := range []struct {
-		name     string
-		findings []ssbom.Vuln
-		checked  *time.Time
-		count    string
+		name      string
+		findings  []ssbom.Vuln
+		checked   *time.Time
+		count     string
+		confirmed bool
+		kevCount  string
 	}{
-		{"legacy CVE", []ssbom.Vuln{legacy}, nil, "Pending"},
-		{"legacy CVE alongside checked CVE", []ssbom.Vuln{legacy, listed}, &checked, "At least 1"},
-		{"checked CVE and finding without CVE", []ssbom.Vuln{unlisted, {ID: "GHSA-test"}}, &checked, "0"},
+		{"legacy CVE", []ssbom.Vuln{legacy}, nil, "Pending", false, "Pending"},
+		{"legacy CVE alongside checked CVE", []ssbom.Vuln{legacy, listed}, &checked, "At least 1", true, "At least 1"},
+		{"KEV with legacy display version", []ssbom.Vuln{listed}, &checked, "Pending", false, "1"},
+		{"checked CVE and finding without CVE", []ssbom.Vuln{unlisted, {ID: "GHSA-test"}}, &checked, "0", false, "0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bom := ssbom.FormattedSBOM{
@@ -195,6 +203,11 @@ func TestRemediationHomepageKEVEvidence(t *testing.T) {
 				ComponentInfo: map[string]ssbom.Component{
 					"example": {Name: "example", Version: "1.0.0", Vulns: tc.findings},
 				},
+			}
+			if tc.confirmed {
+				component := bom.ComponentInfo["example"]
+				component.InstalledVersion = pdfConfirmedVersion("example", component.Version)
+				bom.ComponentInfo["example"] = component
 			}
 			var output bytes.Buffer
 			require.NoError(t, Generate(&output, Report{Language: English, SBOM: bom}))
@@ -204,7 +217,12 @@ func TestRemediationHomepageKEVEvidence(t *testing.T) {
 			require.NoError(t, err)
 			text := strings.Join(strings.Fields(string(page)), " ")
 			require.Contains(t, text, "Components to update immediately "+tc.count)
-			require.Contains(t, text, "CVEs listed in CISA KEV "+tc.count)
+			require.Contains(t, text, "CVEs listed in CISA KEV "+tc.kevCount)
+			if tc.name == "KEV with legacy display version" {
+				require.Contains(t, text, "Upgrade to test Pending")
+				require.Contains(t, text, "Confirm the installed version")
+				require.Contains(t, text, "Coverage is pending")
+			}
 		})
 	}
 }
@@ -218,7 +236,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 			name: {Name: name, Version: "1.0",
 				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", EPSS: "0.02", LEV: "0.937221", SuggestFixVersion: "9.9.9",
 					Summary: "弱點摘要", Details: strings.Repeat("跨頁內容 Mixed-language text. ", 400) + "末頁標記"}}},
-			"urgent": {Name: "urgent-package", Version: "1.0", Vulns: []ssbom.Vuln{
+			"urgent": {Name: "urgent-package", Version: "1.0", InstalledVersion: pdfConfirmedVersion("urgent-package", "1.0"), Vulns: []ssbom.Vuln{
 				{ID: "CVE-2024-0001", CVSSScore: "8.0", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"},
 					RepairEvidence: &ssbom.RepairEvidence{AdvisoryID: "CVE-2024-0001", Ecosystem: "npm", Package: "urgent-package", Installed: "1.0",
 						Ranges: []ssbom.RepairInterval{{Start: "0", Fixed: "1.2.3"}}}},
@@ -422,7 +440,7 @@ func TestRemediationHomepageKeepsCheckpointWithManyKEVFindings(t *testing.T) {
 			var output bytes.Buffer
 			bom := ssbom.FormattedSBOM{
 				ComponentInfo: map[string]ssbom.Component{
-					"one": {Name: "first-" + strings.Repeat("long-component-name-", 36), Version: "1.0.0", Vulns: findings},
+					"one": {Name: "first-" + strings.Repeat("long-component-name-", 36), Version: "1.0.0", InstalledVersion: pdfConfirmedVersion("first", "1.0.0"), Vulns: findings},
 				},
 			}
 			require.NoError(t, generateUntagged(&output, Report{Language: lang, SBOM: bom}))

@@ -309,17 +309,25 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, na
 		if ref != "" && !isGeneratedRoot(ref) {
 			key := componentKey(p.PackageName, ref, p.PackageVersion, reserved, result)
 			refToName[ref] = key
-			pkg := spdxReportPackage(p)
+			pkg, locators := spdxReportPackage(p)
 			vulns := packageFindings(vulnPkgs, pkg)
+			var installed *InstalledVersionEvidence
+			if len(vulns) > 0 {
+				installed = scannedInstalledVersion(pkg, p.PackageVersion)
+				if installed != nil && installed.Confirmed {
+					installed.Confirmed = spdxLocatorsAgree(installed, locators)
+				}
+			}
 			if pkg.Ecosystem == "Go" && len(vulns) > 0 {
 				goComponents[key] = true
 			}
 			result[key] = Component{
-				Name:       p.PackageName,
-				Version:    cmp.Or(p.PackageVersion, pkg.Version),
-				VulnNumber: len(vulns),
-				Vulns:      vulns,
-				Licences:   getSpdxLicences(p.PackageLicenseDeclared),
+				Name:             p.PackageName,
+				Version:          cmp.Or(p.PackageVersion, pkg.Version),
+				InstalledVersion: installed,
+				VulnNumber:       len(vulns),
+				Vulns:            vulns,
+				Licences:         getSpdxLicences(p.PackageLicenseDeclared),
 			}
 		}
 	}
@@ -386,27 +394,42 @@ func spdxReportPackages(document *spdx.Document) []file.PackageVersion {
 		if pkg.PackageSPDXIdentifier == "" || isGeneratedRoot(string(pkg.PackageSPDXIdentifier)) {
 			continue
 		}
-		packages = append(packages, spdxReportPackage(pkg))
+		identity, _ := spdxReportPackage(pkg)
+		packages = append(packages, identity)
 	}
 	return packages
 }
 
-func spdxReportPackage(pkg *spdx.Package) file.PackageVersion {
-	var chosen *purl.PackageURL
+func spdxReportPackage(pkg *spdx.Package) (file.PackageVersion, []purl.PackageURL) {
+	var locators []purl.PackageURL
 	for _, ref := range pkg.PackageExternalReferences {
 		if ref == nil || (ref.RefType != "purl" && ref.RefType != "http://spdx.org/rdf/references/purl") {
 			continue
 		}
 		if parsed, err := purl.FromString(ref.Locator); err == nil {
-			chosen = &parsed
+			locators = append(locators, parsed)
 		}
 	}
-	if chosen == nil {
-		return file.PackageVersion{}
+	if len(locators) == 0 {
+		return file.PackageVersion{}, nil
 	}
-	version := chosen.Version
-	if version == "" {
-		version = pkg.PackageVersion
+	// SCALIBR uses the last parseable PURL.
+	chosen := locators[len(locators)-1]
+	version := cmp.Or(chosen.Version, pkg.PackageVersion)
+	return file.IdentifyPackage(chosen.Name, version, chosen.String()), locators
+}
+
+func spdxLocatorsAgree(installed *InstalledVersionEvidence, locators []purl.PackageURL) bool {
+	for _, locator := range locators {
+		version := usableVersion(locator.Version)
+		identity := file.IdentifyPackage(locator.Name, cmp.Or(version, installed.Version), locator.String())
+		if identity.Name == "" {
+			continue
+		}
+		if identity.Name != installed.Package || identity.Ecosystem != installed.Ecosystem ||
+			(version != "" && !sameInstalledVersion(installed.Ecosystem, version, installed.Version)) {
+			return false
+		}
 	}
-	return file.IdentifyPackage(chosen.Name, version, chosen.String())
+	return true
 }

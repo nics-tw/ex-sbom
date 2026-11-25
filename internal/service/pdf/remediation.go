@@ -89,7 +89,7 @@ func remediationEvidence(source *ssbom.ReportSource, components map[string]ssbom
 			for _, id := range ids {
 				listed[id] = struct{}{}
 			}
-			versionKnown = versionKnown && strings.TrimSpace(component.Version) != ""
+			versionKnown = versionKnown && component.ConfirmedInstalledVersion() != ""
 		}
 	}
 	return len(listed), kevComplete, kevComplete && versionKnown
@@ -288,8 +288,8 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 		signal = d.label("Known exploitation (CISA KEV)", "已知遭利用（CISA KEV）")
 	}
 	field(d.label("Basis", "依據"), finding.ID+" · CVSS "+score+" · "+signal)
-	if len(entry.UrgentCVEs) > 0 {
-		field(d.label("Listed by CISA KEV", "列入 CISA KEV"), d.remediationKEVList(entry.UrgentCVEs, homepage))
+	if len(entry.KEVCVEs) > 0 {
+		field(d.label("Listed by CISA KEV", "列入 CISA KEV"), d.remediationKEVList(entry.KEVCVEs, homepage))
 	}
 	if entry.Upgrade != "" {
 		field(d.label("Upgrade to test", "建議驗測版本"), entry.Upgrade)
@@ -302,6 +302,8 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 		if len(coveredKEV) != 0 {
 			field(d.label("KEV findings expected to be addressed", "預計涵蓋的 KEV 弱點"), d.remediationKEVList(coveredKEV, homepage))
 		}
+	} else if entry.KEVVersionPending {
+		field(d.label("Upgrade to test", "建議驗測版本"), d.label("Pending", "待確認"))
 	} else {
 		field(d.label("Common fix version", "共同修補版本"),
 			d.label("Unverified. See individual advisory candidates in the details.", "尚未驗證，個別公告候選請見弱點明細。"))
@@ -325,8 +327,11 @@ func (d *document) remediationEntry(rank int, entry ssbom.ComponentAssessment, l
 	if homepage && urgent {
 		action = d.label("Confirm actual deployment and exposure. ", "確認實際部署與曝險。") + action
 	}
-	if entry.Driver.KEVMatch && strings.TrimSpace(entry.Version) == "" {
+	if entry.KEVVersionPending {
 		action = d.confirmInstalledVersionAction()
+		if !homepage {
+			field(d.label("Fix coverage", "修補涵蓋範圍"), d.pendingRemediationCoverage())
+		}
 	}
 	field(d.label("Next action", "下一步"), action)
 	if homepage {

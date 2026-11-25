@@ -233,8 +233,9 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 		ComponentToLevel: map[string]int{"priority": 0, "urgent": 1, "elevated": 1, "review": 1},
 		ComponentInfo: map[string]ssbom.Component{
 			"priority": {
-				Name:    componentName,
-				Version: "1.0.0",
+				Name:             componentName,
+				Version:          "1.0.0",
+				InstalledVersion: &ssbom.InstalledVersionEvidence{Ecosystem: "npm", Package: "example", Version: "1.0.0", Confirmed: true},
 				Vulns: []ssbom.Vuln{
 					{
 						ID: covered, CVEIDs: []string{covered}, CVSSScore: "9.8", CVSSVersion: "3.1",
@@ -252,6 +253,7 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 			},
 			"urgent": {
 				Name: "urgent\u202Ecomponent", Version: "2.0.0",
+				InstalledVersion: &ssbom.InstalledVersionEvidence{Ecosystem: "npm", Package: "urgent", Version: "2.0.0", Confirmed: true},
 				Vulns: []ssbom.Vuln{{
 					ID: "CVE-2099-1002", CVEIDs: []string{"CVE-2099-1002"}, CVSSScore: "7.1",
 					KEV: ssbom.KEVListed, KEVCVE: "CVE-2099-1002",
@@ -335,12 +337,12 @@ func TestTaggedReportDownloadPreservesPrioritiesAndEvidence(t *testing.T) {
 			require.Contains(t, continuation, "2 "+urgentName+" 2.0.0 7.1")
 			if tc.language == "en" {
 				require.Contains(t, continuation, "verify missing inputs before deferring work")
-				require.Contains(t, continuation, "ex-sbom policy v2")
+				require.Contains(t, continuation, "ex-sbom policy v3")
 				require.Contains(t, continuation, "Repair version policy")
 				require.Contains(t, continuation, "the same minor series for 0.x")
 			} else {
 				require.Contains(t, continuation, "請先查證缺項，再決定是否延後")
-				require.Contains(t, continuation, "ex-sbom 排序規則 v2")
+				require.Contains(t, continuation, "ex-sbom 排序規則 v3")
 				require.Contains(t, continuation, "修補版本選擇")
 				require.Contains(t, continuation, "0.x 限同一次要版本")
 			}
@@ -407,6 +409,8 @@ func TestTaggedReportDownloadDistinguishesMissingUrgencyEvidence(t *testing.T) {
 		{"partial query", "至少 1", "1.0.0", "At least 1", ssbom.ReportSource{Status: ssbom.QueryPartial, KEVCheckedAt: &checked}, []ssbom.Vuln{known}},
 		{"one unchecked finding", "至少 1", "1.0.0", "At least 1", ssbom.ReportSource{Status: ssbom.QueryCompleted, KEVCheckedAt: &checked}, []ssbom.Vuln{known, unknown}},
 		{"unconfirmed version", "待查證", "", "Pending", ssbom.ReportSource{Status: ssbom.QueryCompleted, KEVCheckedAt: &checked}, []ssbom.Vuln{known}},
+		{"legacy display only", "待查證", "1.0.0", "Pending", ssbom.ReportSource{Status: ssbom.QueryCompleted, KEVCheckedAt: &checked}, []ssbom.Vuln{known}},
+		{"placeholder display", "待查證", "NOASSERTION", "Pending", ssbom.ReportSource{Status: ssbom.QueryCompleted, KEVCheckedAt: &checked}, []ssbom.Vuln{known}},
 		{"confirmed zero", "0", "1.0.0", "0", ssbom.ReportSource{Status: ssbom.QueryCompleted, KEVCheckedAt: &checked}, []ssbom.Vuln{unlisted}},
 		{"no CVE to check", "0", "1.0.0", "0", ssbom.ReportSource{Status: ssbom.QueryCompleted}, []ssbom.Vuln{{ID: "TEST-LOCAL", CVSSScore: "8.1"}}},
 	} {
@@ -416,6 +420,11 @@ func TestTaggedReportDownloadDistinguishesMissingUrgencyEvidence(t *testing.T) {
 				ComponentInfo: map[string]ssbom.Component{
 					"example": {Name: "example", Version: tc.version, Vulns: tc.findings},
 				},
+			}
+			if tc.name == "partial query" || tc.name == "one unchecked finding" {
+				component := bom.ComponentInfo["example"]
+				component.InstalledVersion = &ssbom.InstalledVersionEvidence{Ecosystem: "npm", Package: "example", Version: tc.version, Confirmed: true}
+				bom.ComponentInfo["example"] = component
 			}
 			cache := ssbom.NewInMemoryCache()
 			cache.Set(1, "fixture", bom)
@@ -442,8 +451,13 @@ func TestTaggedReportDownloadDistinguishesMissingUrgencyEvidence(t *testing.T) {
 						require.Contains(t, home, label+" "+language.count)
 					}
 					kevCount := language.count
-					if tc.version == "" {
+					if tc.name == "unconfirmed version" || tc.name == "legacy display only" || tc.name == "placeholder display" {
 						kevCount = "1"
+						pendingVersion := "Upgrade to test Pending"
+						if language.code == "zh-Hant" {
+							pendingVersion = "建議驗測版本 待確認"
+						}
+						require.Contains(t, home, pendingVersion)
 					}
 					require.Contains(t, home, language.kev+" "+kevCount)
 					require.Contains(t, home, language.coverage)
