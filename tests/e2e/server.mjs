@@ -13,7 +13,7 @@ export async function startServer(binary, dbPath, { failScan = false, historical
       EX_SBOM_E2E_HISTORY_SCORE: historicalLEV,
       EX_SBOM_E2E_FAIL_RISK_FEEDS: failRiskFeeds ? "1" : "0",
     },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
   });
   let log = "";
   let ready;
@@ -23,6 +23,7 @@ export async function startServer(binary, dbPath, { failScan = false, historical
     rejectReady = reject;
   });
   const exited = once(server, "exit");
+  server.stdin.on("error", rejectReady);
   const read = chunk => {
     log = (log + chunk).slice(-16_384);
     const url = log.match(/^EX_SBOM_E2E_URL=(http:\/\/127\.0\.0\.1:\d+)\r?\n/m)?.[1];
@@ -43,7 +44,7 @@ export async function startServer(binary, dbPath, { failScan = false, historical
       getLog: () => log,
       async stop() {
         if (server.exitCode === null && server.signalCode === null) {
-          server.kill("SIGTERM");
+          server.stdin.end();
         }
         const [code, signal] = await exited;
         if (code !== 0) throw new Error(`Service shutdown failed (${code ?? signal})\n${log}`);

@@ -68,6 +68,11 @@ func TestE2EServer(t *testing.T) {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// The browser harness closes stdin to shut down cleanly on Windows too.
+	go func() {
+		_, _ = io.Copy(io.Discard, os.Stdin)
+		stop()
+	}()
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.Serve(listener) }()
 	fmt.Printf("EX_SBOM_E2E_URL=http://%s\n", listener.Addr())

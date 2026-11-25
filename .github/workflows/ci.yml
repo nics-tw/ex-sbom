@@ -383,14 +383,14 @@ jobs:
           go test -tags 'unit integration taggedpdf' ./...
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        if: matrix.platform == 'linux-amd64'
+        if: matrix.platform == 'linux-amd64' || matrix.platform == 'windows-amd64'
         with:
           node-version: lts/*
           cache: npm
           cache-dependency-path: tests/e2e/package-lock.json
 
       - name: Browser download with the release renderer
-        if: matrix.platform == 'linux-amd64'
+        if: matrix.platform == 'linux-amd64' || matrix.platform == 'windows-amd64'
         working-directory: tests/e2e
         env:
           EX_SBOM_E2E_BINARY: ${{ runner.temp }}/ex-sbom-release-browser.test
@@ -399,7 +399,17 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npx playwright install --with-deps chromium
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            export PATH="$(cygpath -u "$MSYS2_POPPLER_BIN"):$PATH"
+            browser_tmp="$(mktemp -d "$(cygpath -u "$LOCALAPPDATA")/ex-sbom-browser.XXXXXX")"
+            export TEMP="$(cygpath -m "$browser_tmp")"
+            export TMP="$TEMP"
+            export EX_SBOM_PDF_CACHE_DIR="$TEMP/cache"
+            export EX_SBOM_E2E_BINARY="$TEMP/ex-sbom-release-browser.test.exe"
+            npx playwright install chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
           go test -tags 'e2e taggedpdf' -c -o "$EX_SBOM_E2E_BINARY" ../..
           npm test -- --grep '@smoke creates a project|downloads verified remediation findings|formats Go advisory candidates|risk feeds fail'
 
