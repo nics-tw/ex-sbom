@@ -6,7 +6,9 @@ package ssbom
 
 import (
 	"math"
+	"slices"
 	"strconv"
+	"strings"
 
 	"ex-sbom/client/first"
 )
@@ -121,6 +123,7 @@ func riskFields(comp Component) (maxCvss, maxEpss, maxLev string, severe bool) {
 
 type vulnRiskKey struct {
 	id, cvss, epss, lev     string
+	kevCVEs                 string
 	levPartial, epssPartial bool
 	kev                     KEVStatus
 	signalComplete          bool
@@ -128,6 +131,8 @@ type vulnRiskKey struct {
 
 func diffVulnRisk(v Vuln, source *ReportSource, compareCompleteness bool) vulnRiskKey {
 	lev := v.verifiedLEVText()
+	kev, kevCVEs := v.KEVEvidence()
+	slices.Sort(kevCVEs)
 	key := vulnRiskKey{
 		id:          v.ID,
 		cvss:        v.CVSSScore,
@@ -135,10 +140,10 @@ func diffVulnRisk(v Vuln, source *ReportSource, compareCompleteness bool) vulnRi
 		lev:         lev,
 		levPartial:  lev != "" && v.LEVPartial,
 		epssPartial: v.EPSSPartial,
-		kev:         v.KEV,
+		kev:         kev,
+		kevCVEs:     strings.Join(slices.Compact(kevCVEs), ","),
 	}
 	if compareCompleteness {
-		kev, _ := v.KEVEvidence()
 		key.signalComplete = v.ExploitationSignal(kev, source).Complete
 	}
 	return key

@@ -154,6 +154,40 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 	}
 }
 
+func TestDiffSBOMs_KEVMatchesChange(t *testing.T) {
+	const cveA, cveB, unrelated = "CVE-2025-0001", "CVE-2025-0002", "CVE-2025-0003"
+	snapshot := func(matches []string, legacy string) FormattedSBOM {
+		finding := Vuln{
+			ID: "GHSA-test", CVEIDs: []string{cveA, cveB},
+			CVSSScore: "9.8", KEV: KEVListed, KEVCVEs: matches, KEVCVE: legacy,
+		}
+		component := Component{Version: "1.0.0", VulnNumber: 1, Vulns: []Vuln{finding}}
+		return makeSBOM(map[string]Component{"pkg": component}, map[string]int{"pkg": 0})
+	}
+	for _, tt := range []struct {
+		name    string
+		a, b    FormattedSBOM
+		changed bool
+	}{
+		{"added match", snapshot([]string{cveA}, ""), snapshot([]string{cveA, cveB}, ""), true},
+		{"replaced match", snapshot([]string{cveA}, ""), snapshot([]string{cveB}, ""), true},
+		{"same matches reordered and duplicated", snapshot([]string{cveA, cveB}, ""), snapshot([]string{cveB, cveA, cveA}, ""), false},
+		{"same match in legacy evidence", snapshot(nil, cveA), snapshot([]string{cveA}, ""), false},
+		{"unrelated CVE ignored", snapshot([]string{cveA}, ""), snapshot([]string{cveA, unrelated}, ""), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DiffSBOMs(tt.a, tt.b)
+			if tt.changed {
+				if assert.Contains(t, result.ByLevel, 0) {
+					assert.Len(t, result.ByLevel[0].Changed, 1)
+				}
+			} else {
+				assert.Empty(t, result.ByLevel)
+			}
+		})
+	}
+}
+
 func TestDiffSBOMs_LEVArchiveCompletenessChanges(t *testing.T) {
 	finding := Vuln{ID: "CVE-2025-0001", CVSSScore: "3.1", EPSS: "0.02", KEV: KEVUnlisted}
 	withLEV := finding
