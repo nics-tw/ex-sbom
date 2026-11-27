@@ -3,6 +3,7 @@
 package ssbom
 
 import (
+	goversion "go/version"
 	"strings"
 
 	"ex-sbom/util/file"
@@ -60,16 +61,21 @@ func sameInstalledVersion(ecosystem, a, b string) bool {
 		other, err := depssemver.PyPI.Parse(b)
 		return err == nil && !other.IsWildcard() && strings.EqualFold(installed.Canon(true), other.Canon(true))
 	}
-	if a == b {
-		return true
-	}
 	switch ecosystem {
 	case "Go", "npm", "crates.io":
+		if ecosystem == "Go" && a == b && goversion.IsValid(a) {
+			return true
+		}
 		// Compare normalized identity including build metadata, not precedence.
 		a, b = repairVersion(a), repairVersion(b)
-		return semver.IsValid(a) && semver.IsValid(b) && a == b
+		if a != b {
+			return false
+		}
+		canonical := semver.Canonical(a)
+		// The Go parser accepts short versions that represent ranges in npm and Cargo.
+		return canonical != "" && (ecosystem == "Go" || canonical == strings.TrimSuffix(a, semver.Build(a)))
 	default:
-		return false
+		return a == b
 	}
 }
 
@@ -80,5 +86,9 @@ func (component Component) ConfirmedInstalledVersion() string {
 	if evidence == nil || !evidence.Confirmed || evidence.Package == "" || evidence.Ecosystem == "" {
 		return ""
 	}
-	return usableVersion(evidence.Version)
+	v := usableVersion(evidence.Version)
+	if !sameInstalledVersion(evidence.Ecosystem, v, v) {
+		return ""
+	}
+	return v
 }

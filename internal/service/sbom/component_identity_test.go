@@ -147,6 +147,14 @@ func TestRemediationDistinguishesConfirmedVersionFromDisplay(t *testing.T) {
 	require.Equal(t, []string{cve}, entry.UrgentCVEs)
 	require.Equal(t, "2.0.1", entry.Upgrade)
 	require.Equal(t, 1, entry.Covered)
+
+	// Previously saved reports can contain a confirmation for a version range.
+	bom.ComponentInfo["fixture"].InstalledVersion.Version = "2.*"
+	entry = bom.RemediationAssessments(nil)[0]
+	require.Equal(t, RemediationElevated, entry.Driver.Priority)
+	require.True(t, entry.KEVVersionPending)
+	require.Empty(t, entry.UrgentCVEs)
+	require.Zero(t, entry.Covered)
 }
 
 func TestCycloneDXPreviewRetainsKEVVersionConflict(t *testing.T) {
@@ -179,6 +187,7 @@ func TestSPDXPreviewInstalledVersionEvidence(t *testing.T) {
 	original := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = original })
 	http.DefaultTransport = sameNameOSVFixture{}
+	const goToolchain = "pkg:golang/go@"
 	const npm = "pkg:npm/fixture@"
 	const pypi = "pkg:pypi/fixture@"
 	for _, tc := range []struct {
@@ -197,6 +206,9 @@ func TestSPDXPreviewInstalledVersionEvidence(t *testing.T) {
 		{"unversioned matching locator", "NOASSERTION", "pkg:npm/fixture", npm + "2.0.0", "2.0.0", true},
 		{"equivalent PyPI version", "v2.0", "", pypi + "2.0.0", "2.0.0", true},
 		{"conflicting PyPI local version", "2.0.0.post1+other", "", pypi + "2.0.0.post1+vendor", "2.0.0.post1+vendor", false},
+		{"wildcard npm version", "NOASSERTION", "", npm + "2.*", "2.*", false},
+		{"partial npm version", "NOASSERTION", "", npm + "2.0", "2.0", false},
+		{"Go toolchain version", "NOASSERTION", "", goToolchain + "go1.24.1", "go1.24.1", true},
 		{"wildcard PyPI version", "NOASSERTION", "", pypi + "2.*", "2.*", false},
 		{"unbounded PyPI version", "NOASSERTION", "", pypi + "2.%E2%88%9E", "2.∞", false},
 	} {
@@ -292,7 +304,7 @@ func (sameNameOSVFixture) RoundTrip(r *http.Request) (*http.Response, error) {
 			switch query.Version {
 			case "1.0.0":
 				results = append(results, `{}`)
-			case "2.0.0", "v2.0.0", "3.0.0", "2.0.0.post1+vendor", "2.*", "2.∞":
+			case "2.0.0", "v2.0.0", "3.0.0", "2.0.0.post1+vendor", "2.*", "2.0", "2.∞", "go1.24.1":
 				results = append(results, `{"vulns":[{"id":"TEST-1"}]}`)
 			default:
 				return nil, fmt.Errorf("unexpected package version: %s", query.Version)

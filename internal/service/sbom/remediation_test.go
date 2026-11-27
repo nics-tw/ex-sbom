@@ -119,7 +119,7 @@ func TestRemediationAssessments(t *testing.T) {
 	}
 	bom := FormattedSBOM{ComponentInfo: map[string]Component{
 		"a-unknown-version": {Name: "unknown version", Vulns: []Vuln{unversionedKEV}},
-		"b-urgent":          {Name: "urgent", Version: "1", InstalledVersion: confirmedVersion("npm", "urgent", "1"), Vulns: []Vuln{urgent, urgent}},
+		"b-urgent":          {Name: "urgent", Version: "1.0.0", InstalledVersion: confirmedVersion("npm", "urgent", "1.0.0"), Vulns: []Vuln{urgent, urgent}},
 		"c-mixed": {Name: "mixed", Version: "1", Vulns: []Vuln{
 			{ID: "higher-cvss", CVSSScore: "9.5", EPSS: "0.1"},
 			{ID: "higher-signal", CVSSScore: "5", EPSS: "0.8"},
@@ -158,7 +158,7 @@ func TestRemediationPreservesAllKEVMatches(t *testing.T) {
 	ids := []string{"CVE-2024-0001", "CVE-2024-0002"}
 	finding := Vuln{CVEIDs: ids, KEV: KEVListed, KEVCVEs: ids}
 	bom := FormattedSBOM{ComponentInfo: map[string]Component{
-		"dependency": {Name: "dependency", Version: "1", InstalledVersion: confirmedVersion("npm", "dependency", "1"), Vulns: []Vuln{finding}},
+		"dependency": {Name: "dependency", Version: "1.0.0", InstalledVersion: confirmedVersion("npm", "dependency", "1.0.0"), Vulns: []Vuln{finding}},
 	}}
 	entry := bom.RemediationAssessments(nil)[0]
 	require.Equal(t, ids, entry.UrgentCVEs)

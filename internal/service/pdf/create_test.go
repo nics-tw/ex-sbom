@@ -236,9 +236,9 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 			name: {Name: name, Version: "1.0",
 				Vulns: []ssbom.Vuln{{ID: "TEST-EX-SBOM-0001", CVSSScore: "8.4", EPSS: "0.02", LEV: "0.937221", SuggestFixVersion: "9.9.9",
 					Summary: "弱點摘要", Details: strings.Repeat("跨頁內容 Mixed-language text. ", 400) + "末頁標記"}}},
-			"urgent": {Name: "urgent-package", Version: "1.0", InstalledVersion: pdfConfirmedVersion("urgent-package", "1.0"), Vulns: []ssbom.Vuln{
+			"urgent": {Name: "urgent-package", Version: "1.0.0", InstalledVersion: pdfConfirmedVersion("urgent-package", "1.0.0"), Vulns: []ssbom.Vuln{
 				{ID: "CVE-2024-0001", CVSSScore: "8.0", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0001", CVEIDs: []string{"CVE-2024-0001"},
-					RepairEvidence: &ssbom.RepairEvidence{AdvisoryID: "CVE-2024-0001", Ecosystem: "npm", Package: "urgent-package", Installed: "1.0",
+					RepairEvidence: &ssbom.RepairEvidence{AdvisoryID: "CVE-2024-0001", Ecosystem: "npm", Package: "urgent-package", Installed: "1.0.0",
 						Ranges: []ssbom.RepairInterval{{Start: "0", Fixed: "1.2.3"}}}},
 				{ID: "CVE-2024-0002", CVSSScore: "6.5", KEV: ssbom.KEVListed, KEVCVE: "CVE-2024-0002", CVEIDs: []string{"CVE-2024-0002"}},
 			}},
@@ -295,7 +295,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 				require.Contains(t, text, tc.count+" | 3")
 				require.NotContains(t, text, "0.937221")
 				if tc.language == TraditionalChinese {
-					require.Contains(t, strings.Split(text, "\f")[0], "1. 立即更新 | urgent-package 1.0")
+					require.Contains(t, strings.Split(text, "\f")[0], "1. 立即更新 | urgent-package 1.0.0")
 					require.Contains(t, strings.Split(text, "\f")[0], "確認上游相依元件")
 					require.Regexp(t, `建議驗測版本[ \t]+1[.]2[.]3`, firstPage)
 					require.Contains(t, strings.Split(text, "\f")[0], "累計預計處理的元件弱點紀錄 | 1")
@@ -305,7 +305,7 @@ func TestGenerateSearchableMultilingualPDF(t *testing.T) {
 					require.Contains(t, text, "建議升級的涵蓋情形 | 1.2.3 · 預計可處理此弱點")
 					require.Contains(t, text, "建議升級的涵蓋情形 | 1.2.3 · 尚未確認涵蓋")
 				} else {
-					require.Contains(t, strings.Split(text, "\f")[0], "1. Update immediately | urgent-package 1.0")
+					require.Contains(t, strings.Split(text, "\f")[0], "1. Update immediately | urgent-package 1.0.0")
 					require.Regexp(t, `Identify the parent\s+dependency`, firstPage)
 					require.Regexp(t, `Upgrade to test[ \t]+1[.]2[.]3`, firstPage)
 					require.Contains(t, strings.Split(text, "\f")[0], "Cumulative findings expected to be addressed | 1")

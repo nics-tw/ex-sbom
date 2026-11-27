@@ -123,11 +123,12 @@ type vulnRiskKey struct {
 	id, cvss, epss, lev     string
 	levPartial, epssPartial bool
 	kev                     KEVStatus
+	signalComplete          bool
 }
 
-func diffVulnRisk(v Vuln) vulnRiskKey {
+func diffVulnRisk(v Vuln, source *ReportSource, compareCompleteness bool) vulnRiskKey {
 	lev := v.verifiedLEVText()
-	return vulnRiskKey{
+	key := vulnRiskKey{
 		id:          v.ID,
 		cvss:        v.CVSSScore,
 		epss:        v.EPSS,
@@ -136,20 +137,26 @@ func diffVulnRisk(v Vuln) vulnRiskKey {
 		epssPartial: v.EPSSPartial,
 		kev:         v.KEV,
 	}
+	if compareCompleteness {
+		kev, _ := v.KEVEvidence()
+		key.signalComplete = v.ExploitationSignal(kev, source).Complete
+	}
+	return key
 }
 
 // sameVulnRisks compares findings as a multiset, so source ordering cannot
 // produce a false diff and equal counts cannot hide changed findings.
-func sameVulnRisks(a, b []Vuln) bool {
+func sameVulnRisks(a, b []Vuln, sourceA, sourceB *ReportSource) bool {
 	if len(a) != len(b) {
 		return false
 	}
+	compareCompleteness := sourceA.LEVDisabled() != sourceB.LEVDisabled()
 	counts := make(map[vulnRiskKey]int, len(a))
 	for _, vuln := range a {
-		counts[diffVulnRisk(vuln)]++
+		counts[diffVulnRisk(vuln, sourceA, compareCompleteness)]++
 	}
 	for _, vuln := range b {
-		key := diffVulnRisk(vuln)
+		key := diffVulnRisk(vuln, sourceB, compareCompleteness)
 		if counts[key] == 0 {
 			return false
 		}
@@ -276,7 +283,7 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 			(installedA == nil || installedB == nil || *installedA != *installedB)
 		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber ||
 			levelA != levelB || compA.ContainsVulnDep != compB.ContainsVulnDep ||
-			installedChanged || !sameVulnRisks(compA.Vulns, compB.Vulns) {
+			installedChanged || !sameVulnRisks(compA.Vulns, compB.Vulns, a.ReportSource, b.ReportSource) {
 			diff := ComponentDiff{
 				Name:       name,
 				VersionA:   compA.Version,

@@ -154,6 +154,32 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 	}
 }
 
+func TestDiffSBOMs_LEVArchiveCompletenessChanges(t *testing.T) {
+	finding := Vuln{ID: "CVE-2025-0001", CVSSScore: "3.1", EPSS: "0.02", KEV: KEVUnlisted}
+	withLEV := finding
+	withLEV.LEV, withLEV.LEVMethod = "0.01", first.LEVMethod
+	components := map[string]Component{
+		"missing-lev": {Version: "1.0.0", VulnNumber: 1, Vulns: []Vuln{finding}},
+		"with-lev":    {Version: "1.0.0", VulnNumber: 1, Vulns: []Vuln{withLEV}},
+		"clean":       {Version: "1.0.0"},
+	}
+	a := makeSBOM(components, nil)
+	b := makeSBOM(components, nil)
+	a.ReportSource = &ReportSource{LEVArchiveStatus: LEVArchiveDisabled}
+	b.ReportSource = &ReportSource{LEVArchiveStatus: LEVArchiveConfigured}
+
+	threshold := 0.10
+	assert.Equal(t, RemediationRoutine, assessFinding(finding, "", &threshold, a.ReportSource).Priority)
+	assert.Equal(t, RemediationReview, assessFinding(finding, "", &threshold, b.ReportSource).Priority)
+	result := DiffSBOMs(a, b)
+	if assert.Contains(t, result.ByLevel, 0) && assert.Len(t, result.ByLevel[0].Changed, 1) {
+		assert.Equal(t, "missing-lev", result.ByLevel[0].Changed[0].Name)
+	}
+
+	a.ReportSource = nil
+	assert.Empty(t, DiffSBOMs(a, b).ByLevel)
+}
+
 func TestDiffSBOMs_InstalledVersionEvidenceChanges(t *testing.T) {
 	before := Component{
 		Version: "1.0.0",
