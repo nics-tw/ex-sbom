@@ -100,12 +100,8 @@ func TestCopyAndCreate(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, info)
 
-				expectedMode := os.FileMode(defaultPermissions)
-				if runtime.GOOS == "windows" {
-					// Go reports writable Windows files as 0666.
-					expectedMode = 0666
-				}
-				assert.Equal(t, expectedMode, info.Mode().Perm())
+				// Check file permissions
+				assert.Equal(t, os.FileMode(defaultPermissions), info.Mode().Perm())
 
 				// Read content and verify
 				content, err := os.ReadFile(path)

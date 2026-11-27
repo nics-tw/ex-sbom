@@ -74,7 +74,6 @@
           reportPreparing: "Preparing the PDF report…",
           reportDownloadStarted: "Download requested for {0}. You can find it in your browser’s downloads.",
           reportDownloadError: "Could not create the PDF report. Please try again.",
-  reportCacheUnavailable: "The PDF renderer cache is unavailable. Ask the administrator to check its permissions, then retry.",
           delete: "Delete",
           deletedSuccessfully: "{0} deleted successfully",
           errorDeleting: "Error deleting file: {0}",
@@ -134,7 +133,7 @@
           projectRename: "Rename",
           projectDelete: "Delete",
           projectRenamePrompt: "Enter new project name:",
-          projectDeleteConfirm: "Remove project “{0}” from the app? Its SBOMs will remain in the database.",
+          projectDeleteConfirm: "Delete this project from the app? Its SBOMs will remain in the database.",
           projectNameRequired: "Enter a new project name.",
           epssLowerBound: "At least {0} (missing alias scores)",
           levLowerBound: "At least {0} (historical gaps)",
@@ -226,7 +225,6 @@
           reportPreparing: "正在產製 PDF 報告…",
           reportDownloadStarted: "已交由瀏覽器下載 {0}，請在瀏覽器的下載清單查找。",
           reportDownloadError: "無法產製 PDF 報告，請再試一次。",
-  reportCacheUnavailable: "PDF 產生器的快取無法使用。請管理者確認快取目錄的權限後，再試一次。",
           delete: "刪除",
           deletedSuccessfully: "{0} 刪除成功",
           errorDeleting: "刪除檔案錯誤: {0}",
@@ -286,7 +284,7 @@
           projectRename: "重新命名",
           projectDelete: "刪除",
           projectRenamePrompt: "輸入新的專案名稱：",
-          projectDeleteConfirm: "確定從工具移除專案「{0}」？SBOM 資料仍保留在資料庫。",
+          projectDeleteConfirm: "確定從應用程式刪除此專案？SBOM 資料仍保留在資料庫。",
           projectNameRequired: "請輸入新專案名稱。",
           epssLowerBound: "至少 {0}（別名分數未齊）",
           levLowerBound: "至少 {0}（歷史資料有缺口）",
@@ -482,7 +480,6 @@
     // ═══════════════════════════════════════════════════════════════════════════
     const Sbom = {
       _topology: new RequestSlot(),
-      _report: new RequestSlot(),
 
       reset() {
         document.getElementById("file-tabs").innerHTML = "";
@@ -492,7 +489,6 @@
 
       _clearActiveTab() {
         this._topology.cancel();
-        this._report.cancel();
         State.activeTab = null;
         document.getElementById("tab-content").innerHTML =
           `<div id="no-tabs-message" class="text-gray-500 italic" data-i18n="noFilesUploaded">${t("noFilesUploaded")}</div>`;
@@ -551,7 +547,6 @@
       },
 
       selectTab(tabEl) {
-        this._report.cancel();
         const previous = State.activeTab;
         previous?.classList.remove("tab-active");
         previous?.querySelector(".sbom-tab-label")?.setAttribute("aria-pressed", "false");
@@ -602,23 +597,14 @@
       },
 
       async downloadReport(version, button, status) {
+        const projectID = State.projectID;
+        const isCurrent = () => State.projectID === projectID && State.activeTab?.dataset.version === version && button.isConnected;
         if (button.getAttribute("aria-disabled") === "true") return;
-        const request = this._report.begin({ projectID: State.projectID, version });
-        const isCurrent = () => this._report.owns(request) && State.projectID === request.projectID &&
-          State.activeTab?.dataset.version === request.version && button.isConnected;
         button.setAttribute("aria-disabled", "true");
         localizeText(status, "reportPreparing");
         try {
-          const response = await Api.getReport(request.projectID, version, State.language, request.controller.signal);
-      const contentType = response.headers.get("Content-Type")?.split(";")[0];
-      if (!response.ok && contentType === "application/json") {
-        const error = await response.json();
-        if (error?.code === "pdf_cache_unavailable") {
-          if (isCurrent()) localizeText(status, "reportCacheUnavailable");
-          return;
-        }
-      }
-      if (!response.ok || contentType !== "application/pdf") {
+          const response = await Api.getReport(projectID, version, State.language);
+          if (!response.ok || response.headers.get("Content-Type")?.split(";")[0] !== "application/pdf") {
             throw new Error("PDF report unavailable");
           }
           const filename = this._reportFilename(response.headers.get("Content-Disposition"));
@@ -638,7 +624,6 @@
         } catch {
           if (isCurrent()) localizeText(status, "reportDownloadError");
         } finally {
-          this._report.finish(request);
           button.removeAttribute("aria-disabled");
         }
       },
@@ -1315,8 +1300,8 @@
 
         if (!panel.querySelector("#diff-select-a")) {
           panel.innerHTML = `
-            <div class="diff-controls mb-6">
-              <div class="diff-version-field">
+            <div class="flex items-end space-x-4 mb-6">
+              <div class="flex-1">
                 <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-a" for="diff-select-a"></label>
                 <select id="diff-select-a" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
               </div>
@@ -1325,7 +1310,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
                 </svg>
               </button>
-              <div class="diff-version-field">
+              <div class="flex-1">
                 <label class="block text-sm font-medium text-gray-700 mb-1" id="diff-label-b" for="diff-select-b"></label>
                 <select id="diff-select-b" class="w-full border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[#009999]"></select>
               </div>
@@ -2040,12 +2025,9 @@
         Project.rename(State.projectID, name.trim());
       });
       document.getElementById("project-delete-btn").addEventListener("click", () => {
-        const projectID = State.projectID;
-        if (!projectID) return;
-        const select = document.getElementById("project-select");
-        const project = Array.from(select.options).find(option => option.value === String(projectID));
-        if (!project || !confirm(t("projectDeleteConfirm", project.text))) return;
-        Project.delete(projectID);
+        if (!State.projectID) return;
+        if (!confirm(t("projectDeleteConfirm"))) return;
+        Project.delete(State.projectID);
       });
 
 

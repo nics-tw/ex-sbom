@@ -191,18 +191,6 @@ test("@smoke creates a project, uploads and previews an SBOM, saves it and downl
   await page.locator("#lang-en").click();
   await reportButton.focus();
 
-  await page.route("**/report?*", route => route.fulfill({
-    status: 500,
-    json: { error: "failed to create PDF", code: "pdf_cache_unavailable" },
-  }), { times: 1 });
-  await page.keyboard.press("Enter");
-  await expect(reportStatus).toContainText("Ask the administrator to check its permissions");
-  await expect(reportButton).toBeEnabled();
-  await page.locator("#lang-zh").click();
-  await expect(reportStatus).toContainText("請管理者確認快取目錄的權限");
-  await page.locator("#lang-en").click();
-  await reportButton.focus();
-
   const downloadEvent = page.waitForEvent("download");
   await page.keyboard.press("Enter");
   const download = await downloadEvent;
@@ -331,27 +319,12 @@ test("searches, compares, renames and deletes versions across windows and a serv
   page.once("dialog", dialog => dialog.accept("Renamed project"));
   await page.locator("#project-rename-btn").click();
   await expect(page.locator("#project-current")).toHaveText("(Renamed project)");
-  const deleteProject = page.locator("#project-delete-btn");
-  let deletePrompt;
-  page.once("dialog", async dialog => {
-    deletePrompt = dialog.message();
-    await dialog.dismiss();
-  });
-  await page.locator("#lang-zh").press("Enter");
-  await deleteProject.press("Enter");
-  expect(deletePrompt).toContain("Renamed project");
-  expect(deletePrompt).toContain("SBOM 資料仍保留在資料庫。");
-  await expect(deleteProject).toBeFocused();
+  page.once("dialog", dialog => dialog.dismiss());
+  await page.locator("#project-delete-btn").click();
   await expect(page.locator("#project-current")).toHaveText("(Renamed project)");
   await expect(versionRow(page, "Before")).toBeVisible();
-  await page.locator("#lang-en").press("Enter");
-  page.once("dialog", async dialog => {
-    deletePrompt = dialog.message();
-    await dialog.accept();
-  });
-  await deleteProject.press("Enter");
-  expect(deletePrompt).toContain("Renamed project");
-  expect(deletePrompt).toContain("SBOMs will remain in the database.");
+  page.once("dialog", dialog => dialog.accept());
+  await page.locator("#project-delete-btn").click();
   await expect(page.locator("#project-select option").filter({ hasText: "Renamed project" })).toHaveCount(0);
   await expect(page.locator("#project-current")).toHaveText("(default)");
   await page.close();
@@ -558,44 +531,6 @@ test("preserves a chosen interface language across navigation and reload", async
   await expect(html).toHaveAttribute("lang", "en");
 });
 
-test("keeps control boundaries and selection visible in forced colors", async ({ page, service }) => {
-  await page.emulateMedia({ forcedColors: "active" });
-  if (!(await page.evaluate(() => matchMedia("(forced-colors: active)").matches))) {
-    test.skip(true, "Browser does not support forced colors emulation");
-  }
-  await page.setViewportSize({ width: 320, height: 720 });
-  await page.goto(service.url);
-  await createProject(page, "Forced colors");
-  await upload(page, sbom("forced-colors-fixture", "1.0.0"), "Before");
-  await upload(page, sbom("forced-colors-fixture", "2.0.0"), "After");
-
-  const english = page.locator("#lang-en");
-  const chinese = page.locator("#lang-zh");
-  const analysis = page.locator("#main-tab-analysis");
-  const comparison = page.locator("#main-tab-diff");
-  const download = page.getByRole("button", { name: "Download PDF Report" });
-  await expect(english).toHaveAttribute("aria-pressed", "true");
-  await expect(english).toHaveCSS("text-decoration-line", "underline");
-  await expect(chinese).toHaveCSS("text-decoration-line", "none");
-  await expect(analysis).toHaveCSS("text-decoration-line", "underline");
-  await expect(comparison).toHaveCSS("text-decoration-line", "none");
-  await expect(download).toHaveCSS("border-top-style", "solid");
-
-  await page.getByRole("button", { name: "Before", exact: true }).press("Enter");
-  await expect(page.getByRole("button", { name: "Before", exact: true })).toHaveCSS("text-decoration-line", "underline");
-  await expect(page.getByRole("button", { name: "After", exact: true })).toHaveCSS("text-decoration-line", "none");
-
-  await chinese.press("Enter");
-  await expect(chinese).toHaveAttribute("aria-pressed", "true");
-  await expect(chinese).toHaveCSS("text-decoration-line", "underline");
-  await expect(english).toHaveCSS("text-decoration-line", "none");
-  await comparison.press("Enter");
-  await expect(comparison).toBeFocused();
-  await expect(comparison).toHaveCSS("outline-width", "3px");
-  await expect(comparison).toHaveCSS("text-decoration-line", "underline");
-  await expect(analysis).toHaveCSS("text-decoration-line", "none");
-});
-
 test("provides bilingual landmarks, field names, and keyboard skip links", async ({ page, service, browserName }) => {
   await page.goto(service.url);
   const main = page.getByRole("main");
@@ -640,29 +575,6 @@ test("keeps selected version visible and Chinese open label in its accessible na
   const open = versionRow(page, "Before").locator(".version-load-btn");
   await expect(open).toHaveText("開啟分析");
   await expect(open).toHaveAccessibleName(/^開啟分析.*Before/);
-});
-
-test("keeps comparison controls in view with increased text spacing", async ({ page, service }) => {
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto(service.url);
-  await page.locator("#main-tab-diff").click();
-  await page.addStyleTag({ content: `
-    * { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }
-    p { margin-block-end: 2em !important; }
-  ` });
-
-  for (const language of ["en", "zh"]) {
-    await page.locator("#lang-" + language).click();
-    const controls = page.locator("#diff-select-a, #diff-swap-btn, #diff-select-b, #diff-compare-btn");
-    await expect(controls).toHaveCount(4);
-    for (const control of await controls.all()) {
-      await expect(control).toBeVisible();
-      const bounds = await control.boundingBox();
-      expect(bounds.x).toBeGreaterThanOrEqual(0);
-      expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
-    }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
-  }
 });
 
 test("preserves comparison disclosures and horizontal scroll when translating", async ({ page, service }) => {
@@ -742,10 +654,6 @@ test("downloads verified remediation findings after storing and reopening an SBO
     expect(download.suggestedFilename()).toMatch(/^Repair exercise.*\.pdf$/i);
     const output = testInfo.outputPath(`remediation-${lang}.pdf`);
     await download.saveAs(output);
-    if (process.env.EX_SBOM_E2E_TAGGED_PDF === "1") {
-      const { stdout } = await promisify(execFile)("pdfinfo", [output]);
-      expect(stdout).toMatch(/^Tagged:\s+yes$/m);
-    }
     const handle = await open(output, "r");
     try {
       expect((await handle.read(Buffer.alloc(5))).buffer.toString()).toBe("%PDF-");

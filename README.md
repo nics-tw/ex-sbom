@@ -18,12 +18,12 @@ Allow outbound HTTPS to the following hosts for vulnerability analysis.
 - `www.cisa.gov` for the KEV catalog at `/sites/default/files/feeds/known_exploited_vulnerabilities.json`.
 
 ## How to use it
-1. Download the executable for your platform from [Releases](https://github.com/nics-tw/ex-sbom/releases). On Windows x64, download `ex-sbom.exe`.
+1. Download the executable for your platform from [Releases](https://github.com/nics-tw/ex-sbom/releases).
 2. Run it, and your browser opens the local web UI at `http://localhost:8080`.
 3. Create or select a project. Projects group related SBOM versions for the same product or system.
 4. In the **SBOM Analysis** tab, add a version by uploading a CycloneDX JSON or SPDX JSON file.
 5. Preview the parsed result, give it a version name, and save it.
-6. Explore the dependency graph, search across versions, or compare two versions in the **Diff** tab. Select a saved version and click **Download PDF Report** to export its report. Executables built by the release workflow below generate tagged PDFs with the bundled renderer and fonts.
+6. Explore the dependency graph, search across versions, or compare two versions in the **Diff** tab. Select a saved version and click **Download PDF Report** to export its report.
 
 ## Features
 
@@ -87,8 +87,6 @@ go build -o ex-sbom
 
 For local development, run `go run .` to start the server.
 
-The `go build` command above uses the development PDF renderer. [GitHub Actions builds and verifies](.github/workflows/ci.yml) official releases for Windows x64, macOS ARM64, Linux ARM64 and Linux x64 with the PDF renderer and fonts bundled.
-
 ## Configuration
 
 The following environment variables can be used to configure the tool:
@@ -99,8 +97,6 @@ The following environment variables can be used to configure the tool:
 | `BIND_ADDR` | `127.0.0.1` | Loopback IP address, such as `127.0.0.1` or `::1`. Other addresses are rejected. |
 | `AUTO_OPEN_BROWSER` | `true` | Set to `false` to prevent automatically opening the browser on startup. |
 | `DB_PATH` | OS-specific (see below) | Path to the DuckDB database file. |
-| `EX_SBOM_PDF_TIMEOUT` | `30s` | Optional time limit for one tagged PDF export, including time waiting for the renderer. Use a duration such as `60s`. |
-| `EX_SBOM_PDF_CACHE_DIR` | `ex-sbom/typst` in the operating system's user cache | Optional absolute path for the bundled renderer. Use a private directory owned by the app's account on a filesystem that allows execution. |
 | `EPSS_ARCHIVE_DIR` | — | Optional directory of official daily `epss_scores-YYYY-MM-DD.csv.gz` files. Keep the archive from 2021-04-14 through the previous UTC day. Import gives the archive lookup up to 3 seconds and reuses in-memory results while the files are unchanged. If the first score date is verified, the report can show a LEV lower bound from the available 30-day window scores. If that date cannot be verified, the report marks LEV unavailable. |
 | `CVE_RESERVATIONS_FILE` | — | Optional local JSON map of CVE IDs to official reservation dates (`YYYY-MM-DD`). Older archive gaps before a CVE was reserved do not invalidate that CVE's history. Use dates from the CVE Program bulk archive. |
 

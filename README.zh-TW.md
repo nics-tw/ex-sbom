@@ -18,12 +18,12 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 
 ## 我該怎麼使用它
 
-1. 從 [Releases](https://github.com/nics-tw/ex-sbom/releases) 下載對應平台的執行檔。Windows x64 直接下載 `ex-sbom.exe`。
+1. 從 [Releases](https://github.com/nics-tw/ex-sbom/releases) 下載對應平台的執行檔。
 2. 執行它，瀏覽器會自動開啟本地網頁介面 `http://localhost:8080`。
 3. 建立或選擇一個專案。專案可用來彙整同一產品或系統的多個 SBOM 版本。
 4. 在 **SBOM 分析** 分頁新增版本，上傳 CycloneDX JSON 或 SPDX JSON 檔案。
 5. 預覽解析結果，輸入版本名稱並儲存。
-6. 探索相依性圖、跨版本搜尋，或在 **Diff 比對** 分頁比較兩個版本。要匯出報告，選好已儲存的版本後點 **下載 PDF 報告**。由下方發布流程建置的執行檔已內含產生器與字型，會直接產出標籤式 PDF。
+6. 探索相依性圖、跨版本搜尋，或在 **Diff 比對** 分頁比較兩個版本。要匯出報告，選好已儲存的版本後點 **下載 PDF 報告**。
 
 ## 功能特色
 
@@ -87,7 +87,6 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 5. 您的瀏覽器應該會自動打開一個新標籤頁，網址為 `http://localhost:8080`。如果沒有自動打開，您可以手動在瀏覽器中輸入此網址。
 本機開發時，可執行 `go run .` 啟動服務。
 
-從原始碼執行上述 `go build`，可使用開發用 PDF 產生器。正式發布版的 Windows x64、macOS ARM64、Linux ARM64 與 Linux x64 執行檔由 [GitHub Actions 建置與驗證](.github/workflows/ci.yml)，並內嵌產生器與字型。
 
 ## 環境設定
 
@@ -99,8 +98,6 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 | `BIND_ADDR` | `127.0.0.1` | 僅接受本機 loopback IP，例如 `127.0.0.1` 或 `::1`。其他位址會被拒絕。 |
 | `AUTO_OPEN_BROWSER` | `true` | 設為 `false` 可在啟動時不自動開啟瀏覽器。 |
 | `DB_PATH` | 依作業系統而定（見下方） | DuckDB 資料庫檔案的路徑。 |
-| `EX_SBOM_PDF_TIMEOUT` | `30s` | 選填。標籤式 PDF 匯出時間上限，包含等待產生器的時間。可設為 `60s` 等時長。 |
-| `EX_SBOM_PDF_CACHE_DIR` | 作業系統使用者快取目錄下的 `ex-sbom/typst` | 選填。可執行內嵌產生器的絕對路徑。請指定由程式執行帳號擁有、僅限該帳號與系統管理者存取的目錄。 |
 | `EPSS_ARCHIVE_DIR` | — | 選填。存放官方每日 `epss_scores-YYYY-MM-DD.csv.gz` 的目錄。請保留自 2021-04-14 起至前一個 UTC 日的封存。每次匯入最多花 3 秒查詢封存，檔案未變更時可重用記憶體中的查詢結果。若已驗證首次評分日期，報告可用查得的 30 天視窗分數計算 LEV 下界。若無法驗證該日期，報告會標示 LEV 未取得。 |
 | `CVE_RESERVATIONS_FILE` | — | 選填。指定本機 JSON 檔，內容為 CVE 識別碼對應官方保留日期（`YYYY-MM-DD`）。CVE 保留日前的歷史封存缺檔不影響該 CVE。請使用 CVE Program 整批封存的日期。 |
 

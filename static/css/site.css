@@ -148,27 +148,6 @@ body .main-tab[aria-pressed="true"] {
   color: var(--site-accent);
 }
 
-.diff-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-
-.diff-version-field {
-  flex: 1 1 7rem;
-  min-inline-size: min(7rem, 100%);
-}
-
-.diff-version-field select {
-  inline-size: 100%;
-  border-color: var(--site-border);
-}
-
-#diff-swap-btn {
-  border-color: var(--site-border);
-}
-
 .history-actions button {
   min-inline-size: 24px;
   min-block-size: 24px;
@@ -275,18 +254,12 @@ body .site-main:focus-visible {
     outline-color: Highlight;
   }
 
-  .language-btn[aria-pressed="true"],
+  .language-btn.active-language {
+    border-color: ButtonText;
+  }
+
   body .main-tab[aria-pressed="true"] {
-    text-decoration: underline;
-    text-underline-offset: .18em;
-  }
-
-  .control-primary {
-    border: 1px solid ButtonText;
-  }
-
-  .control-primary:is(:disabled, [aria-disabled="true"]) {
-    border-color: GrayText;
+    border-block-end-color: ButtonText;
   }
 }
 

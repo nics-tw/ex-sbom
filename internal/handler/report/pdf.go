@@ -6,7 +6,6 @@ package report
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"log/slog"
 	"mime"
@@ -57,20 +56,9 @@ func (h *Handler) CreatePDF(c *gin.Context) {
 		Language: language, SBOM: bom,
 	}
 	var body bytes.Buffer
-	if err := pdf.GenerateContext(c.Request.Context(), &body, report); err != nil {
-		if c.Request.Context().Err() != nil {
-			return
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			c.JSON(http.StatusServiceUnavailable, gin.H{msg.RespErr: "PDF rendering timed out"})
-			return
-		}
+	if err := pdf.Generate(&body, report); err != nil {
 		slog.Error("Failed to create PDF report", "error", err)
-		response := gin.H{msg.RespErr: "failed to create PDF"}
-		if errors.Is(err, pdf.ErrCacheUnavailable) {
-			response["code"] = "pdf_cache_unavailable"
-		}
-		c.JSON(http.StatusInternalServerError, response)
+		c.JSON(http.StatusInternalServerError, gin.H{msg.RespErr: "failed to create PDF"})
 		return
 	}
 

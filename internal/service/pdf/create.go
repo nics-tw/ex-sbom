@@ -115,6 +115,10 @@ type document struct {
 	usedGlyphFallback bool
 }
 
+func Generate(w io.Writer, report Report) error {
+	return generateUntagged(w, report)
+}
+
 func generateUntagged(w io.Writer, report Report) error {
 	font, err := loadFont()
 	if err != nil {
