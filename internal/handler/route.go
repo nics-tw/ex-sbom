@@ -45,7 +45,7 @@ func SetupRouterGroup(r *gin.Engine,
 	namedSBOM := sboms.Group("/:name", middleware.DecodeVersionName())
 	namedSBOM.DELETE("", sbomH.Delete)
 	namedSBOM.PUT("", middleware.JSONContentType(), sbomH.Rename)
-	namedSBOM.GET("/report", reportH.CreatePDF)
+	namedSBOM.GET("/report", middleware.RequireLocalBrowserSource, reportH.CreatePDF)
 
 	topo := namedSBOM.Group("/topology")
 	topo.GET("", topoH.ListComponents)

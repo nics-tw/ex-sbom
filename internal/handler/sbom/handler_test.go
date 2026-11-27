@@ -187,11 +187,14 @@ func TestCreateRejectsMissingOrInvalidPreviewToken(t *testing.T) {
 
 func TestPreviewTokenBindsReportSource(t *testing.T) {
 	h := New(nil, nil)
-	source := &ssbom.ReportSource{FileName: "input.json", FileSHA256: "source hash", Status: ssbom.QueryCompleted}
+	source := &ssbom.ReportSource{FileName: "input.json", FileSHA256: "source hash", Status: ssbom.QueryCompleted, LEVArchiveStatus: ssbom.LEVArchiveDisabled}
 	token, err := h.previewToken(1, "analysis hash", time.Time{}, source)
 	assert.NoError(t, err)
 	assert.True(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, source))
 	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, nil))
+	withGoIdentity := *source
+	withGoIdentity.GoComponents = map[string]bool{"go-module": true}
+	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &withGoIdentity))
 
 	changed := *source
 	changed.FileSHA256 = "other hash"
@@ -199,4 +202,27 @@ func TestPreviewTokenBindsReportSource(t *testing.T) {
 	changed = *source
 	changed.Status = ssbom.QueryPartial
 	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &changed))
+	changed = *source
+	changed.LEVArchiveStatus = ssbom.LEVArchiveConfigured
+	assert.False(t, h.validPreviewToken(token, 1, "analysis hash", time.Time{}, &changed))
+}
+
+func TestPreviewTokenBindsInstalledVersionEvidence(t *testing.T) {
+	h := New(nil, nil)
+	component := ssbom.Component{Name: "fixture", Version: "1.0.0"}
+	bom := ssbom.FormattedSBOM{ComponentInfo: map[string]ssbom.Component{"fixture": component}}
+	legacyHash := domain.SHA256(ssbom.HashSBOM(bom))
+	component.InstalledVersion = &ssbom.InstalledVersionEvidence{
+		Ecosystem: "npm", Package: "fixture", Version: "2.0.0",
+	}
+	bom.ComponentInfo["fixture"] = component
+	checksum := domain.SHA256(ssbom.HashSBOM(bom))
+	assert.NotEqual(t, legacyHash, checksum)
+	token, err := h.previewToken(1, checksum, time.Time{}, nil)
+	assert.NoError(t, err)
+	component.InstalledVersion.Confirmed = true
+	changed := domain.SHA256(ssbom.HashSBOM(bom))
+	assert.NotEqual(t, checksum, changed)
+	assert.False(t, h.validPreviewToken(token, 1, changed, time.Time{}, nil))
+	assert.True(t, h.validPreviewToken(token, 1, checksum, time.Time{}, nil))
 }

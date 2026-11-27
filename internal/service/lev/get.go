@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"sync"
 
 	"ex-sbom/client/first"
@@ -114,8 +113,6 @@ func GetByChunk(cves []string) (map[string]first.EPSS, error) {
 	var resultMap = make(map[string]first.EPSS)
 
 	for _, epss := range allResults {
-		epssNum, _ := strconv.ParseFloat(epss.EPSS, 64)
-		epss.EPSSNum = epssNum
 
 		resultMap[epss.CVE] = epss
 	}

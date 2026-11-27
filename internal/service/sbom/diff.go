@@ -6,7 +6,11 @@ package ssbom
 
 import (
 	"math"
+	"slices"
 	"strconv"
+	"strings"
+
+	"ex-sbom/client/first"
 )
 
 // ComponentDiff represents a single component difference between two SBOMs.
@@ -31,6 +35,9 @@ type ComponentDiff struct {
 	MaxLevB    string `json:"max_lev_b,omitempty"`
 	SevereA    bool   `json:"severe_a,omitempty"`
 	SevereB    bool   `json:"severe_b,omitempty"`
+
+	InstalledVersionA *InstalledVersionEvidence `json:"installed_version_a,omitempty"`
+	InstalledVersionB *InstalledVersionEvidence `json:"installed_version_b,omitempty"`
 }
 
 // LevelDiff holds the diff for a single dependency level.
@@ -80,30 +87,81 @@ func maxVulnScore(vulns []Vuln, getter func(Vuln) string) string {
 	return result
 }
 
+// maxVulnProbability omits the aggregate when any finding's evidence is partial.
+func maxVulnProbability(vulns []Vuln, evidence func(Vuln) (string, bool)) string {
+	var maximum string
+	var maxProbability float64
+	for _, vuln := range vulns {
+		raw, lowerBound := evidence(vuln)
+		if lowerBound {
+			return ""
+		}
+		probability, valid := first.ParseProbability(raw)
+		if !valid {
+			continue
+		}
+		if maximum == "" || probability > maxProbability {
+			maximum = raw
+			maxProbability = probability
+		}
+	}
+	return maximum
+}
+
 func riskFields(comp Component) (maxCvss, maxEpss, maxLev string, severe bool) {
 	maxCvss = maxVulnScore(comp.Vulns, func(v Vuln) string { return v.CVSSScore })
-	maxEpss = maxVulnScore(comp.Vulns, func(v Vuln) string { return v.EPSS })
-	maxLev = maxVulnScore(comp.Vulns, func(v Vuln) string { return v.LEV })
+	maxEpss = maxVulnProbability(comp.Vulns, func(v Vuln) (string, bool) {
+		return v.EPSS, v.EPSSPartial
+	})
+	maxLev = maxVulnProbability(comp.Vulns, func(v Vuln) (string, bool) {
+		value := v.verifiedLEVText()
+		return value, value != "" && v.LEVPartial
+	})
 	severe = HasSevereVuln(comp.Vulns)
 	return
 }
 
 type vulnRiskKey struct {
-	id, cvss, epss, lev string
+	id, cvss, epss, lev     string
+	kevCVEs                 string
+	levPartial, epssPartial bool
+	kev                     KEVStatus
+	signalComplete          bool
+}
+
+func diffVulnRisk(v Vuln, source *ReportSource, compareCompleteness bool) vulnRiskKey {
+	lev := v.verifiedLEVText()
+	kev, kevCVEs := v.KEVEvidence()
+	slices.Sort(kevCVEs)
+	key := vulnRiskKey{
+		id:          v.ID,
+		cvss:        v.CVSSScore,
+		epss:        v.EPSS,
+		lev:         lev,
+		levPartial:  lev != "" && v.LEVPartial,
+		epssPartial: v.EPSSPartial,
+		kev:         kev,
+		kevCVEs:     strings.Join(slices.Compact(kevCVEs), ","),
+	}
+	if compareCompleteness {
+		key.signalComplete = v.ExploitationSignal(kev, source).Complete
+	}
+	return key
 }
 
 // sameVulnRisks compares findings as a multiset, so source ordering cannot
 // produce a false diff and equal counts cannot hide changed findings.
-func sameVulnRisks(a, b []Vuln) bool {
+func sameVulnRisks(a, b []Vuln, sourceA, sourceB *ReportSource) bool {
 	if len(a) != len(b) {
 		return false
 	}
+	compareCompleteness := sourceA.LEVDisabled() != sourceB.LEVDisabled()
 	counts := make(map[vulnRiskKey]int, len(a))
 	for _, vuln := range a {
-		counts[vulnRiskKey{vuln.ID, vuln.CVSSScore, vuln.EPSS, vuln.LEV}]++
+		counts[diffVulnRisk(vuln, sourceA, compareCompleteness)]++
 	}
 	for _, vuln := range b {
-		key := vulnRiskKey{vuln.ID, vuln.CVSSScore, vuln.EPSS, vuln.LEV}
+		key := diffVulnRisk(vuln, sourceB, compareCompleteness)
 		if counts[key] == 0 {
 			return false
 		}
@@ -225,9 +283,12 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 
 		cvssB, epssB, levB, severeB := riskFields(compB)
 		levelB := b.ComponentToLevel[keyB]
+		installedA, installedB := compA.InstalledVersion, compB.InstalledVersion
+		installedChanged := installedA != installedB &&
+			(installedA == nil || installedB == nil || *installedA != *installedB)
 		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber ||
 			levelA != levelB || compA.ContainsVulnDep != compB.ContainsVulnDep ||
-			!sameVulnRisks(compA.Vulns, compB.Vulns) {
+			installedChanged || !sameVulnRisks(compA.Vulns, compB.Vulns, a.ReportSource, b.ReportSource) {
 			diff := ComponentDiff{
 				Name:       name,
 				VersionA:   compA.Version,
@@ -246,6 +307,10 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 				MaxLevB:    levB,
 				SevereA:    severeA,
 				SevereB:    severeB,
+			}
+			if installedChanged {
+				diff.InstalledVersionA = installedA
+				diff.InstalledVersionB = installedB
 			}
 
 			if keyB != name {

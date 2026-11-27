@@ -7,12 +7,9 @@ package first
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
-
-	"ex-sbom/util"
+	"time"
 )
 
 type (
@@ -33,9 +30,6 @@ type (
 		Percentile string       `json:"percentile"`
 		Date       string       `json:"date"`
 		TimeSeries []TimeSeries `json:"time-series"`
-
-		LEV     float64 `json:"-"`
-		EPSSNum float64 `json:"-"`
 	}
 
 	TimeSeries struct {
@@ -52,12 +46,11 @@ type (
 const (
 	BaseURL = "https://api.first.org/data/v1/epss"
 	Pcve    = "?cve="
-	Ps      = "&scope=time-series"
 )
 
 func New() *Client {
 	return &Client{
-		HttpClient: &http.Client{},
+		HttpClient: &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
@@ -77,14 +70,6 @@ func (c *Client) GetEPSS(cves []string) (*EPSSResponse, error) {
 	var epssResponse EPSSResponse
 	if err := json.NewDecoder(resp.Body).Decode(&epssResponse); err != nil {
 		return nil, err
-	}
-
-	for i := range epssResponse.Data {
-		if len(epssResponse.Data[i].TimeSeries) > 0 {
-			epssResponse.Data[i].LEV = getLEV(epssResponse.Data[i].TimeSeries)
-		} else {
-			epssResponse.Data[i].LEV = 0.0
-		}
 	}
 
 	return &epssResponse, nil
@@ -108,34 +93,5 @@ func composeParam(cves []string) string {
 		p.WriteString(cve)
 	}
 
-	p.WriteString(Ps)
-
 	return p.String()
-}
-
-func getLEV(ts []TimeSeries) float64 {
-	var fs, reverse []float64
-
-	for _, t := range ts {
-		if t.EPSS != "" {
-			epssf, err := strconv.ParseFloat(t.EPSS, 64)
-			if err != nil {
-				slog.Error("failed to parse EPSS value", "value", t.EPSS, "error", err)
-				continue
-			}
-
-			fs = append(fs, epssf)
-		}
-
-		if len(fs) == 0 {
-			return 0.0
-		}
-
-		for _, f := range fs {
-			r := 1 - f
-			reverse = append(reverse, r)
-		}
-	}
-
-	return 1 - util.Multiply(reverse)
 }

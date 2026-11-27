@@ -3,6 +3,7 @@ module ex-sbom
 go 1.26.5
 
 require (
+	deps.dev/util/semver v0.0.0-20260727054525-2946ae4a6141
 	github.com/CycloneDX/cyclonedx-go v0.11.0
 	github.com/alifiroozi80/duckdb v1.1.1
 	github.com/gin-gonic/gin v1.10.1
@@ -13,6 +14,7 @@ require (
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/spdx/tools-golang v0.5.7
 	github.com/stretchr/testify v1.12.1
+	golang.org/x/sys v0.48.0
 	gorm.io/gorm v1.31.1
 )
 
@@ -25,7 +27,6 @@ require (
 	deps.dev/util/maven v0.0.0-20260727054525-2946ae4a6141 // indirect
 	deps.dev/util/pypi v0.0.0-20260727054525-2946ae4a6141 // indirect
 	deps.dev/util/resolve v0.0.0-20260727054525-2946ae4a6141 // indirect
-	deps.dev/util/semver v0.0.0-20260727054525-2946ae4a6141 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
 	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 // indirect
@@ -178,7 +179,6 @@ require (
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect

@@ -10,14 +10,20 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 
 > 注意：由於 osv-scanner 需連線至 OSV API 取得弱點資料，因此在啟動時以及上傳 SBOM 時皆需要可用的網際網路連線。
 
+若環境限制對外連線，請允許工具透過 HTTPS 連線至下列主機。
+
+- `api.osv.dev` 用於啟動時的連線檢查與 OSV 弱點查詢。
+- `api.first.org` 用於從 `/data/v1/epss` 取得最新 EPSS 分數。
+- `www.cisa.gov` 用於從 `/sites/default/files/feeds/known_exploited_vulnerabilities.json` 取得 KEV 清單。
+
 ## 我該怎麼使用它
 
-1. 下載 Release 中的執行檔（推薦），或是自行編譯此專案。
+1. 從 [Releases](https://github.com/nics-tw/ex-sbom/releases) 下載對應平台的執行檔。
 2. 執行它，瀏覽器會自動開啟本地網頁介面 `http://localhost:8080`。
 3. 建立或選擇一個專案。專案可用來彙整同一產品或系統的多個 SBOM 版本。
 4. 在 **SBOM 分析** 分頁新增版本，上傳 CycloneDX JSON 或 SPDX JSON 檔案。
 5. 預覽解析結果，輸入版本名稱並儲存。
-6. 探索相依性圖、跨版本搜尋、在 **Diff 比對** 分頁比較兩個版本，或匯出 PDF 報告。
+6. 探索相依性圖、跨版本搜尋，或在 **Diff 比對** 分頁比較兩個版本。要匯出報告，選好已儲存的版本後點 **下載 PDF 報告**。
 
 ## 功能特色
 
@@ -79,7 +85,8 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
    ./ex-sbom
    ```
 5. 您的瀏覽器應該會自動打開一個新標籤頁，網址為 `http://localhost:8080`。如果沒有自動打開，您可以手動在瀏覽器中輸入此網址。
-   （如果是本地開發，您可以直接執行 `go run main.go` 來啟動它。）
+本機開發時，可執行 `go run .` 啟動服務。
+
 
 ## 環境設定
 
@@ -91,6 +98,22 @@ ex-sbom 封裝為單一執行檔，內嵌應用程式頁面、本地 JavaScript 
 | `BIND_ADDR` | `127.0.0.1` | 僅接受本機 loopback IP，例如 `127.0.0.1` 或 `::1`。其他位址會被拒絕。 |
 | `AUTO_OPEN_BROWSER` | `true` | 設為 `false` 可在啟動時不自動開啟瀏覽器。 |
 | `DB_PATH` | 依作業系統而定（見下方） | DuckDB 資料庫檔案的路徑。 |
+| `EPSS_ARCHIVE_DIR` | — | 選填。存放官方每日 `epss_scores-YYYY-MM-DD.csv.gz` 的目錄。請保留自 2021-04-14 起至前一個 UTC 日的封存。每次匯入最多花 3 秒查詢封存，檔案未變更時可重用記憶體中的查詢結果。若已驗證首次評分日期，報告可用查得的 30 天視窗分數計算 LEV 下界。若無法驗證該日期，報告會標示 LEV 未取得。 |
+| `CVE_RESERVATIONS_FILE` | — | 選填。指定本機 JSON 檔，內容為 CVE 識別碼對應官方保留日期（`YYYY-MM-DD`）。CVE 保留日前的歷史封存缺檔不影響該 CVE。請使用 CVE Program 整批封存的日期。 |
+
+### 歷史 EPSS 與 LEV
+
+可選的封存索引適合匯入時需要查詢多年歷史 LEV 的情境。維運人員可在離線環境用同一個執行檔預先建立索引。
+
+```bash
+./ex-sbom lev-index build --archive /path/to/epss --as-of 2026-11-22 --output /private/ex-sbom/epss-2026-11-22 --reservations /path/to/reservations.json
+```
+
+輸出路徑須尚未使用，且位於服務帳號可控的目錄。指令會複製來源資料，完整建置後發布為唯讀快照。沒有可信的保留日期檔時省略 `--reservations`。將 `EPSS_ARCHIVE_DIR` 指向新快照。有保留日期時，另將 `CVE_RESERVATIONS_FILE` 指向快照內的 `cve-reservations.json`。匯入以掃描時間的前一個 UTC 日為截日。索引不符或無法使用時，可在三秒預算剩餘時間內查詢原始封存。LEV 分為完整值、下界與未取得。
+
+截日更新、日檔補齊或來源修正時先建立新快照，再一起切換兩個設定並重啟程式。需要回復時，以相同步驟指回先前驗證過的快照。已儲存的報告使用該次掃描留下的 LEV 證據。
+
+46 個 CVE 的選用驗收可執行 `go test -v -count=1 -tags unit -run '^TestHistoricalLEVOfficialArchiveAcceptance$' ./internal/service/sbom`。將 `EX_SBOM_LEV_ACCEPT_SNAPSHOT`、`EX_SBOM_LEV_ACCEPT_SOURCE`、`EX_SBOM_LEV_ACCEPT_CUTOFF`、`EX_SBOM_LEV_ACCEPT_CVES` 分別設為快照、原始封存、UTC 截日及包含 46 個不同 CVE 的文字檔。使用保留日期檔時設定 `EX_SBOM_LEV_ACCEPT_RESERVATIONS`。若要保存逐筆結果，將 `EX_SBOM_LEV_ACCEPT_REPORT` 指向新的私有檔案路徑。
 
 預設情況下，資料庫檔案會儲存於各平台原生的設定目錄：
 - macOS：`~/Library/Application Support/ex-sbom/data.duckdb`

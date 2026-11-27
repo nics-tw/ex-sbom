@@ -41,8 +41,9 @@ type (
 
 	// Component is a struct that contains the information from both the original SBOM file and scanned info from the osv-scanner util
 	Component struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
+		Name             string                    `json:"name"`
+		Version          string                    `json:"version"`
+		InstalledVersion *InstalledVersionEvidence `json:"installed_version,omitempty"`
 		// VulnNumber is the number of total vulnerabilities that the component has
 		VulnNumber      int    `json:"vuln_number"`
 		Vulns           []Vuln `json:"vulns"`
@@ -61,18 +62,32 @@ type (
 		ID      string `json:"id"`
 		Summary string `json:"summary"`
 		// Details is the description of the vulnerability, which is in markdown format, including root cause and patch information
-		Details   string `json:"details"`
-		CVSSScore string `json:"cvss_score"`
+		Details     string `json:"details"`
+		CVSSScore   string `json:"cvss_score"`
+		CVSSVersion string `json:"cvss_version,omitempty"`
 		// SuggestFixVersion is a distinct list of versions that the user can upgrade to prevent the vulnerability
 		// here concat the versions with ", " as the separator
 
 		SuggestFixVersion string `json:"suggest_fix_version"`
 		OtherFixVersions  string `json:"other_fix_versions"`
 
-		EPSS string `json:"epss,omitempty"`
-		LEV  string `json:"lev,omitempty"`
+		EPSS        string    `json:"epss,omitempty"`
+		EPSSDate    string    `json:"epss_date,omitempty"`
+		EPSSCVE     string    `json:"epss_cve,omitempty"`
+		EPSSPartial bool      `json:"epss_partial,omitempty"`
+		LEV         string    `json:"lev,omitempty"`
+		LEVMethod   string    `json:"lev_method,omitempty"`
+		LEVFirst    string    `json:"lev_first,omitempty"`
+		LEVAsOf     string    `json:"lev_as_of,omitempty"`
+		LEVPartial  bool      `json:"lev_partial,omitempty"`
+		LEVCVE      string    `json:"lev_cve,omitempty"`
+		CVEIDs      []string  `json:"cve_ids,omitempty"`
+		KEV         KEVStatus `json:"kev,omitempty"`
+		KEVCVE      string    `json:"kev_cve,omitempty"`
+		KEVCVEs     []string  `json:"kev_cves,omitempty"`
 
-		FixVersions []string `json:"fix_versions,omitempty"`
+		RepairEvidence *RepairEvidence `json:"repair_evidence,omitempty"`
+		FixVersions    []string        `json:"fix_versions,omitempty"`
 	}
 
 	version struct {
@@ -118,6 +133,8 @@ func sortFormattedSBOM(sbom *FormattedSBOM) {
 	for _, component := range sbom.ComponentInfo {
 		for i := range component.Vulns {
 			slices.Sort(component.Vulns[i].FixVersions)
+			slices.Sort(component.Vulns[i].CVEIDs)
+			slices.Sort(component.Vulns[i].KEVCVEs)
 			if versions := component.Vulns[i].OtherFixVersions; strings.Contains(versions, ", ") {
 				other := strings.Split(versions, ", ")
 				slices.Sort(other)
@@ -136,11 +153,25 @@ func compareVulns(a, b Vuln) int {
 		cmp.Compare(a.Summary, b.Summary),
 		cmp.Compare(a.Details, b.Details),
 		cmp.Compare(a.CVSSScore, b.CVSSScore),
+		cmp.Compare(a.CVSSVersion, b.CVSSVersion),
 		cmp.Compare(a.SuggestFixVersion, b.SuggestFixVersion),
 		cmp.Compare(a.OtherFixVersions, b.OtherFixVersions),
 		cmp.Compare(a.EPSS, b.EPSS),
+		cmp.Compare(a.EPSSDate, b.EPSSDate),
+		cmp.Compare(a.EPSSCVE, b.EPSSCVE),
+		cmp.Compare(strconv.FormatBool(a.EPSSPartial), strconv.FormatBool(b.EPSSPartial)),
 		cmp.Compare(a.LEV, b.LEV),
+		cmp.Compare(a.LEVMethod, b.LEVMethod),
+		cmp.Compare(a.LEVFirst, b.LEVFirst),
+		cmp.Compare(a.LEVAsOf, b.LEVAsOf),
+		cmp.Compare(strconv.FormatBool(a.LEVPartial), strconv.FormatBool(b.LEVPartial)),
+		cmp.Compare(a.LEVCVE, b.LEVCVE),
+		slices.Compare(a.CVEIDs, b.CVEIDs),
+		cmp.Compare(a.KEV, b.KEV),
+		cmp.Compare(a.KEVCVE, b.KEVCVE),
+		slices.Compare(a.KEVCVEs, b.KEVCVEs),
 		slices.Compare(a.FixVersions, b.FixVersions),
+		compareRepairEvidence(a.RepairEvidence, b.RepairEvidence),
 	)
 }
 
@@ -398,23 +429,18 @@ func getComponentToLevel(DependencyLevel map[int][]string) map[string]int {
 	return componentToLevel
 }
 
-func getCVSS(id string, groups []models.GroupInfo) string {
-	for _, g := range groups {
-		if slices.Contains(g.IDs, id) {
-			return g.MaxSeverity
-		}
-	}
-
-	return ""
-}
-
-func getVulns(pkg models.PackageVulns, version string) []Vuln {
+func buildVulns(pkg models.PackageVulns, version string, identity *file.PackageVersion) []Vuln {
 	var vulns []Vuln
+	var groupFallbacks map[string]cvssRating
 	for _, v := range pkg.Vulnerabilities {
 		if v == nil {
 			continue
 		}
 		allFixVers := getAllFixVersions(v)
+		var evidence *RepairEvidence
+		if identity != nil {
+			evidence = matchedRepairEvidence(v, *identity)
+		}
 		slices.Sort(allFixVers)
 		suggestFix := findNearestVersions(version, allFixVers)
 		otherFixVer := getDiff(allFixVers, suggestFix)
@@ -423,15 +449,26 @@ func getVulns(pkg models.PackageVulns, version string) []Vuln {
 		if identifier == "" {
 			identifier = v.Id
 		}
+		cvss, standard := advisoryCVSS(v, identity)
+		if cvss == "" {
+			if groupFallbacks == nil {
+				groupFallbacks = groupCVSSByID(pkg)
+			}
+			fallback := groupFallbacks[v.Id]
+			cvss, standard = fallback.score, fallback.version
+		}
 		vulns = append(vulns, Vuln{
 			ID:                identifier,
+			CVEIDs:            findingCVEs(v.Id, v.Aliases),
 			Summary:           v.Summary,
 			Details:           v.Details,
-			CVSSScore:         getCVSS(v.Id, pkg.Groups),
+			CVSSScore:         cvss,
+			CVSSVersion:       standard,
 			SuggestFixVersion: getVersionString(suggestFix),
 			OtherFixVersions:  getVersionString(otherFixVer),
 
-			FixVersions: allFixVers,
+			FixVersions:    allFixVers,
+			RepairEvidence: evidence,
 		})
 	}
 	return vulns
@@ -441,7 +478,7 @@ func packageFindings(pkgs map[file.PackageVersion]models.PackageVulns, key file.
 	if key.Name == "" {
 		return nil
 	}
-	return getVulns(pkgs[key], key.Version)
+	return buildVulns(pkgs[key], key.Version, &key)
 }
 
 func getCVEFromAliases(aliases []string) string {

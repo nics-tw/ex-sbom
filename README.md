@@ -11,13 +11,19 @@ ex-sbom is packaged as a single executable that embeds the application pages, lo
 
 > Note: A working internet connection is required at startup and when uploading an SBOM, because osv-scanner queries the OSV API for vulnerability data.
 
+Allow outbound HTTPS to the following hosts for vulnerability analysis.
+
+- `api.osv.dev` for the startup check and OSV vulnerability queries.
+- `api.first.org` for current EPSS scores at `/data/v1/epss`.
+- `www.cisa.gov` for the KEV catalog at `/sites/default/files/feeds/known_exploited_vulnerabilities.json`.
+
 ## How to use it
-1. Download the executable from the Release page (recommended), or build the project yourself.
+1. Download the executable for your platform from [Releases](https://github.com/nics-tw/ex-sbom/releases).
 2. Run it, and your browser opens the local web UI at `http://localhost:8080`.
 3. Create or select a project. Projects group related SBOM versions for the same product or system.
 4. In the **SBOM Analysis** tab, add a version by uploading a CycloneDX JSON or SPDX JSON file.
 5. Preview the parsed result, give it a version name, and save it.
-6. Explore the dependency graph, search across versions, compare two versions in the **Diff** tab, or export a PDF report.
+6. Explore the dependency graph, search across versions, or compare two versions in the **Diff** tab. Select a saved version and click **Download PDF Report** to export its report.
 
 ## Features
 
@@ -79,7 +85,7 @@ go build -o ex-sbom
 
 5. Your browser should automatically open a new tab with the URL `http://localhost:8080`. If it doesn't, you can manually open your browser and enter the URL.
 
-（If for local development, you can merely run the command `go run main.go` to start the server.）
+For local development, run `go run .` to start the server.
 
 ## Configuration
 
@@ -91,6 +97,22 @@ The following environment variables can be used to configure the tool:
 | `BIND_ADDR` | `127.0.0.1` | Loopback IP address, such as `127.0.0.1` or `::1`. Other addresses are rejected. |
 | `AUTO_OPEN_BROWSER` | `true` | Set to `false` to prevent automatically opening the browser on startup. |
 | `DB_PATH` | OS-specific (see below) | Path to the DuckDB database file. |
+| `EPSS_ARCHIVE_DIR` | — | Optional directory of official daily `epss_scores-YYYY-MM-DD.csv.gz` files. Keep the archive from 2021-04-14 through the previous UTC day. Import gives the archive lookup up to 3 seconds and reuses in-memory results while the files are unchanged. If the first score date is verified, the report can show a LEV lower bound from the available 30-day window scores. If that date cannot be verified, the report marks LEV unavailable. |
+| `CVE_RESERVATIONS_FILE` | — | Optional local JSON map of CVE IDs to official reservation dates (`YYYY-MM-DD`). Older archive gaps before a CVE was reserved do not invalidate that CVE's history. Use dates from the CVE Program bulk archive. |
+
+### Historical EPSS and LEV
+
+The optional index is useful when a fresh import needs historical LEV from many years of daily EPSS files. An operator prepares it offline with the same executable used to serve reports.
+
+```bash
+./ex-sbom lev-index build --archive /path/to/epss --as-of 2026-11-22 --output /private/ex-sbom/epss-2026-11-22 --reservations /path/to/reservations.json
+```
+
+Use an unused output path under a directory controlled by the service account. The command copies the inputs and publishes the read-only snapshot after the index is complete. Omit `--reservations` when there is no trusted reservations file. Set `EPSS_ARCHIVE_DIR` to the published directory. If reservations were supplied, set `CVE_RESERVATIONS_FILE` to `cve-reservations.json` inside that snapshot. An import uses the UTC day before the scan as its cutoff. When the index does not match or is unavailable, the app can scan the raw archive within the remaining three-second budget. Results distinguish an exact value, a lower bound, and unavailable evidence.
+
+Build a new snapshot for a new cutoff or corrected inputs. Switch both settings together and restart the app. A rollback uses the same steps with a previously verified snapshot. Stored reports read their recorded LEV evidence.
+
+Run `TestHistoricalLEVOfficialArchiveAcceptance` with `go test -v -count=1 -tags unit -run '^TestHistoricalLEVOfficialArchiveAcceptance$' ./internal/service/sbom` for the optional 46-CVE acceptance check. Set `EX_SBOM_LEV_ACCEPT_SNAPSHOT`, `EX_SBOM_LEV_ACCEPT_SOURCE`, `EX_SBOM_LEV_ACCEPT_CUTOFF` and `EX_SBOM_LEV_ACCEPT_CVES` to the snapshot, original archive, UTC cutoff and a file with 46 distinct CVEs. Set `EX_SBOM_LEV_ACCEPT_RESERVATIONS` if the original archive has a reservations file. Set `EX_SBOM_LEV_ACCEPT_REPORT` to a new private file path to retain per-CVE results.
 
 By default, the database file is stored under the platform-native config directory:
 - macOS: `~/Library/Application Support/ex-sbom/data.duckdb`

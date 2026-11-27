@@ -8,6 +8,8 @@ package ssbom
 
 import (
 	"encoding/json"
+
+	"ex-sbom/client/first"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -112,7 +114,7 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 	base := Component{
 		Version: "1.0.0", VulnNumber: 2,
 		Vulns: []Vuln{
-			{ID: "CVE-1", CVSSScore: "7.1", EPSS: "0.1", LEV: "0.2"},
+			{ID: "CVE-2025-0001", CVEIDs: []string{"CVE-2025-0001"}, CVSSScore: "7.1", EPSS: "0.1", LEV: "0.2", LEVMethod: first.LEVMethod, KEV: KEVUnlisted},
 			{ID: "CVE-2", CVSSScore: "4.0", EPSS: "0.3", LEV: "0.4"},
 		},
 	}
@@ -126,6 +128,13 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 		{"changed CVSS", func(c *Component) { c.Vulns[0].CVSSScore = "7.2" }, true},
 		{"changed EPSS", func(c *Component) { c.Vulns[0].EPSS = "0.2" }, true},
 		{"changed LEV", func(c *Component) { c.Vulns[0].LEV = "0.3" }, true},
+		{"changed LEV certainty", func(c *Component) { c.Vulns[0].LEVPartial = true }, true},
+		{"listed in KEV", func(c *Component) {
+			c.Vulns[0].KEV = KEVListed
+			c.Vulns[0].KEVCVEs = c.Vulns[0].CVEIDs
+		}, true},
+		{"changed unverified LEV", func(c *Component) { c.Vulns[1].LEV = "0.9" }, false},
+		{"changed unverified LEV certainty", func(c *Component) { c.Vulns[1].LEVPartial = true }, false},
 		{"changed dependency risk", func(c *Component) { c.ContainsVulnDep = true }, true},
 	}
 	for _, tt := range tests {
@@ -136,12 +145,126 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 			a := makeSBOM(map[string]Component{"pkg": base}, map[string]int{"pkg": 0})
 			b := makeSBOM(map[string]Component{"pkg": newComponent}, map[string]int{"pkg": 0})
 			result := DiffSBOMs(a, b)
-			if tt.changed {
+			if tt.changed && assert.Contains(t, result.ByLevel, 0) {
 				assert.Len(t, result.ByLevel[0].Changed, 1)
+			} else if !tt.changed {
+				assert.Empty(t, result.ByLevel)
+			}
+		})
+	}
+}
+
+func TestDiffSBOMs_KEVMatchesChange(t *testing.T) {
+	const cveA, cveB, unrelated = "CVE-2025-0001", "CVE-2025-0002", "CVE-2025-0003"
+	snapshot := func(matches []string, legacy string) FormattedSBOM {
+		finding := Vuln{
+			ID: "GHSA-test", CVEIDs: []string{cveA, cveB},
+			CVSSScore: "9.8", KEV: KEVListed, KEVCVEs: matches, KEVCVE: legacy,
+		}
+		component := Component{Version: "1.0.0", VulnNumber: 1, Vulns: []Vuln{finding}}
+		return makeSBOM(map[string]Component{"pkg": component}, map[string]int{"pkg": 0})
+	}
+	for _, tt := range []struct {
+		name    string
+		a, b    FormattedSBOM
+		changed bool
+	}{
+		{"added match", snapshot([]string{cveA}, ""), snapshot([]string{cveA, cveB}, ""), true},
+		{"replaced match", snapshot([]string{cveA}, ""), snapshot([]string{cveB}, ""), true},
+		{"same matches reordered and duplicated", snapshot([]string{cveA, cveB}, ""), snapshot([]string{cveB, cveA, cveA}, ""), false},
+		{"same match in legacy evidence", snapshot(nil, cveA), snapshot([]string{cveA}, ""), false},
+		{"unrelated CVE ignored", snapshot([]string{cveA}, ""), snapshot([]string{cveA, unrelated}, ""), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DiffSBOMs(tt.a, tt.b)
+			if tt.changed {
+				if assert.Contains(t, result.ByLevel, 0) {
+					assert.Len(t, result.ByLevel[0].Changed, 1)
+				}
 			} else {
 				assert.Empty(t, result.ByLevel)
 			}
 		})
+	}
+}
+
+func TestDiffSBOMs_LEVArchiveCompletenessChanges(t *testing.T) {
+	finding := Vuln{ID: "CVE-2025-0001", CVSSScore: "3.1", EPSS: "0.02", KEV: KEVUnlisted}
+	withLEV := finding
+	withLEV.LEV, withLEV.LEVMethod = "0.01", first.LEVMethod
+	components := map[string]Component{
+		"missing-lev": {Version: "1.0.0", VulnNumber: 1, Vulns: []Vuln{finding}},
+		"with-lev":    {Version: "1.0.0", VulnNumber: 1, Vulns: []Vuln{withLEV}},
+		"clean":       {Version: "1.0.0"},
+	}
+	a := makeSBOM(components, nil)
+	b := makeSBOM(components, nil)
+	a.ReportSource = &ReportSource{LEVArchiveStatus: LEVArchiveDisabled}
+	b.ReportSource = &ReportSource{LEVArchiveStatus: LEVArchiveConfigured}
+
+	threshold := 0.10
+	assert.Equal(t, RemediationRoutine, assessFinding(finding, "", &threshold, a.ReportSource).Priority)
+	assert.Equal(t, RemediationReview, assessFinding(finding, "", &threshold, b.ReportSource).Priority)
+	result := DiffSBOMs(a, b)
+	if assert.Contains(t, result.ByLevel, 0) && assert.Len(t, result.ByLevel[0].Changed, 1) {
+		assert.Equal(t, "missing-lev", result.ByLevel[0].Changed[0].Name)
+	}
+
+	a.ReportSource = nil
+	assert.Empty(t, DiffSBOMs(a, b).ByLevel)
+}
+
+func TestDiffSBOMs_InstalledVersionEvidenceChanges(t *testing.T) {
+	before := Component{
+		Version: "1.0.0",
+		InstalledVersion: &InstalledVersionEvidence{
+			Ecosystem: "npm", Package: "pkg", Version: "1.0.0",
+		},
+		VulnNumber: 1,
+		Vulns:      []Vuln{{ID: "CVE-2025-0001", CVSSScore: "9.8", KEV: KEVListed}},
+	}
+	snapshot := func(component Component) FormattedSBOM {
+		return makeSBOM(map[string]Component{"pkg": component}, map[string]int{"pkg": 0})
+	}
+	equivalent := *before.InstalledVersion
+	after := before
+	after.InstalledVersion = &equivalent
+	assert.Empty(t, DiffSBOMs(snapshot(before), snapshot(after)).ByLevel)
+
+	after.InstalledVersion.Confirmed = true
+	result := DiffSBOMs(snapshot(before), snapshot(after))
+	if assert.Contains(t, result.ByLevel, 0) {
+		changes := result.ByLevel[0].Changed
+		if assert.Len(t, changes, 1) {
+			assert.Equal(t, changes[0].VersionA, changes[0].VersionB)
+			assert.Equal(t, before.InstalledVersion, changes[0].InstalledVersionA)
+			assert.Equal(t, after.InstalledVersion, changes[0].InstalledVersionB)
+			body, err := json.Marshal(changes[0])
+			assert.NoError(t, err)
+			assert.Contains(t, string(body), `"installed_version_a":{"ecosystem":"npm","package":"pkg","version":"1.0.0","confirmed":false}`)
+			assert.Contains(t, string(body), `"installed_version_b":{"ecosystem":"npm","package":"pkg","version":"1.0.0","confirmed":true}`)
+		}
+	}
+}
+
+func TestDiffSBOMs_EmptyEPSScoreBecomesPartial(t *testing.T) {
+	before := Component{Version: "1.0.0", VulnNumber: 2, Vulns: []Vuln{
+		{ID: "TEST-SCORED", EPSS: "0.2"},
+		{ID: "TEST-MISSING"},
+	}}
+	after := before
+	after.Vulns = append([]Vuln(nil), before.Vulns...)
+	after.Vulns[1].EPSSPartial = true
+
+	a := makeSBOM(map[string]Component{"pkg": before}, map[string]int{"pkg": 0})
+	b := makeSBOM(map[string]Component{"pkg": after}, map[string]int{"pkg": 0})
+	result := DiffSBOMs(a, b)
+	if assert.Contains(t, result.ByLevel, 0) {
+		changes := result.ByLevel[0].Changed
+		if assert.Len(t, changes, 1) {
+			assert.Equal(t, "0.2", changes[0].MaxEpssA)
+			assert.Empty(t, changes[0].MaxEpssB)
+		}
 	}
 }
 
@@ -438,4 +561,62 @@ func TestDiffSBOMs_ChangedLevelToZeroIsPreserved(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `"level_a":1`)
 	assert.Contains(t, string(data), `"level_b":0`, "level 0 must not be dropped by omitempty")
+}
+
+func TestRiskFieldsProbabilityMaxima(t *testing.T) {
+	cases := []struct {
+		name     string
+		findings []Vuln
+		wantEPSS string
+		wantLEV  string
+	}{
+		{
+			name: "partial EPSS above the complete score",
+			findings: []Vuln{
+				{EPSS: "0.2", LEV: "0.3", LEVMethod: first.LEVMethod},
+				{EPSS: "0.8", EPSSPartial: true},
+			},
+			wantLEV: "0.3",
+		},
+		{
+			name: "partial verified LEV above the complete score",
+			findings: []Vuln{
+				{EPSS: "0.2", LEV: "0.3", LEVMethod: first.LEVMethod},
+				{LEV: "0.8", LEVMethod: first.LEVMethod, LEVPartial: true},
+			},
+			wantEPSS: "0.2",
+		},
+		{
+			name: "explicitly missing EPSS alongside a complete score",
+			findings: []Vuln{
+				{EPSS: "0.2"},
+				{EPSSPartial: true},
+			},
+		},
+		{
+			name: "unknown legacy LEV and valid zero",
+			findings: []Vuln{
+				{LEV: "1", LEVPartial: true},
+				{EPSS: "0", LEV: "0", LEVMethod: first.LEVMethod},
+			},
+			wantEPSS: "0",
+			wantLEV:  "0",
+		},
+		{
+			name: "complete findings use the highest verified scores",
+			findings: []Vuln{
+				{EPSS: "0.4", LEV: "1", LEVMethod: first.LEVMethod},
+				{EPSS: "0.8", LEV: "0.8", LEVMethod: first.LEVMethod},
+			},
+			wantEPSS: "0.8",
+			wantLEV:  "1",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, epss, lev, _ := riskFields(Component{Vulns: tc.findings})
+			assert.Equal(t, tc.wantEPSS, epss)
+			assert.Equal(t, tc.wantLEV, lev)
+		})
+	}
 }

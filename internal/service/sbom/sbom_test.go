@@ -60,15 +60,15 @@ func TestFindNearestVersions(t *testing.T) {
 	}
 }
 
-func TestGetVulnsFixVersionsIgnoreScannerOrder(t *testing.T) {
+func TestBuildVulnsFixVersionsIgnoreScannerOrder(t *testing.T) {
 	makeVulns := func(candidates ...string) []Vuln {
 		var events []*osvschema.Event
 		for _, candidate := range candidates {
 			events = append(events, &osvschema.Event{Fixed: candidate})
 		}
-		return getVulns(models.PackageVulns{Vulnerabilities: []*osvschema.Vulnerability{{
+		return buildVulns(models.PackageVulns{Vulnerabilities: []*osvschema.Vulnerability{{
 			Affected: []*osvschema.Affected{{Ranges: []*osvschema.Range{{Events: events}}}},
-		}}}, "1.0")
+		}}}, "1.0", nil)
 	}
 
 	forward := makeVulns("3.0", "1.2-b", "2.0", "1.2-a")
@@ -673,7 +673,7 @@ func TestGetVersionString(t *testing.T) {
 	}
 }
 
-func TestGetVulns(t *testing.T) {
+func TestBuildVulns(t *testing.T) {
 	// Setup test data
 	mockVulnMap := map[string]models.PackageVulns{
 		"package1": {
@@ -798,7 +798,7 @@ func TestGetVulns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getVulns(mockVulnMap[tt.packageName], tt.packageVer)
+			result := buildVulns(mockVulnMap[tt.packageName], tt.packageVer, nil)
 
 			// Check the length of result
 			assert.Equal(t, tt.expectedCount, len(result))
@@ -840,7 +840,7 @@ func TestGetVulns(t *testing.T) {
 	}
 }
 
-func TestGetCVSS(t *testing.T) {
+func TestGroupCVSS(t *testing.T) {
 	tests := []struct {
 		name     string
 		id       string
@@ -859,16 +859,19 @@ func TestGetCVSS(t *testing.T) {
 			expected: "7.5",
 		},
 		{
-			name: "ID found in multiple groups",
+			name: "first matching group with a score wins",
 			id:   "CVE-2023-1234",
 			groups: []models.GroupInfo{
 				{
-					IDs:         []string{"CVE-2023-5678"},
-					MaxSeverity: "4.5",
+					IDs: []string{"CVE-2023-1234"},
 				},
 				{
 					IDs:         []string{"CVE-2023-1234", "CVE-2023-9012"},
 					MaxSeverity: "8.0",
+				},
+				{
+					IDs:         []string{"CVE-2023-1234"},
+					MaxSeverity: "4.5",
 				},
 			},
 			expected: "8.0",
@@ -920,9 +923,11 @@ func TestGetCVSS(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getCVSS(tt.id, tt.groups)
+			rating := groupCVSSByID(models.PackageVulns{Groups: tt.groups})[tt.id]
+			result, standard := rating.score, rating.version
+			assert.Empty(t, standard)
 			if result != tt.expected {
-				t.Errorf("getCVSS(%s, groups) = %s, want %s",
+				t.Errorf("groupCVSS(%s, groups) = %s, want %s",
 					tt.id, result, tt.expected)
 			}
 		})

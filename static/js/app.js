@@ -135,6 +135,10 @@
           projectRenamePrompt: "Enter new project name:",
           projectDeleteConfirm: "Delete this project from the app? Its SBOMs will remain in the database.",
           projectNameRequired: "Enter a new project name.",
+          epssLowerBound: "At least {0} (missing alias scores)",
+          levLowerBound: "At least {0} (historical gaps)",
+          levUnavailable: "Unavailable or unverified",
+          levDisabled: "LEV was disabled at scan time.",
           diffFiles: "Diff Files",
           diffSbomTitle: "Compare SBOMs",
           diffSbomA: "SBOM A (before)",
@@ -282,6 +286,10 @@
           projectRenamePrompt: "輸入新的專案名稱：",
           projectDeleteConfirm: "確定從應用程式刪除此專案？SBOM 資料仍保留在資料庫。",
           projectNameRequired: "請輸入新專案名稱。",
+          epssLowerBound: "至少 {0}（別名分數未齊）",
+          levLowerBound: "至少 {0}（歷史資料有缺口）",
+          levUnavailable: "未取得或未驗證",
+          levDisabled: "掃描時未啟用 LEV。",
           diffFiles: "Diff 檔案",
           diffSbomTitle: "比較 SBOM",
           diffSbomA: "SBOM A（舊版）",
@@ -983,12 +991,14 @@
           suggested_fix_version: suggestedFix,
           is_breaking_change: false,
           has_severe_vuln: hasSevere,
+          lev_archive_status: bomResult.report_source?.lev_archive_status,
         }, paths);
       },
 
       _renderDetails(comp, vulnDepPaths = []) {
         const { name, version, vuln_number = 0, vulns: _vulns = [],
-                suggested_fix_version, is_breaking_change, has_severe_vuln, licences } = comp;
+                suggested_fix_version, is_breaking_change, has_severe_vuln, licences, lev_archive_status } = comp;
+        const levDisabled = lev_archive_status === "disabled";
         const vulns = _vulns ?? [];
 
         const warnIcon = (color) => _warnSVG(color, "", "h-5 w-5 mr-1 flex-shrink-0 mt-0.5");
@@ -1054,6 +1064,9 @@
           </div>`;
 
         if (vulns.length > 0) {
+          if (levDisabled) {
+            html += `<p class="mt-2 text-sm text-gray-600">${t("levDisabled")}</p>`;
+          }
           vulns.forEach((vuln, i) => {
             const severity  = _severityFromCvss(vuln.cvss_score);
             const sevClass  = _severityClass(severity);
@@ -1069,8 +1082,8 @@
                   </span>
                   <span class="flex flex-wrap items-center gap-y-1">
                     ${vuln.cvss_score ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 mr-2">CVSS: ${esc(vuln.cvss_score)}</span>` : ""}
-                    ${vuln.epss       ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${esc(vuln.epss)}</span>` : ""}
-                    ${vuln.lev        ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${esc(vuln.lev)}</span>` : ""}
+                    ${vuln.epss       ? `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">EPSS: ${vuln.epss_partial ? esc(t("epssLowerBound", vuln.epss)) : esc(vuln.epss)}</span>` : ""}
+                    ${levDisabled ? "" : `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">LEV: ${vuln.lev ? (vuln.lev_partial ? esc(t("levLowerBound", vuln.lev)) : esc(vuln.lev)) : t("levUnavailable")}</span>`}
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${sevClass}">${t("severity" + severity)}</span>
                     <svg aria-hidden="true" id="vuln-chevron-${i}" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 transform motion-safe:transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -1216,11 +1229,23 @@
         this._comparison.cancel();
       },
 
+      _showStatusError(key) {
+        const result = document.getElementById("diff-result");
+        const message = document.createElement("p");
+        message.className = "text-red-700";
+        message.setAttribute("aria-hidden", "true");
+        localizeText(message, key);
+        result.replaceChildren(message);
+        localizeText(document.getElementById("diff-status"), key);
+      },
+
       _selectionChanged() {
         this._displayed = null;
         this._comparison.cancel();
         document.getElementById("diff-result").innerHTML = "";
-        document.getElementById("diff-status").textContent = "";
+        const status = document.getElementById("diff-status");
+        delete status.dataset.i18n;
+        status.textContent = "";
       },
 
       _swap() {
@@ -1240,8 +1265,7 @@
 
         if (!a || !b || a === b) {
           this._comparison.cancel();
-          status.textContent = "";
-          resultEl.innerHTML = `<p class="text-red-700">${t("diffSelectBoth")}</p>`;
+          this._showStatusError("diffSelectBoth");
           return;
         }
 
@@ -1255,6 +1279,7 @@
           document.getElementById("diff-select-b").value === req.b;
 
         resultEl.innerHTML = `<p class="py-8 text-center" data-i18n="loading" aria-hidden="true">${t("loading")}</p>`;
+        delete status.dataset.i18n;
         status.textContent = t("loading");
 
         try {
@@ -1309,7 +1334,6 @@
         const selects = ["diff-select-a", "diff-select-b"].map(id => document.getElementById(id));
         const compare = document.getElementById("diff-compare-btn");
         const swap = document.getElementById("diff-swap-btn");
-        const result = document.getElementById("diff-result");
         this._selectionChanged();
         this.translate();
         for (const select of selects) {
@@ -1335,7 +1359,7 @@
           compare.disabled = versions.length < 2;
           swap.disabled = versions.length < 2;
         } catch {
-          if (isCurrent()) result.textContent = t("diffVersionsFailed");
+          if (isCurrent()) this._showStatusError("diffVersionsFailed");
         } finally {
           this._versions.finish(request);
         }
@@ -1685,7 +1709,7 @@
               <span class="text-gray-500">${t("uploadComponentCount")} <strong class="text-gray-800">${data.summary.component_count}</strong></span>
               <span class="text-gray-500">${t("uploadVulnCount")} <strong class="${data.summary.vuln_count > 0 ? 'text-red-700' : 'text-green-700'}">${data.summary.vuln_count}</strong></span>
             </div>`;
-          this._renderPreviewTopology(summary, data.bom_result);
+      this._renderPreviewTopology(summary, data.bom_result, data.go_advisories);
 
           const displayName = data.filename || req.file.name;
           document.getElementById("sbom-preview-title").innerHTML =
@@ -1787,7 +1811,7 @@
         }
       },
 
-      _renderPreviewTopology(container, bomResult) {
+      _renderPreviewTopology(container, bomResult, goAdvisories = {}) {
         const depLevel = bomResult?.DependencyLevel || {};
         const compInfo = bomResult?.ComponentInfo || {};
         const levels = Object.entries(depLevel).map(([lvlStr, components]) => {
@@ -1807,12 +1831,12 @@
         if (levels.length === 0) {
           wrap.innerHTML = `<div class="text-gray-400 italic text-sm">無元件資料</div>`;
         } else {
-          levels.forEach(lvl => wrap.appendChild(this._buildPreviewLevelPanel(lvl, compInfo, bomResult)));
+          levels.forEach(lvl => wrap.appendChild(this._buildPreviewLevelPanel(lvl, compInfo, bomResult, goAdvisories)));
         }
         container.appendChild(wrap);
       },
 
-      _buildPreviewLevelPanel(level, compInfo, bomResult) {
+      _buildPreviewLevelPanel(level, compInfo, bomResult, goAdvisories) {
         const panel = document.createElement("div");
         panel.className = "mb-4 border border-gray-200 rounded-md overflow-hidden";
 
@@ -1840,7 +1864,12 @@
         const body = document.createElement("div");
         body.className = "px-4 py-3";
         body.appendChild(Sbom._buildTopologyList(level, level.components, (comp, trigger) => {
-          ComponentModal.showFromLocal(comp, compInfo[comp] || {}, bomResult, trigger);
+          const info = Object.hasOwn(compInfo, comp) ? compInfo[comp] : {};
+          const candidates = Object.hasOwn(goAdvisories, comp) ? goAdvisories[comp] : null;
+          const details = candidates
+            ? { ...info, vulns: info.vulns.map((vuln, i) => ({ ...vuln, ...candidates[i] })) }
+            : info;
+          ComponentModal.showFromLocal(comp, details, bomResult, trigger);
         }));
         panel.appendChild(body);
         return panel;

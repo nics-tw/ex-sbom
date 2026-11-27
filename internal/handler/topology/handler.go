@@ -161,7 +161,11 @@ func (h *Handler) GetComponent(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: toComponentResp(component)})
+	response := toComponentResp(component, ssbom.IsGoComponent(bom.ReportSource, comp, component))
+	if bom.ReportSource != nil && bom.ReportSource.LEVArchiveStatus != "" {
+		response["lev_archive_status"] = bom.ReportSource.LEVArchiveStatus
+	}
+	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: response})
 }
 
 // GetComponentVulnDep returns vulnerability dependency paths for a component.
@@ -210,7 +214,7 @@ func (h *Handler) GetComponentVulnDep(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{msg.RespMsg: "ok", msg.RespData: paths})
 }
 
-func toComponentResp(c ssbom.Component) map[string]any {
+func toComponentResp(c ssbom.Component, isGo bool) map[string]any {
 	hasSevere := ssbom.HasSevereVuln(c.Vulns)
 	var versions [][]string
 	for _, v := range c.Vulns {
@@ -220,11 +224,25 @@ func toComponentResp(c ssbom.Component) map[string]any {
 	}
 
 	suggest := ssbom.GetSuggestFixVersions(c.Version, versions...)
+	if isGo {
+		suggest = ssbom.GoCandidateVersions(suggest)
+	}
+	vulns := slices.Clone(c.Vulns)
+	for i := range vulns {
+		if isGo {
+			vulns[i] = vulns[i].GoAdvisoryDisplay()
+		}
+		if _, valid := vulns[i].VerifiedLEV(); !valid {
+			vulns[i].LEV = ""
+			vulns[i].LEVPartial = false
+		}
+	}
+
 	return map[string]any{
 		"name":                  c.Name,
 		"version":               c.Version,
 		"vuln_number":           c.VulnNumber,
-		"vulns":                 c.Vulns,
+		"vulns":                 vulns,
 		"contain_vuln_dep":      c.ContainsVulnDep,
 		"suggested_fix_version": suggest,
 		"is_breaking_change":    ssbom.IsBreakingChange(c.Version, suggest),

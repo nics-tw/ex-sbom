@@ -1,10 +1,12 @@
 // Copyright (c) 2025 國家資通安全研究院-前瞻研究籌獲中心 National Institute of Cyber Security(RA)
 // SPDX-License-Identifier: MIT
 
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, open, rm } from "node:fs/promises";
+import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { expect, test as base } from "@playwright/test";
 import { startServer, useLocalAssets } from "./server.mjs";
 
@@ -44,7 +46,7 @@ const test = base.extend({
   },
 });
 
-function sbom(component, version) {
+function sbom(component, version, purl = `pkg:npm/${component}@${version}`) {
   return {
     name: `${component}.json`,
     mimeType: "application/json",
@@ -55,7 +57,7 @@ function sbom(component, version) {
       metadata: { component: { type: "application", name: "fixture", "bom-ref": "root" } },
       components: [{
         type: "library", name: component, version, "bom-ref": component,
-        purl: `pkg:npm/${component}@${version}`,
+        purl,
       }],
       dependencies: [{ ref: "root", dependsOn: [component] }, { ref: component, dependsOn: [] }],
     })),
@@ -599,6 +601,228 @@ test("preserves comparison disclosures and horizontal scroll when translating", 
   await expect.poll(() => region.evaluate(el => el.scrollLeft)).toBe(scroll);
 });
 
+test("downloads verified remediation findings after storing and reopening an SBOM", async ({ page, service }, testInfo) => {
+  await service.restart({ historicalLEV: "0.37" });
+  await page.goto(service.url);
+  const project = await createProject(page, "Remediation fixture");
+  const [preview] = await Promise.all([
+    page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+    upload(page, sbom("fixture-remediation", "1.0.0"), "Repair exercise"),
+  ]);
+  const previewBOM = (await preview.json()).data.bom_result;
+  expect(previewBOM.report_source.lev_archive_status).toBe("configured");
+  const findings = previewBOM.ComponentInfo["fixture-remediation"].vulns;
+  const finding = findings.find(vuln => vuln.id === "CVE-2025-99999");
+  expect(finding).toMatchObject({
+    lev: "0.37",
+    lev_method: "nist-cswp41-eq10-v1",
+    lev_cve: "CVE-2025-99999",
+    kev: "listed",
+  });
+  expect(findings.find(vuln => vuln.id === "CVE-2025-99998")).toMatchObject({ kev: "unlisted" });
+  expect(finding.lev_first).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(finding.lev_as_of).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await service.restart({ historicalLEV: "0.41" });
+  await page.goto(service.url);
+  await selectProject(page, project, "Remediation fixture");
+  const [updatedPreview] = await Promise.all([
+    page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+    upload(page, sbom("fixture-remediation", "1.1.0"), "Repair after archive refresh"),
+  ]);
+  const updated = (await updatedPreview.json()).data.bom_result.ComponentInfo["fixture-remediation"];
+  expect(updated.vulns.find(vuln => vuln.id === finding.id).lev).toBe("0.41");
+  await versionRow(page, "Repair exercise").locator(".version-load-btn").click();
+  const component = await page.request.get(
+    new URL(`/projects/${project}/sboms/Repair%20exercise/topology/component?component=fixture-remediation`, service.url).href,
+  );
+  expect(component.ok()).toBe(true);
+  const saved = (await component.json()).data;
+  expect(saved.lev_archive_status).toBe("configured");
+  expect(saved.vulns.find(vuln => vuln.id === finding.id)).toMatchObject({
+    lev: "0.37", lev_first: finding.lev_first, lev_as_of: finding.lev_as_of,
+  });
+  expect(saved.vulns.find(vuln => vuln.id === "CVE-2025-99998")).toMatchObject({ kev: "unlisted" });
+  for (const [lang, button] of [["en", "Download PDF Report"], ["zh", "下載 PDF 報告"]]) {
+    await page.locator("#lang-" + lang).click();
+    const [download, response] = await Promise.all([
+      page.waitForEvent("download"),
+      page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/report")),
+      page.getByRole("button", { name: button, exact: true }).click(),
+    ]);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("application/pdf");
+    expect(download.suggestedFilename()).toMatch(/^Repair exercise.*\.pdf$/i);
+    const output = testInfo.outputPath(`remediation-${lang}.pdf`);
+    await download.saveAs(output);
+    const handle = await open(output, "r");
+    try {
+      expect((await handle.read(Buffer.alloc(5))).buffer.toString()).toBe("%PDF-");
+    } finally {
+      await handle.close();
+    }
+    let content;
+    try {
+      ({ stdout: content } = await promisify(execFile)("pdftotext", ["-raw", "-eol", "unix", "-enc", "UTF-8", output, "-"]));
+    } catch (error) {
+      if (error.code !== "ENOENT" || process.env.CI) throw error;
+      testInfo.annotations.push({ type: "PDF text check", description: "Install Poppler to verify stored LEV values" });
+      continue;
+    }
+    content = content.replaceAll("\u200b", "");
+    const findingHeading = /^(?:CVE-2025-99999 · fixture-remediation 1\.0\.0|(?:Component|元件)\s*\|\s*fixture-remediation\n(?:Version|版本)\s*\|\s*1\.0\.0\n(?:Vulnerability ID|弱點識別碼)\s*\|\s*CVE-2025-99999)$/m;
+    expect(content).toMatch(findingHeading);
+    const findingText = content.split(findingHeading)[1].split(/^(?:CVE-\d{4}-\d+ · |(?:Component|元件)\s*\|)/m)[0];
+    expect(findingText).toMatch(/^LEV[ \t]+(?:\|[ \t]+)?37%$/m);
+    expect(content).not.toMatch(/^LEV[ \t]+(?:\|[ \t]+)?41%$/m);
+  }
+});
+
+test("formats Go advisory candidates in preview, saved details and PDF", async ({ page, service }, testInfo) => {
+  await page.goto(service.url);
+  const project = await createProject(page, "Go candidate fixture");
+  const component = "example.com/widget";
+  const file = { ...sbom(component, "v1.2.3", `pkg:golang/${component}@v1.2.3`), name: "go-candidate.json" };
+  await page.locator("#select-sbom-btn").click();
+  await page.locator("#sbom-file-input").setInputFiles(file);
+  await page.locator("#sbom-modal-preview-btn").click();
+  const previewComponent = page.locator("#sbom-preview-summary").getByRole("button", { name: component });
+  await previewComponent.click();
+  const details = page.locator("#component-modal-content");
+  await expect(details).toContainText("v1.2.4");
+  await page.keyboard.press("Escape");
+  await page.locator("#sbom-version-input").fill("Go release");
+  await page.locator("#sbom-modal-commit-btn").click();
+  await expect(page.locator("#sbom-modal")).toBeHidden();
+
+  await service.restart();
+  await page.goto(service.url);
+  await selectProject(page, project, "Go candidate fixture");
+  await versionRow(page, "Go release").locator(".version-load-btn").click();
+  await page.locator("#active-topology").getByRole("button", { name: component }).click();
+  await expect(details).toContainText("v1.2.4");
+  await page.keyboard.press("Escape");
+  const response = await page.request.get(new URL(`/projects/${project}/sboms/Go%20release/topology/component?component=${encodeURIComponent(component)}`, service.url).href);
+  expect(response.ok()).toBe(true);
+  const { data } = await response.json();
+  expect(data.suggested_fix_version).toBe("v1.2.4");
+  expect(data.vulns[0].suggest_fix_version).toBe("v1.2.4");
+  expect(data.vulns[0].fix_versions).toEqual(["1.2.4"]);
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download PDF Report" }).click();
+  const output = testInfo.outputPath("go-candidate.pdf");
+  await (await download).saveAs(output);
+  let content;
+  try {
+    ({ stdout: content } = await promisify(execFile)("pdftotext", ["-raw", output, "-"]));
+  } catch (error) {
+    if (error.code !== "ENOENT" || process.env.CI) throw error;
+    testInfo.annotations.push({ type: "PDF text check", description: "Install Poppler to verify candidate versions" });
+    return;
+  }
+  expect(content.replaceAll("\u200b", "")).toMatch(/Advisory candidates for this finding\s+(?:\|\s+)?v1\.2\.4(?:\s|$)/);
+});
+
+test("preserves KEV while conflicting installed versions await confirmation", async ({ page, service }, testInfo) => {
+  await page.goto(service.url);
+  const projectName = "KEV version evidence";
+  const project = await createProject(page, projectName);
+  const component = "fixture-remediation";
+  const confirmed = "Confirmed version";
+  const pending = "Conflicting version";
+  for (const [version, purlVersion, expected] of [
+    [pending, "2.0.0", false],
+    [confirmed, "1.0.0", true],
+  ]) {
+    const [preview] = await Promise.all([
+      page.waitForResponse((res) => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+      upload(page, sbom(component, "1.0.0", `pkg:npm/${component}@${purlVersion}`), version),
+    ]);
+    const { ComponentInfo } = (await preview.json()).data.bom_result;
+    expect(ComponentInfo[component].installed_version).toMatchObject({
+      package: component,
+      version: "1.0.0",
+      confirmed: expected,
+    });
+    expect(ComponentInfo[component].vulns.find((finding) => finding.id === "CVE-2025-99999").kev).toBe("listed");
+  }
+
+  await service.restart();
+  await page.goto(service.url);
+  await selectProject(page, project, projectName);
+  for (const [version, priority, count, path] of [
+    [pending, /Prioritize fix assessment[\s\S]*?fixture-remediation/i, "Pending", "pending.pdf"],
+    [confirmed, /Update immediately[\s\S]*?fixture-remediation/i, "1", "confirmed.pdf"],
+  ]) {
+    const response = await page.request.get(new URL(
+      `/projects/${project}/sboms/${encodeURIComponent(version)}/report?lang=en`, service.url,
+    ).href);
+    expect(response.ok()).toBe(true);
+    const output = testInfo.outputPath(path);
+    await writeFile(output, await response.body());
+    let text;
+    try {
+      ({ stdout: text } = await promisify(execFile)("pdftotext", ["-raw", output, "-"]));
+    } catch (error) {
+      if (error.code !== "ENOENT" || process.env.CI) throw error;
+      testInfo.annotations.push({ type: "PDF text check", description: "Install Poppler to verify report wording" });
+      return;
+    }
+    text = text.replaceAll("\u200b", "").replace(/\s+/g, " ");
+    expect(text).toMatch(priority);
+    expect(text).toMatch(new RegExp(`Components (?:to )?update immediately ${count}(?: |$)`));
+    expect(text).toContain("CVEs listed in CISA KEV 1");
+    expect(text).toContain("CVE-2025-99999");
+    if (version === pending) {
+      expect(text).toContain("Confirm the installed version");
+      expect(text).toContain("Upgrade to test Pending");
+      expect(text).toMatch(/Coverage (?:is )?pending/);
+    }
+  }
+});
+
+test("keeps remediation findings and PDF download available when risk feeds fail", async ({ page, service }, testInfo) => {
+  await service.restart({ failRiskFeeds: true });
+  await page.goto(service.url);
+  const project = await createProject(page, "Unavailable risk feeds");
+  const [preview] = await Promise.all([
+    page.waitForResponse(res => new URL(res.url()).pathname.endsWith("/sboms/preview")),
+    upload(page, sbom("fixture-remediation", "1.0.0"), "Offline risk evidence"),
+  ]);
+  const previewBOM = (await preview.json()).data.bom_result;
+  expect(previewBOM.report_source.lev_archive_status).toBe("disabled");
+  const finding = previewBOM.ComponentInfo["fixture-remediation"].vulns.find(vuln => vuln.id === "CVE-2025-99999");
+  expect(finding).toMatchObject({ id: "CVE-2025-99999", cvss_score: "9.8" });
+  expect(finding.epss).toBeUndefined();
+  expect(finding.lev).toBeUndefined();
+  expect(finding.kev).toBeUndefined();
+  const response = await page.request.get(new URL(
+    `/projects/${project}/sboms/Offline%20risk%20evidence/report?lang=zh-TW`, service.url,
+  ).href);
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/pdf");
+  const body = await response.body();
+  expect(body.subarray(0, 5).toString()).toBe("%PDF-");
+  const output = testInfo.outputPath("missing-risk-feeds-zh.pdf");
+  await testInfo.attach("missing-risk-feeds-zh", { body, contentType: "application/pdf" });
+  await writeFile(output, body);
+  let text;
+  try {
+    ({ stdout: text } = await promisify(execFile)("pdftotext", ["-raw", output, "-"]));
+  } catch (error) {
+    if (error.code !== "ENOENT" || process.env.CI) throw error;
+    testInfo.annotations.push({ type: "PDF text check", description: "Install Poppler to verify report wording" });
+    return;
+  }
+  text = text.replaceAll("\u200b", "");
+  expect(text).toMatch(/安排評估\s*\|\s*fixture-remediation/);
+  expect(text).toMatch(/KEV\s*(?:\|\s*)?尚未查核/);
+  expect(text).toMatch(/EPSS\s*(?:\|\s*)?未記錄/);
+  expect(text).toMatch(/綜合利用指標\s*(?:\|\s*)?資料不足/);
+  expect(text).toMatch(/LEV\s*(?:\|\s*)?掃描時未啟用/);
+  expect(text).toContain("CVE-2025-99999");
+});
+
 test("explains a blank project name and lets the user correct it", async ({ page, service }) => {
   await page.goto(service.url);
   const name = page.locator("#project-input");
@@ -653,6 +877,44 @@ test("clears comparison status on reopening", async ({ page, service }) => {
   await page.locator("#main-tab-diff").click();
   await expect(page.locator("#diff-result")).toBeEmpty();
   await expect(page.locator("#diff-status")).toBeEmpty();
+});
+
+test("announces comparison errors and clears them before retry", async ({ page, service }) => {
+  await page.goto(service.url);
+  await createProject(page, "Comparison status");
+  await upload(page, sbom("status-fixture", "1.0.0"), "Before");
+  await upload(page, sbom("status-fixture", "2.0.0"), "After");
+  await page.locator("#main-tab-diff").click();
+
+  const compare = page.locator("#diff-compare-btn");
+  const panel = page.locator("#panel-diff");
+  const error = panel.getByRole("status").filter({ hasText: /select two different|請選擇兩個不同/ });
+  await page.locator("#diff-select-a").selectOption("Before");
+  await page.locator("#diff-select-b").selectOption("Before");
+  await compare.press("Enter");
+  await expect(error).toHaveText("Please select two different SBOMs");
+  await expect(compare).toBeFocused();
+  await page.locator("#lang-zh").click();
+  await expect(error).toHaveText("請選擇兩個不同的 SBOM");
+
+  await page.locator("#diff-select-b").selectOption("After");
+  await expect(error).toHaveCount(0);
+  await compare.press("Enter");
+  await expect(panel.getByRole("status")).toContainText(/共 .*項新增/);
+  await expect(compare).toBeFocused();
+  await expect(error).toHaveCount(0);
+
+  await page.locator("#main-tab-analysis").click();
+  await page.route("**/projects/*/versions", route => route.fulfill({ status: 503 }), { times: 1 });
+  const comparisonTab = page.locator("#main-tab-diff");
+  await comparisonTab.press("Enter");
+  await expect(panel.getByRole("status")).toContainText("無法載入版本");
+  await expect(comparisonTab).toBeFocused();
+  await page.locator("#lang-en").click();
+  await expect(panel.getByRole("status")).toContainText("Could not load versions.");
+  await comparisonTab.press("Enter");
+  await expect(compare).toBeEnabled();
+  await expect(panel.getByRole("status")).toBeEmpty();
 });
 
 test("provides a labelled and keyboard-scrollable version history region", async ({ page, service }) => {

@@ -6,6 +6,7 @@ package ssbom
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -13,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"ex-sbom/client/cisa"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	sbomreader "github.com/spdx/tools-golang/json"
@@ -32,6 +35,11 @@ var (
 
 // Preview parses raw SBOM bytes and returns the result without saving to DB.
 func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, error) {
+	return s.PreviewContext(context.Background(), rawData)
+}
+
+// PreviewContext applies the request deadline to historical archive enrichment.
+func (s *Service) PreviewContext(ctx context.Context, rawData []byte) (FormattedSBOM, string, time.Time, error) {
 	switch detectFileType(rawData) {
 	case fileTypeJSON: // no-op: proceed to format detection below
 	case fileTypeXML:
@@ -46,12 +54,15 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		if err != nil {
 			return FormattedSBOM{}, "", time.Time{}, fmt.Errorf("%w: %w", ErrSPDXParseFailed, err)
 		}
-		bom, sha256Hash, err := s.PreviewSPDX(doc, rawData)
+		bom, _, err := s.PreviewSPDX(doc, rawData)
 		if err != nil {
 			return FormattedSBOM{}, "", time.Time{}, err
 		}
 		setReportSpecification(&bom, rawData, keySPDXVersion, "")
-		return bom, sha256Hash, spdxTimestamp(doc), nil
+		applyKEV(&bom, cisa.Current)
+		applyHistoricalLEV(ctx, &bom)
+		sortFormattedSBOM(&bom)
+		return bom, HashSBOM(bom), spdxTimestamp(doc), nil
 
 	case sbomFormatCycloneDX:
 		cdxData := downgradeCDXSpecVersion(rawData)
@@ -62,11 +73,15 @@ func (s *Service) Preview(rawData []byte) (FormattedSBOM, string, time.Time, err
 		}
 		// Scan the same (possibly downgraded) representation the decoder accepted,
 		// so the scanner cannot reject bytes the parser already validated.
-		result, sha256Hash, bomTimestamp, err := s.PreviewCDX(bom, cdxData)
-		if err == nil {
-			setReportSpecification(&result, rawData, keySpecVersion, "CycloneDX ")
+		result, _, bomTimestamp, err := s.PreviewCDX(bom, cdxData)
+		if err != nil {
+			return result, "", bomTimestamp, err
 		}
-		return result, sha256Hash, bomTimestamp, err
+		setReportSpecification(&result, rawData, keySpecVersion, "CycloneDX ")
+		applyKEV(&result, cisa.Current)
+		applyHistoricalLEV(ctx, &result)
+		sortFormattedSBOM(&result)
+		return result, HashSBOM(result), bomTimestamp, nil
 
 	default:
 		return FormattedSBOM{}, "", time.Time{}, ErrInvalidSBOMFormat

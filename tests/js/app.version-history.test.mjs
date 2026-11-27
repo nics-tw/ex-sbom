@@ -93,7 +93,7 @@ function makeApp() {
     prompt: () => "renamed", confirm: () => true, alert() {},
   };
   vm.createContext(sandbox);
-  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api, VersionHistory, Sbom, SbomModal, MainTab };", sandbox);
+  vm.runInContext(appJs + "\n;globalThis.__test = { Project, State, Api, VersionHistory, Sbom, SbomModal, MainTab, ComponentModal };", sandbox);
   return { ...sandbox.__test, getElementById };
 }
 
@@ -394,3 +394,26 @@ for (const action of ["rename", "delete"]) {
     );
   });
 }
+
+test("component details show one LEV note for disabled scans and retain individual evidence elsewhere", () => {
+  const { ComponentModal, getElementById } = makeApp();
+  const vulns = [{ id: "CVE-2025-0001" }, { id: "CVE-2025-0002" }];
+  const content = getElementById("component-modal-content");
+
+  ComponentModal._renderDetails({ vulns, lev_archive_status: "disabled" });
+  assert.equal((content.innerHTML.match(/LEV was disabled at scan time/g) || []).length, 1);
+  assert.doesNotMatch(content.innerHTML, /Unavailable or unverified/);
+
+  ComponentModal._renderDetails({
+    vulns: [vulns[0], { ...vulns[1], epss: "0.5", epss_partial: true, lev: "0.37", lev_partial: true }],
+    lev_archive_status: "configured",
+  });
+  assert.doesNotMatch(content.innerHTML, /LEV was disabled/);
+  assert.match(content.innerHTML, /Unavailable or unverified/);
+  assert.match(content.innerHTML, /At least 0\.5 \(missing alias scores\)/);
+  assert.match(content.innerHTML, /At least 0\.37 \(historical gaps\)/);
+
+  ComponentModal._renderDetails({ vulns });
+  assert.doesNotMatch(content.innerHTML, /LEV was disabled/);
+  assert.match(content.innerHTML, /Unavailable or unverified/);
+});

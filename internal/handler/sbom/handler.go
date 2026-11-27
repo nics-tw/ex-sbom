@@ -261,7 +261,7 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
-	bomResult, sha256Hash, bomTimestamp, err := h.sbomSvc.Preview(sbomData)
+	bomResult, sha256Hash, bomTimestamp, err := h.sbomSvc.PreviewContext(c.Request.Context(), sbomData)
 	if err != nil {
 		switch {
 		case errors.Is(err, ssbom.ErrXMLNotSupported):
@@ -300,8 +300,21 @@ func (h *Handler) Preview(c *gin.Context) {
 		return
 	}
 
+	goAdvisories := make(map[string][]advisoryCandidates)
+	for key, component := range bomResult.ComponentInfo {
+		if len(component.Vulns) == 0 || !ssbom.IsGoComponent(bomResult.ReportSource, key, component) {
+			continue
+		}
+		candidates := make([]advisoryCandidates, len(component.Vulns))
+		for i, vuln := range component.Vulns {
+			display := vuln.GoAdvisoryDisplay()
+			candidates[i] = advisoryCandidates{display.SuggestFixVersion, display.OtherFixVersions}
+		}
+		goAdvisories[key] = candidates
+	}
 	c.JSON(http.StatusOK, gin.H{msg.RespData: gin.H{
 		"bom_result":       bomResult,
+		"go_advisories":    goAdvisories,
 		"sha256":           sha256Hash,
 		"bom_timestamp":    bomTimestamp,
 		"preview_token":    previewToken,
@@ -312,6 +325,11 @@ func (h *Handler) Preview(c *gin.Context) {
 			"vuln_count":      countVulns(bomResult),
 		},
 	}})
+}
+
+type advisoryCandidates struct {
+	SuggestFixVersion string `json:"suggest_fix_version"`
+	OtherFixVersions  string `json:"other_fix_versions"`
 }
 
 // Create saves a pre-parsed SBOM result to DB under the given version name.

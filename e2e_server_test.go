@@ -6,6 +6,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,11 +18,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"ex-sbom/client/first"
 	"ex-sbom/internal/db"
 	"ex-sbom/internal/repository"
 	ssbom "ex-sbom/internal/service/sbom"
@@ -36,8 +39,14 @@ func TestE2EServer(t *testing.T) {
 		t.Skip("start through the browser fixture, with a temporary DB_PATH")
 	}
 	transport := http.DefaultTransport
-	http.DefaultTransport = e2eOSVTransport{fail: os.Getenv("EX_SBOM_E2E_FAIL_SCAN") == "1"}
+	http.DefaultTransport = e2eOSVTransport{
+		fail:          os.Getenv("EX_SBOM_E2E_FAIL_SCAN") == "1",
+		failRiskFeeds: os.Getenv("EX_SBOM_E2E_FAIL_RISK_FEEDS") == "1",
+	}
 	t.Cleanup(func() { http.DefaultTransport = transport })
+	if score := os.Getenv("EX_SBOM_E2E_HISTORY_SCORE"); score != "" {
+		seedE2EEPSSHistory(t, score)
+	}
 
 	if err := db.Init(path); err != nil {
 		t.Fatal(err)
@@ -78,10 +87,75 @@ func TestE2EServer(t *testing.T) {
 	}
 }
 
+func seedE2EEPSSHistory(t *testing.T, score string) {
+	t.Helper()
+	dir := t.TempDir()
+	asOf := time.Now().UTC().AddDate(0, 0, -1)
+	start := asOf.AddDate(0, 0, -29)
+	archive, err := os.Create(filepath.Join(dir, "epss_scores-"+start.Format(time.DateOnly)+".csv.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compressed := gzip.NewWriter(archive)
+	_, writeErr := fmt.Fprintf(compressed, "#model_version:fixture,score_date:%sT00:00:00+0000\ncve,epss,percentile\nCVE-2025-99999,%s,0.95\n", start.Format(time.DateOnly), score)
+	if err := errors.Join(writeErr, compressed.Close(), archive.Close()); err != nil {
+		t.Fatal(err)
+	}
+	reservations := filepath.Join(dir, "reservations.json")
+	if err := os.WriteFile(reservations, []byte(fmt.Sprintf(`{"CVE-2025-99999":%q}`, start.Format(time.DateOnly))), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		// The Windows archive package tests exercise sealed ACLs and cleanup.
+		t.Setenv("EPSS_ARCHIVE_DIR", dir)
+		t.Setenv("CVE_RESERVATIONS_FILE", reservations)
+		return
+	}
+	snapshot := filepath.Join(t.TempDir(), "snapshot")
+	if err := first.BuildArchiveIndex(context.Background(), dir, reservations, asOf.Format(time.DateOnly), snapshot); err != nil {
+		t.Fatal(err)
+	}
+	// A temp directory needs writable permissions when the test removes it.
+	t.Cleanup(func() { _ = os.Chmod(snapshot, 0700) })
+	t.Setenv("EPSS_ARCHIVE_DIR", snapshot)
+	t.Setenv("CVE_RESERVATIONS_FILE", filepath.Join(snapshot, first.ArchiveIndexReservations))
+}
+
 // e2eOSVTransport exercises the real scanner with deterministic query results.
-type e2eOSVTransport struct{ fail bool }
+type e2eOSVTransport struct{ fail, failRiskFeeds bool }
 
 func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Method == http.MethodGet {
+		switch req.URL.Host + req.URL.Path {
+		case "api.osv.dev/v1/vulns/EX-SBOM-TEST-1":
+			return e2eJSON(req, `{
+				"id":"EX-SBOM-TEST-1","aliases":["CVE-2025-99999"],
+				"modified":"2025-01-01T00:00:00Z","summary":"Synthetic remediation finding",
+				"severity":[{"type":"CVSS_V3","score":"CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}],
+				"affected":[{"package":{"ecosystem":"npm","name":"fixture-remediation"},
+				"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}]}]
+			}`), nil
+		case "api.osv.dev/v1/vulns/EX-SBOM-TEST-2":
+			return e2eJSON(req, `{
+				"id":"EX-SBOM-TEST-2","aliases":["CVE-2025-99998"],
+				"modified":"2025-01-01T00:00:00Z","summary":"Unlisted synthetic finding",
+				"affected":[{"package":{"ecosystem":"npm","name":"fixture-remediation"},
+				"ranges":[{"type":"SEMVER","events":[{"introduced":"0"},{"fixed":"1.2.3"}]}]}]
+			}`), nil
+		case "api.osv.dev/v1/vulns/EX-SBOM-GO-FIX":
+			return e2eJSON(req, `{"id":"EX-SBOM-GO-FIX","modified":"2025-01-01T00:00:00Z","summary":"Go advisory candidate fixture","affected":[{"package":{"ecosystem":"Go","name":"example.com/widget"},"ranges":[{"type":"GIT","repo":"https://example.com/widget","events":[{"introduced":"0"},{"fixed":"1.2.4"}]}]}]}`), nil
+		case "api.first.org/data/v1/epss":
+			if transport.failRiskFeeds {
+				return nil, errors.New("fixture EPSS source unavailable")
+			}
+			return e2eJSON(req, `{"data":[{"cve":"CVE-2025-99999","epss":"0.2","date":"2025-01-02"}]}`), nil
+		case "www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json":
+			if transport.failRiskFeeds {
+				return nil, errors.New("fixture KEV source unavailable")
+			}
+			return e2eJSON(req, `{"catalogVersion":"synthetic","count":1,"vulnerabilities":[{"cveID":"CVE-2025-99999"}]}`), nil
+		}
+	}
 	if req.Body != nil {
 		defer req.Body.Close()
 	}
@@ -99,24 +173,42 @@ func (transport e2eOSVTransport) RoundTrip(req *http.Request) (*http.Response, e
 		}, nil
 	}
 	var query struct {
-		Queries []json.RawMessage `json:"queries"`
+		Queries []struct {
+			Package struct {
+				Name string `json:"name"`
+			} `json:"package"`
+		} `json:"queries"`
 	}
 	if err := json.NewDecoder(req.Body).Decode(&query); err != nil {
 		return nil, err
 	}
+	results := make([]json.RawMessage, len(query.Queries))
+	for i, item := range query.Queries {
+		results[i] = json.RawMessage(`{}`)
+		if item.Package.Name == "fixture-remediation" {
+			results[i] = json.RawMessage(`{"vulns":[{"id":"EX-SBOM-TEST-1"},{"id":"EX-SBOM-TEST-2"}]}`)
+		}
+		if item.Package.Name == "example.com/widget" {
+			results[i] = json.RawMessage(`{"vulns":[{"id":"EX-SBOM-GO-FIX"}]}`)
+		}
+	}
 	reply, err := json.Marshal(struct {
-		Results []struct{} `json:"results"`
-	}{Results: make([]struct{}, len(query.Queries))})
+		Results []json.RawMessage `json:"results"`
+	}{Results: results})
 	if err != nil {
 		return nil, err
 	}
+	return e2eJSON(req, string(reply)), nil
+}
+
+func e2eJSON(req *http.Request, body string) *http.Response {
 	return &http.Response{
 		StatusCode: http.StatusOK,
 		Status:     "200 OK",
 		Header:     http.Header{"Content-Type": {"application/json"}},
-		Body:       io.NopCloser(strings.NewReader(string(reply))),
+		Body:       io.NopCloser(strings.NewReader(body)),
 		Request:    req,
-	}, nil
+	}
 }
 
 // Store valid JSON with an incompatible shape to exercise the same corrupt-row

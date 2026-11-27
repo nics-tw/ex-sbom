@@ -21,6 +21,11 @@ jobs:
       - name: Build
         run: go build ./...
 
+      - name: Install Poppler for PDF checks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+
       # Every Go test file carries a build tag, so a bare `go test ./...`
       # compiles no tests at all — the tags are required.
       - name: Go tests (unit + integration)

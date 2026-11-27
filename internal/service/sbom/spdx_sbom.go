@@ -5,6 +5,7 @@
 package ssbom
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"ex-sbom/internal/domain"
-	"ex-sbom/internal/service/lev"
 	"ex-sbom/util"
 	"ex-sbom/util/file"
 
@@ -35,7 +35,8 @@ const (
 func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (FormattedSBOM, string, error) {
 	names := getSpdxComponents(*document)
 	refToName := getSpdxIdentifierToName(*document)
-	componentInfo, observation, err := getSpdxComponentInfo(*document, rawData, name, names, refToName)
+	goComponents := make(map[string]bool)
+	componentInfo, observation, err := getSpdxComponentInfo(*document, rawData, name, names, refToName, goComponents)
 	if err != nil {
 		return FormattedSBOM{}, "", err
 	}
@@ -52,6 +53,7 @@ func buildSPDXResult(document *spdx.Document, rawData []byte, name string) (Form
 		ReportSource:      observedSource(spdxReportPackages(document), componentInfo, observation),
 	}
 
+	bom.ReportSource.GoComponents = goComponents
 	compWithVuln := []string{}
 	for compName, info := range bom.ComponentInfo {
 		if info.VulnNumber > 0 {
@@ -279,7 +281,7 @@ func getSpdxDep(input spdx.Document, nameMap map[string]string) map[string][]str
 	return dependency
 }
 
-func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, names []string, refToName map[string]string) (map[string]Component, file.QueryObservation, error) {
+func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, names []string, refToName map[string]string, goComponents map[string]bool) (map[string]Component, file.QueryObservation, error) {
 	var result = make(map[string]Component)
 
 	path, err := file.CopyAndCreate(file.FileInput{
@@ -307,50 +309,30 @@ func getSpdxComponentInfo(input spdx.Document, files []byte, filename string, na
 		if ref != "" && !isGeneratedRoot(ref) {
 			key := componentKey(p.PackageName, ref, p.PackageVersion, reserved, result)
 			refToName[ref] = key
-			vulns := packageFindings(vulnPkgs, spdxReportPackage(p))
+			pkg, locators := spdxReportPackage(p)
+			vulns := packageFindings(vulnPkgs, pkg)
+			var installed *InstalledVersionEvidence
+			if len(vulns) > 0 {
+				installed = scannedInstalledVersion(pkg, p.PackageVersion)
+				if installed != nil && installed.Confirmed {
+					installed.Confirmed = spdxLocatorsAgree(installed, locators)
+				}
+			}
+			if pkg.Ecosystem == "Go" && len(vulns) > 0 {
+				goComponents[key] = true
+			}
 			result[key] = Component{
-				Name:       p.PackageName,
-				Version:    p.PackageVersion,
-				VulnNumber: len(vulns),
-				Vulns:      vulns,
-				Licences:   getSpdxLicences(p.PackageLicenseDeclared),
+				Name:             p.PackageName,
+				Version:          cmp.Or(p.PackageVersion, pkg.Version),
+				InstalledVersion: installed,
+				VulnNumber:       len(vulns),
+				Vulns:            vulns,
+				Licences:         getSpdxLicences(p.PackageLicenseDeclared),
 			}
 		}
 	}
 
-	var cves []string
-	for _, c := range result {
-		for _, v := range c.Vulns {
-			if v.ID != "" {
-				cves = append(cves, v.ID)
-			}
-		}
-	}
-
-	// will call api for get epss and lev
-	firstInfos, err := lev.GetByChunk(cves)
-	if err != nil {
-		slog.Error("failed to get lev info", "error", err)
-	}
-
-	if len(firstInfos) == 0 {
-		slog.Info("no lev info found for the components", "name", util.LogSafe(filename))
-	}
-
-	for name, info := range result {
-		updated := false
-		for i, v := range info.Vulns {
-			if data, found := firstInfos[v.ID]; found {
-				slog.Info("found lev info", "cve", util.LogSafe(v.ID), "lev", data.LEV, "epss", util.LogSafe(data.EPSS))
-				info.Vulns[i].EPSS = fmt.Sprintf("%.6f", data.EPSSNum)
-				info.Vulns[i].LEV = fmt.Sprintf("%.6f", data.LEV)
-				updated = true
-			}
-		}
-		if updated {
-			result[name] = info
-		}
-	}
+	applyEPSS(result)
 
 	return result, observation, nil
 }
@@ -412,27 +394,42 @@ func spdxReportPackages(document *spdx.Document) []file.PackageVersion {
 		if pkg.PackageSPDXIdentifier == "" || isGeneratedRoot(string(pkg.PackageSPDXIdentifier)) {
 			continue
 		}
-		packages = append(packages, spdxReportPackage(pkg))
+		identity, _ := spdxReportPackage(pkg)
+		packages = append(packages, identity)
 	}
 	return packages
 }
 
-func spdxReportPackage(pkg *spdx.Package) file.PackageVersion {
-	var chosen *purl.PackageURL
+func spdxReportPackage(pkg *spdx.Package) (file.PackageVersion, []purl.PackageURL) {
+	var locators []purl.PackageURL
 	for _, ref := range pkg.PackageExternalReferences {
 		if ref == nil || (ref.RefType != "purl" && ref.RefType != "http://spdx.org/rdf/references/purl") {
 			continue
 		}
 		if parsed, err := purl.FromString(ref.Locator); err == nil {
-			chosen = &parsed
+			locators = append(locators, parsed)
 		}
 	}
-	if chosen == nil {
-		return file.PackageVersion{}
+	if len(locators) == 0 {
+		return file.PackageVersion{}, nil
 	}
-	version := chosen.Version
-	if version == "" {
-		version = pkg.PackageVersion
+	// SCALIBR uses the last parseable PURL.
+	chosen := locators[len(locators)-1]
+	version := cmp.Or(chosen.Version, pkg.PackageVersion)
+	return file.IdentifyPackage(chosen.Name, version, chosen.String()), locators
+}
+
+func spdxLocatorsAgree(installed *InstalledVersionEvidence, locators []purl.PackageURL) bool {
+	for _, locator := range locators {
+		version := usableVersion(locator.Version)
+		identity := file.IdentifyPackage(locator.Name, cmp.Or(version, installed.Version), locator.String())
+		if identity.Name == "" {
+			continue
+		}
+		if identity.Name != installed.Package || identity.Ecosystem != installed.Ecosystem ||
+			(version != "" && !sameInstalledVersion(installed.Ecosystem, version, installed.Version)) {
+			return false
+		}
 	}
-	return file.IdentifyPackage(chosen.Name, version, chosen.String())
+	return true
 }
