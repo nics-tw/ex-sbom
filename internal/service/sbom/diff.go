@@ -33,6 +33,9 @@ type ComponentDiff struct {
 	MaxLevB    string `json:"max_lev_b,omitempty"`
 	SevereA    bool   `json:"severe_a,omitempty"`
 	SevereB    bool   `json:"severe_b,omitempty"`
+
+	InstalledVersionA *InstalledVersionEvidence `json:"installed_version_a,omitempty"`
+	InstalledVersionB *InstalledVersionEvidence `json:"installed_version_b,omitempty"`
 }
 
 // LevelDiff holds the diff for a single dependency level.
@@ -268,9 +271,12 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 
 		cvssB, epssB, levB, severeB := riskFields(compB)
 		levelB := b.ComponentToLevel[keyB]
+		installedA, installedB := compA.InstalledVersion, compB.InstalledVersion
+		installedChanged := installedA != installedB &&
+			(installedA == nil || installedB == nil || *installedA != *installedB)
 		if compA.Version != compB.Version || compA.VulnNumber != compB.VulnNumber ||
 			levelA != levelB || compA.ContainsVulnDep != compB.ContainsVulnDep ||
-			!sameVulnRisks(compA.Vulns, compB.Vulns) {
+			installedChanged || !sameVulnRisks(compA.Vulns, compB.Vulns) {
 			diff := ComponentDiff{
 				Name:       name,
 				VersionA:   compA.Version,
@@ -289,6 +295,10 @@ func DiffSBOMs(a, b FormattedSBOM) DiffResult {
 				MaxLevB:    levB,
 				SevereA:    severeA,
 				SevereB:    severeB,
+			}
+			if installedChanged {
+				diff.InstalledVersionA = installedA
+				diff.InstalledVersionB = installedB
 			}
 
 			if keyB != name {

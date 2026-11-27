@@ -154,6 +154,39 @@ func TestDiffSBOMs_SameCountRiskChanges(t *testing.T) {
 	}
 }
 
+func TestDiffSBOMs_InstalledVersionEvidenceChanges(t *testing.T) {
+	before := Component{
+		Version: "1.0.0",
+		InstalledVersion: &InstalledVersionEvidence{
+			Ecosystem: "npm", Package: "pkg", Version: "1.0.0",
+		},
+		VulnNumber: 1,
+		Vulns:      []Vuln{{ID: "CVE-2025-0001", CVSSScore: "9.8", KEV: KEVListed}},
+	}
+	snapshot := func(component Component) FormattedSBOM {
+		return makeSBOM(map[string]Component{"pkg": component}, map[string]int{"pkg": 0})
+	}
+	equivalent := *before.InstalledVersion
+	after := before
+	after.InstalledVersion = &equivalent
+	assert.Empty(t, DiffSBOMs(snapshot(before), snapshot(after)).ByLevel)
+
+	after.InstalledVersion.Confirmed = true
+	result := DiffSBOMs(snapshot(before), snapshot(after))
+	if assert.Contains(t, result.ByLevel, 0) {
+		changes := result.ByLevel[0].Changed
+		if assert.Len(t, changes, 1) {
+			assert.Equal(t, changes[0].VersionA, changes[0].VersionB)
+			assert.Equal(t, before.InstalledVersion, changes[0].InstalledVersionA)
+			assert.Equal(t, after.InstalledVersion, changes[0].InstalledVersionB)
+			body, err := json.Marshal(changes[0])
+			assert.NoError(t, err)
+			assert.Contains(t, string(body), `"installed_version_a":{"ecosystem":"npm","package":"pkg","version":"1.0.0","confirmed":false}`)
+			assert.Contains(t, string(body), `"installed_version_b":{"ecosystem":"npm","package":"pkg","version":"1.0.0","confirmed":true}`)
+		}
+	}
+}
+
 func TestDiffSBOMs_EmptyEPSScoreBecomesPartial(t *testing.T) {
 	before := Component{Version: "1.0.0", VulnNumber: 2, Vulns: []Vuln{
 		{ID: "TEST-SCORED", EPSS: "0.2"},
